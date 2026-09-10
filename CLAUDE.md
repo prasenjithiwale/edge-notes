@@ -72,6 +72,10 @@ Layout: `src/` (dock/, notes/, components/, store/ Zustand, lib/, styles/tokens.
 
 `notes.db` in the app data directory, WAL mode, migrations tracked via `PRAGMA user_version` and run in a transaction at startup. Notes are soft-deleted (`deleted_at`) so undo works now and sync works later; rows deleted more than 30 days ago are purged at startup. IDs are UUID v7. Store only the palette **id** for a note color, never a hex value, so the palette can be retuned. `pinned` and `sort_order` columns are reserved for post-v1.
 
+Never edit a migration that has shipped — append a new one. Repository functions take `now: i64` rather than reading the clock, which is what keeps them deterministic under test. Settings rows are written only when a value changes, so `Settings::default()` is the single source of the brief 9.2 defaults; a malformed stored value falls back to its default rather than failing startup.
+
+**The notes list does not re-sort while the editor is open.** Notes sort by `updated_at` descending, so re-sorting on each keystroke would pull the card being edited out from under the cursor. `setContent` updates optimistically without reordering; the list re-sorts in `stopEditing`. Restore deliberately leaves `updated_at` alone so an undone delete returns to its old position.
+
 ## Conventions
 
 - TypeScript strict, no `any`. Rust: no `unwrap`/`expect` outside startup code and tests.

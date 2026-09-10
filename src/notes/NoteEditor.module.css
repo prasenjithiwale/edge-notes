@@ -1,0 +1,64 @@
+.editor {
+  background: var(--note-bg);
+  color: var(--note-text);
+  border-radius: var(--radius-card);
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.textarea {
+  width: 100%;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.5;
+  resize: none;
+  overflow-y: auto;
+  padding: 0;
+  /* Text selection is allowed here and nowhere else in the chrome. */
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.textarea:focus {
+  outline: none;
+}
+
+.textarea::placeholder {
+  color: inherit;
+  opacity: 0.5;
+}
+
+.footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+}
+
+.footerButton {
+  color: inherit;
+}
+
+.footerButton:hover {
+  /* The card already carries the note colour, so tint rather than fill. */
+  background: rgb(0 0 0 / 8%);
+}
+
+.done {
+  border: none;
+  background: transparent;
+  color: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 4px 8px;
+  border-radius: var(--radius-control);
+}
+
+.done:hover {
+  background: rgb(0 0 0 / 8%);
+}

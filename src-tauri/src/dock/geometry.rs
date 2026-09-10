@@ -5,10 +5,10 @@
 //! from the brief are converted once, here, using the target monitor's scale
 //! factor. Nothing in this module touches Tauri, so it is fully unit-testable.
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 /// Which screen edge the dock is attached to.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Side {
     Left,

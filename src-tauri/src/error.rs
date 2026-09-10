@@ -9,6 +9,14 @@ pub enum AppError {
     WindowNotFound(&'static str),
     #[error("the dock is not initialised")]
     DockUnavailable,
+    #[error("no note with id {0}")]
+    NoteNotFound(String),
+    #[error("{0} is not a known palette colour")]
+    UnknownColor(String),
+    #[error("database error: {0}")]
+    Database(#[from] rusqlite::Error),
+    #[error("could not encode value: {0}")]
+    Serde(#[from] serde_json::Error),
     #[error("{0}")]
     Tauri(#[from] tauri::Error),
 }
@@ -19,6 +27,10 @@ impl AppError {
         match self {
             Self::WindowNotFound(_) => "window_not_found",
             Self::DockUnavailable => "dock_unavailable",
+            Self::NoteNotFound(_) => "note_not_found",
+            Self::UnknownColor(_) => "unknown_color",
+            Self::Database(_) => "database",
+            Self::Serde(_) => "serde",
             Self::Tauri(_) => "tauri",
         }
     }

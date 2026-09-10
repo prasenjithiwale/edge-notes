@@ -10,7 +10,7 @@ import {
   onDockState,
 } from "../lib/ipc";
 import { useDockStore } from "../store/dock";
-import { PlaceholderPanel } from "./PlaceholderPanel";
+import { Panel } from "./Panel";
 import { Tab } from "./Tab";
 import styles from "./DockShell.module.css";
 
@@ -103,7 +103,7 @@ export function DockShell() {
         data-slide="true"
         onTransitionEnd={handleTransitionEnd}
       >
-        <PlaceholderPanel className={cx(styles.panel)} />
+        <Panel className={cx(styles.panel)} />
         <Tab className={cx(styles.tab)} />
       </div>
     </div>

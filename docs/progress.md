@@ -7,8 +7,8 @@ of every milestone. The spec is [build-brief.md](build-brief.md).
 
 | Milestone | Status |
 |---|---|
-| M0 Docking spike | Built, five follow-up fixes applied; **awaiting manual acceptance on macOS** (checklist below). Windows and Linux untested. |
-| M1 Notes core | Not started |
+| M0 Docking spike | Built, five follow-up fixes applied. **Never manually accepted** — see the note below. Windows and Linux untested. |
+| M1 Notes core | Built; awaiting manual acceptance (checklist below). |
 | M2 Find and organize | Not started |
 | M3 System integration | Not started |
 | M4 Polish | Not started |
@@ -17,6 +17,11 @@ of every milestone. The spec is [build-brief.md](build-brief.md).
 Built and verified on macOS 26.6.2 (Tahoe), Apple Silicon, single 1920×1080
 display at 1× scale. Every scaling and multi-monitor case is covered by unit
 tests but has not been seen on real hardware.
+
+**The M0 checklist was never reported as run.** M1 was started on the explicit
+instruction to proceed, so the notes UI now sits on docking behaviour that no
+human has watched. If a docking problem turns up later, that is where to look
+first — the M0 checklist is still at the bottom of this file.
 
 ## Commands
 
@@ -198,6 +203,61 @@ and a couple of render tests before the notes UI grows.
    the rest of the settings store; the fallback logic in brief 8.5 is not built.
 6. **`tab_offset` is fixed at 0.5.** Dragging the tab is M4.
 7. Errors currently go to stderr via `eprintln!`. `tauri-plugin-log` arrives in M3.
+
+## M1: notes core
+
+SQLite with migrations, the notes and settings commands, typed IPC, the notes
+store, card list, inline editor with autosave, delete with undo, and the empty
+state. Search, the colour filter row, the editor's colour swatches and the
+"edited 2h ago" line are M2.
+
+### Decisions
+
+**The list does not re-sort while you type.** Notes sort by `updated_at`
+descending, so live re-sorting would yank the card you are editing to the top
+mid-sentence. `setContent` updates content optimistically but leaves the order
+alone; the list re-sorts when the editor closes.
+
+**Restore does not touch `updated_at`.** An undone delete returns to its old
+position in the list instead of jumping to the top, because undoing a mistake is
+not an edit.
+
+**Empty notes are discarded with a soft delete and no toast.** Brief 6.9 says an
+empty note is discarded when the editor closes; there is nothing in it worth
+offering to undo. It leaves a tombstone row, which the 30-day purge collects.
+
+**Settings rows are written only when changed.** A fresh database has zero rows
+in `settings` and every value comes from `Settings::default()`, so the defaults
+in brief 9.2 live in exactly one place. A malformed or future-version value falls
+back to its default rather than failing startup.
+
+**Sort has an id tiebreak.** Two notes saved in the same millisecond would
+otherwise swap places on every reload.
+
+**`notes_create` also writes `notes.lastColor`**, which is what makes the next
+new note reuse the last colour (brief 6.9) without a second round trip.
+
+### Verified at runtime
+
+The database is created at
+`~/Library/Application Support/dev.edgenotes.app/notes.db` in WAL mode at
+`user_version = 1`, with the `notes` and `settings` tables and the
+`idx_notes_active` index exactly as specified in brief 9.1.
+
+### M1 acceptance checklist
+
+- [ ] The panel opens to "Capture your first note" on a fresh install
+- [ ] New note (+) creates a card at the top and opens it in the editor
+- [ ] Typing autosaves: close the panel, reopen, and the text is still there
+- [ ] The card title is the first line and the preview is the rest, clamped to two lines
+- [ ] The panel does not close while the editor has focus, even with Keep open off
+- [ ] Esc closes the editor and leaves the panel open
+- [ ] Done closes the editor and the list re-sorts to most-recently-edited first
+- [ ] Delete shows "Note deleted" with Undo, and Undo puts the note back in place
+- [ ] The toast disappears after about 5 seconds
+- [ ] Opening a note, typing nothing and closing discards it — no empty card is left
+- [ ] Notes survive a full quit and relaunch
+- [ ] Cards use the palette colours and are readable in both light and dark mode
 
 ## M0 acceptance checklist
 
