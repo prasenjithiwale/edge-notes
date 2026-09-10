@@ -1,0 +1,81 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## Project rules
+
+- The full spec is `docs/build-brief.md`. Read it before any task.
+- Current status, decisions, and platform findings are in `docs/progress.md`. Read it before any task and update it at the end of every milestone.
+- Work on one milestone at a time. Stop when it's done. At the end of each milestone, summarize what changed and give a manual test checklist before continuing.
+- Don't add dependencies outside section 4 of the brief without asking.
+- Don't change files in `src-tauri/src/dock/` or `src-tauri/src/platform/` unless the task requires it. If you must, explain why first and run the dock tests afterward.
+- Before saying a task is done: `cargo fmt`, `cargo clippy` (no warnings), `cargo test`, and the frontend lint and tests must all pass.
+- Verify Tauri APIs against the current Tauri 2 docs (https://v2.tauri.app) before using them. Code in the brief is a sketch, not copy-paste-ready.
+- Treat the UI rules in section 7 of the brief as hard requirements, not suggestions.
+
+## Commands
+
+**Run `nvm use` first in any fresh shell.** `.nvmrc` pins Node 24; the Node 25 on
+`PATH` from Homebrew is outside Vitest 5's supported engine range.
+
+```bash
+nvm use && npm install
+
+npm run tauri dev            # run the app (Vite + Rust, hot reload)
+npm run tauri build          # release bundle (.app, .dmg)
+npm run tauri build -- --bundles app   # .app only, much faster
+
+npm run lint                 # ESLint, zero warnings allowed
+npm test                     # Vitest
+npx tsc --noEmit             # type check (not part of lint)
+npx vitest run src/lib/dock.test.ts    # one frontend test file
+npx vitest run -t "flips the chevron"  # one test by name
+
+cd src-tauri && cargo fmt
+cd src-tauri && cargo clippy --all-targets -- -D warnings
+cd src-tauri && cargo test
+cd src-tauri && cargo test dock::controller   # one module
+cd src-tauri && cargo test hover_intent       # one test
+```
+
+Linux blank-window workaround on some NVIDIA/WebKitGTK setups: `WEBKIT_DISABLE_DMABUF_RENDERER=1`.
+
+## Architecture
+
+A desktop notes widget: a small tab docked to the left or right screen edge, floating above other apps. Hover slides out a 320 px panel of color-coded notes; leaving slides it back.
+
+**Rust owns everything stateful.** SQLite, window geometry, and the dock state machine all live in Rust; the webview gets no window, filesystem, shell, or SQL permissions — only event listening plus the typed commands in section 9.3 of the brief. Components never call `invoke` directly; every command and event is wrapped in `src/lib/ipc.ts`.
+
+**The window is always exactly the size of what's visible.** Collapsed it is just the tab (28×88); open it is the panel plus tab plus a 12 px transparent margin on the three sides away from the screen edge (room for the panel's shadow). There is no full-screen click-through overlay — a window that ignores the mouse can't detect hover either. Hit-testing uses the panel rect, not the window rect.
+
+**Hover detection lives in Rust, not the DOM.** On macOS an inactive window receives no mouse enter/exit/move events (tauri-apps/tauri#11386), and this widget is inactive almost all the time. So a `DockController` polls `AppHandle::cursor_position()` from a single thread and hit-tests against the tab and panel rects — 33 ms while open or when the cursor is within 150 px of the docked edge, 150 ms otherwise. Never call `cursor_position()` or `available_monitors()` in tight or concurrent loops (crash reports: tauri-apps/tauri#15170). On Linux, frontend `pointerleave` and window blur feed in as secondary signals because the global cursor position can go stale under XWayland.
+
+**The controller is pure and the poller is the only thing that touches Tauri.** `dock/controller.rs` takes `Input` values plus a clock and returns `Action` values; `dock/poller.rs` applies them. `dock/geometry.rs` is pure math in physical pixels. This split is what makes docking unit-testable with a fake clock — keep it. Rust works in physical px, CSS in logical px; convert once at the boundary using the monitor's scale factor.
+
+**There is no atomic bounds API in Tauri 2.11**, verified against the crate source. A right dock must keep `x + width` pinned to the screen edge, so `poller::apply_rect` issues `set_position` and `set_size` back to back inside one `run_on_main_thread` closure, and `geometry::apply_order` picks the order (move first when growing, resize first when shrinking). If a visible jump ever appears on macOS, the reserve fix is `NSPanel::setFrame_display_` through the panel handle.
+
+**Animation is a frontend/Rust handshake, and the order prevents flicker.** Opening: Rust resizes the window first, then emits `dock:state` with `phase: "opening"` — until that event the frontend keeps the panel translated fully past the docked edge, so the resize reveals nothing. The frontend slides in, then calls `dock_animation_done("opening")`. Closing runs the reverse, and Rust shrinks the window anyway if no acknowledgment arrives within 300 ms. Cursor re-entry during `closing` reverses to `opening` without resizing.
+
+**Opening never takes focus.** Focus happens only on click or shortcut. After collapse the previously active app keeps focus.
+
+**The frontend never changes layout between phases.** The tab and panel are one group anchored to the docked edge, with the closed state at `translateX(±panel-width)`. Because the collapsed and expanded windows share that edge, the same CSS puts the tab on identical screen pixels at both window sizes — which is what makes the resize invisible. Only the transform changes; don't replace this with per-phase layouts.
+
+Layout: `src/` (dock/, notes/, components/, store/ Zustand, lib/, styles/tokens.css) and `src-tauri/src/` (dock/, platform/, db/, commands.rs, tray.rs, error.rs). Section 10 of the brief has the full tree.
+
+### Platform specifics
+
+- **macOS:** `ActivationPolicy::Accessory` (no Dock icon, no menu bar) and `tauri-nspanel` (pinned commit) to convert the window into a non-activating panel that joins all Spaces and floats over full-screen apps — while still able to become key window so typing works. Panel operations run on the main thread. Keep this isolated in `platform/macos.rs`. `macOSPrivateApi` is required for transparency and rules out the Mac App Store.
+- **Windows:** `skipTaskbar` + `alwaysOnTop` cover most behavior. Verify expanding doesn't steal focus before adding any extended window styles.
+- **Linux:** X11 direct. When `XDG_SESSION_TYPE=wayland`, set `GDK_BACKEND=x11` at the very top of `main` before Tauri or GTK start (in Rust 2024 `set_var` is `unsafe`; call it before any threads spawn). `EDGE_NOTES_NATIVE_WAYLAND=1` opts out.
+
+### Data
+
+`notes.db` in the app data directory, WAL mode, migrations tracked via `PRAGMA user_version` and run in a transaction at startup. Notes are soft-deleted (`deleted_at`) so undo works now and sync works later; rows deleted more than 30 days ago are purged at startup. IDs are UUID v7. Store only the palette **id** for a note color, never a hex value, so the palette can be retuned. `pinned` and `sort_order` columns are reserved for post-v1.
+
+## Conventions
+
+- TypeScript strict, no `any`. Rust: no `unwrap`/`expect` outside startup code and tests.
+- Styling is CSS Modules plus one `tokens.css`; no UI kit, no Tailwind. Note colors are the only color — chrome is neutral, one accent used only for focus rings and active Keep open.
+- Two font weights (400, 600), sentence case, 4 px spacing grid, no emoji or gradients.
+- Nothing essential may be hover-only: on macOS an inactive window may never see hover. Hover styles are an enhancement.
+- `cursor: default` on buttons and cards; text cursor only in text fields.

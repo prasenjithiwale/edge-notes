@@ -1,0 +1,75 @@
+/* Chrome tokens and note palette (brief 7.2 and 7.3).
+   Light is the base; dark only redefines values. */
+:root {
+  --surface: #ffffff;
+  --surface-sunken: #f4f4f5;
+  --border: rgba(0, 0, 0, 0.08);
+  --text-primary: #1d1d1f;
+  --text-secondary: #6e6e73;
+  --text-tertiary: #8e8e93;
+  --accent: #2f6feb;
+  --shadow-panel:
+    0 8px 28px rgba(0, 0, 0, 0.12), 0 1px 3px rgba(0, 0, 0, 0.08);
+
+  /* Note palette: background / text pairs, stored by id in the database. */
+  --note-yellow-bg: #fdf3c4;
+  --note-yellow-text: #5c4a00;
+  --note-peach-bg: #fde2d2;
+  --note-peach-text: #6b3419;
+  --note-pink-bg: #fadde7;
+  --note-pink-text: #6b2440;
+  --note-lavender-bg: #e6e1fa;
+  --note-lavender-text: #3a2f73;
+  --note-blue-bg: #dcebfa;
+  --note-blue-text: #173f66;
+  --note-mint-bg: #d9f2e6;
+  --note-mint-text: #1b5238;
+  --note-gray-bg: #ecebe8;
+  --note-gray-text: #3a3936;
+
+  /* Geometry, mirrored from the Rust side (brief 6.4). */
+  --tab-width: 28px;
+  --tab-height: 88px;
+  --panel-width: 320px;
+  --shadow-margin: 12px;
+
+  /* Motion (brief 6.2). */
+  --open-duration: 180ms;
+  --open-easing: cubic-bezier(0.2, 0, 0, 1);
+  --close-duration: 140ms;
+  --close-easing: cubic-bezier(0.4, 0, 1, 1);
+
+  /* Radii follow hierarchy: panel 14, cards 10, controls 8. */
+  --radius-panel: 14px;
+  --radius-card: 10px;
+  --radius-control: 8px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --surface: #1c1c1e;
+    --surface-sunken: #2a2a2d;
+    --border: rgba(255, 255, 255, 0.08);
+    --text-primary: #f2f2f3;
+    --text-secondary: #a1a1a6;
+    --text-tertiary: #7c7c80;
+    --accent: #5a8df0;
+    --shadow-panel:
+      0 8px 28px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.06);
+
+    --note-yellow-bg: #4a3f16;
+    --note-yellow-text: #f7e9a8;
+    --note-peach-bg: #4d2e1f;
+    --note-peach-text: #f8cdb5;
+    --note-pink-bg: #4a2333;
+    --note-pink-text: #f5c3d4;
+    --note-lavender-bg: #312a55;
+    --note-lavender-text: #d6cef7;
+    --note-blue-bg: #1e3550;
+    --note-blue-text: #bfd9f5;
+    --note-mint-bg: #1d3f31;
+    --note-mint-text: #bde8d2;
+    --note-gray-bg: #34332f;
+    --note-gray-text: #e3e2de;
+  }
+}

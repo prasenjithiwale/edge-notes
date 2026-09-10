@@ -1,0 +1,53 @@
+.tab {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  flex-direction: column;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+}
+
+/* Rounded only on the side facing the screen centre (brief 6.5). */
+[data-side="right"] .tab {
+  border-right: none;
+  border-radius: var(--radius-control) 0 0 var(--radius-control);
+}
+
+[data-side="left"] .tab {
+  border-left: none;
+  border-radius: 0 var(--radius-control) var(--radius-control) 0;
+}
+
+.chevron {
+  display: block;
+  transition: transform var(--open-duration) var(--open-easing);
+}
+
+/*
+ * The icon is a left-pointing chevron. Collapsed it points toward the screen
+ * centre (the direction the panel will come from); open it flips back toward
+ * the edge (brief 6.5).
+ */
+[data-side="right"] .chevron {
+  transform: rotate(0deg);
+}
+
+[data-side="right"] .open .chevron {
+  transform: rotate(180deg);
+}
+
+[data-side="left"] .chevron {
+  transform: rotate(180deg);
+}
+
+[data-side="left"] .open .chevron {
+  transform: rotate(0deg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chevron {
+    transition: none;
+  }
+}

@@ -1,0 +1,89 @@
+.viewport {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+}
+
+/*
+ * The tab and panel move as one group, anchored to the docked edge. Because the
+ * collapsed and expanded windows share that edge, translating the group by one
+ * panel width puts the tab on exactly the pixels it occupied while collapsed —
+ * which is what makes the window resize invisible (brief 8.4).
+ */
+.group {
+  position: absolute;
+  inset: 0;
+  will-change: transform;
+}
+
+.panel {
+  position: absolute;
+  top: var(--shadow-margin);
+  bottom: var(--shadow-margin);
+  width: var(--panel-width);
+}
+
+.tab {
+  position: absolute;
+  top: var(--tab-top, 0);
+  width: var(--tab-width);
+  height: var(--tab-height);
+}
+
+/*
+ * Side is a data attribute, not a class: CSS Modules hash class names per file,
+ * so a class set here cannot be selected from Tab.module.css. The attribute is
+ * global and works across modules.
+ */
+[data-side="right"] .panel {
+  right: 0;
+}
+
+[data-side="right"] .tab {
+  right: var(--panel-width);
+}
+
+[data-side="left"] .panel {
+  left: 0;
+}
+
+[data-side="left"] .tab {
+  left: var(--panel-width);
+}
+
+/* Closed: pushed fully past the docked edge. */
+[data-side="right"].closed .group {
+  transform: translateX(var(--panel-width));
+}
+
+[data-side="left"].closed .group {
+  transform: translateX(calc(-1 * var(--panel-width)));
+}
+
+.opening .group {
+  transition: transform var(--open-duration) var(--open-easing);
+}
+
+.closing .group {
+  transition: transform var(--close-duration) var(--close-easing);
+}
+
+/*
+ * Brief 6.2: no slide under reduced motion, just an 80ms fade. The fade must be
+ * on the panel rather than the group — fading the group would take the tab with
+ * it, and the tab is the one thing that must never disappear.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .opening .group,
+  .closing .group {
+    transition: none;
+  }
+
+  .panel {
+    transition: opacity 80ms linear;
+  }
+
+  .closed .panel {
+    opacity: 0;
+  }
+}
