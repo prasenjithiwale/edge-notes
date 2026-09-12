@@ -11,7 +11,7 @@ of every milestone. The spec is [build-brief.md](build-brief.md).
 | M1 Notes core | Built and accepted on macOS: the checklist below was run against the running app. |
 | M2 Find and organize | Built and accepted on macOS: the checklist below was run against the running app. |
 | M3 System integration | Built and verified on macOS, with one known gap (keyboard focus after the shortcut). |
-| M4 Polish | Not started |
+| M4 Polish | In progress: settings view and export done and verified; tab dragging, the editor's height transition and performance measurements still to do. |
 | M5 Packaging | Not started |
 
 Built and verified on macOS 26.6.2 (Tahoe), Apple Silicon, single 1920×1080
@@ -686,6 +686,62 @@ Verified on screen unless marked otherwise.
 - [x] One click anywhere in the panel after the shortcut puts the caret in the note
 - [ ] "Quit Edge Notes" (not exercised, to keep the app running for the rest)
 - [ ] Anything on Windows or Linux, including the Wayland fallback
+
+## M4: polish (in progress)
+
+### Done and verified on the running app
+
+**The settings view** (brief M4), reached from a gear in the header: theme, open
+and close delays, panel width, monitor and the new-note shortcut. Everything
+applies immediately (brief 9.3) — switching to Light repainted the panel and tab
+while the system stayed dark, and a typed width of 360 resized the real window.
+
+**Export** writes one Markdown file per note plus `notes.json` into
+`~/Documents/Edge Notes <date time>/`, and the panel reports the path.
+
+### Decisions
+
+**Numeric settings clamp when you finish, not while you type.** Clamping on every
+keystroke made multi-digit values impossible: typing 400 into a 280–420 field went
+4 → 280, then "2800" → 420. The draft is local until blur or Enter. The shortcut
+field works the same way, because rebinding per keystroke tried to register "C",
+"Cm", "Cmd" and logged a failure for each.
+
+**`Placement` groups the settings that decide where the dock sits** (side, offset,
+width, monitor), so the next placement setting does not touch every call site.
+
+**Export goes to the documents folder rather than asking.** A save dialog would
+mean `tauri-plugin-dialog`, outside brief section 4. The first export makes macOS
+ask the app for permission to that folder, which is expected.
+
+**The dark palette now lives behind two selectors** — the system preference unless
+the user chose light, and an explicit dark choice. They must stay identical;
+tokens.css says so at the top of the block.
+
+### The contrast check found a real accessibility defect
+
+Brief 7.3 asks for AA contrast on every note colour, so it is now a test rather
+than an opinion — and it failed on ten of forty-two pairs. Card titles were fine;
+**reduced-opacity text fell below AA in light mode**: the card preview at 0.75 on
+yellow, peach and mint, and the edited-time line at 0.70 on *all seven* colours.
+
+The lowest opacity that clears AA on every colour in both themes is 0.79, so there
+is now a single `--note-secondary-opacity` token at 0.82, used by the card
+preview, the untitled placeholder, the editor's placeholder and its edited-time
+line. `src/lib/contrast.test.ts` fails if it is ever lowered past the threshold.
+
+### Still to do in M4
+
+- [ ] Dragging the tab to reposition it along the edge (`dock.tabOffset` is still
+      fixed at 0.5 unless set by hand)
+- [ ] The editor's 160 ms height transition (brief 6.9) — never built in M1; the
+      card is replaced by the editor rather than growing into it
+- [ ] Performance measurements: idle CPU, 60 fps on the slide, tab visible within
+      a second of launch. The transparency GPU cost (issue #15471) needs
+      `sudo powermetrics`, so it needs the owner
+- [x] Reduced-motion pass: both transition sites (the group slide and the tab
+      chevron) are covered by `prefers-reduced-motion` blocks
+- [x] Accessibility: contrast verified and fixed, above
 
 ## M0 acceptance checklist
 
