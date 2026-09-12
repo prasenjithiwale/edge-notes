@@ -11,7 +11,7 @@ of every milestone. The spec is [build-brief.md](build-brief.md).
 | M1 Notes core | Built and accepted on macOS: the checklist below was run against the running app. |
 | M2 Find and organize | Built and accepted on macOS: the checklist below was run against the running app. |
 | M3 System integration | Built and verified on macOS, with one known gap (keyboard focus after the shortcut). |
-| M4 Polish | In progress: settings view and export done and verified; tab dragging, the editor's height transition and performance measurements still to do. |
+| M4 Polish | Built and verified on macOS. Only the GPU power measurement is outstanding, and it needs `sudo`. |
 | M5 Packaging | Not started |
 
 Built and verified on macOS 26.6.2 (Tahoe), Apple Silicon, single 1920×1080
@@ -714,6 +714,10 @@ width, monitor), so the next placement setting does not touch every call site.
 mean `tauri-plugin-dialog`, outside brief section 4. The first export makes macOS
 ask the app for permission to that folder, which is expected.
 
+**The editor grows into place** (brief 6.9), animating `max-height` from about a
+card's height to its own over 160 ms and then releasing the constraint — it has to
+be released, or the textarea could not grow as you type.
+
 **The dark palette now lives behind two selectors** — the system preference unless
 the user chose light, and an explicit dark choice. They must stay identical;
 tokens.css says so at the top of the block.
@@ -730,18 +734,52 @@ is now a single `--note-secondary-opacity` token at 0.82, used by the card
 preview, the untitled placeholder, the editor's placeholder and its edited-time
 line. `src/lib/contrast.test.ts` fails if it is ever lowered past the threshold.
 
-### Still to do in M4
+### Dragging the tab
 
-- [ ] Dragging the tab to reposition it along the edge (`dock.tabOffset` is still
-      fixed at 0.5 unless set by hand)
-- [ ] The editor's 160 ms height transition (brief 6.9) — never built in M1; the
-      card is replaced by the editor rather than growing into it
-- [ ] Performance measurements: idle CPU, 60 fps on the slide, tab visible within
-      a second of launch. The transparency GPU cost (issue #15471) needs
-      `sudo powermetrics`, so it needs the owner
-- [x] Reduced-motion pass: both transition sites (the group slide and the tab
-      chevron) are covered by `prefers-reduced-motion` blocks
-- [x] Accessibility: contrast verified and fixed, above
+Rust drives it, because the window moves with the tab: the frontend's own
+coordinates shift under the pointer mid-drag, while the poller already has the
+cursor in desktop coordinates. Pointer-down on the tab begins it; the release is
+caught on the *window*, since the pointer leaves the tab as soon as the window
+starts following it, and `pointercancel` ends it too so an interrupted drag cannot
+leave the dock stuck. Dropping persists the position as a ratio (brief 8.5) and
+hands the cursor back to hover, so the panel opens without moving the mouse again.
+
+The offset is clamped as a ratio rather than in pixels, so the stored value always
+matches where the tab is; clamping pixels alone would let the ratio drift past the
+end, and dragging back would do nothing until the drift was used up.
+
+**The drag test found a second bug:** `panel.width` resized the window but not the
+panel. Rust sized the window from the setting while `--panel-width` stayed a
+static 320 px token, so a widened window just grew a transparent margin.
+`DockShell` now drives the variable from the setting.
+
+### Measurements (release build, macOS 26.6.2, M-series, 1920×1080 at 1×)
+
+| Target (brief 11) | Measured |
+|---|---|
+| Visible tab in under 1 second from launch | **147 ms**, by polling the screen at ~40 ms granularity |
+| Idle CPU near 0% | **0.05%** mean over 30 s, collapsed and untouched |
+| Installer under about 15 MB | **4.5 MB** bundle (the installer itself is M5) |
+| Resident memory | 90 MB |
+
+Also confirmed on the release bundle: **transparency survives bundling**, so
+issue [#13415](https://github.com/tauri-apps/tauri/issues/13415) does not affect
+this app — worth knowing before M5. The dragged tab position also survived the
+dev-to-release restart, which exercises the ratio round-trip through SQLite.
+
+Not measured: the 60 fps slide, which needs frame instrumentation rather than a
+stopwatch, and the transparency GPU cost (issue #15471) — that one needs
+`sudo powermetrics --samplers gpu_power -i 1000 -n 5` with the panel collapsed and
+idle, so it needs the owner.
+
+### Reduced motion and accessibility
+
+- [x] Both transition sites — the group slide and the tab chevron — are covered by
+      `prefers-reduced-motion` blocks, and the editor's new expansion checks it
+      before animating.
+- [x] Contrast verified and fixed, above.
+- [x] `prefersReducedMotion` tolerates a missing `matchMedia` rather than
+      throwing: an absent accessibility API must not take the editor down with it.
 
 ## M0 acceptance checklist
 

@@ -4,6 +4,7 @@ import { Trash2 } from "lucide-react";
 import { IconButton } from "../components/IconButton";
 import { cx } from "../lib/cx";
 import { NOTE_COLORS, type Note } from "../lib/ipc";
+import { prefersReducedMotion } from "../lib/motion";
 import { colorName, editedLabel } from "../lib/notes";
 import { useNow } from "../lib/useNow";
 import { useDockStore } from "../store/dock";
@@ -18,8 +19,20 @@ interface NoteEditorProps {
 /** Brief 6.9: the textarea grows to about 60% of the panel, then scrolls. */
 const MAX_HEIGHT_RATIO = 0.6;
 
+/** Brief 6.9: the card expands in place over this long. */
+const EXPAND_MS = 160;
+
+/**
+ * Where the expansion starts from: about the height of the card that was just
+ * replaced. Measuring the outgoing card would mean threading its height through
+ * the list for a 160 ms animation; a close-enough constant keeps the growth
+ * visible without that.
+ */
+const CARD_HEIGHT_GUESS = 64;
+
 export function NoteEditor({ note }: NoteEditorProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const rootRef = useRef<HTMLElement>(null);
   const setContent = useNotesStore((state) => state.setContent);
   const setColor = useNotesStore((state) => state.setColor);
   const stopEditing = useNotesStore((state) => state.stopEditing);
@@ -39,6 +52,43 @@ export function NoteEditor({ note }: NoteEditorProps) {
         : Number.POSITIVE_INFINITY;
     textarea.style.height = "auto";
     textarea.style.height = `${String(Math.min(textarea.scrollHeight, max))}px`;
+  }, []);
+
+  // Brief 6.9: the card expands in place rather than being swapped for a taller
+  // box. Animating `max-height` from roughly the card's height to the editor's
+  // own, then letting go of the constraint — it has to be released, or the
+  // textarea could not grow as you type.
+  useEffect(() => {
+    const root = rootRef.current;
+    if (!root || prefersReducedMotion()) {
+      return;
+    }
+
+    const target = root.scrollHeight;
+    const start = Math.min(target, CARD_HEIGHT_GUESS);
+    root.style.overflow = "hidden";
+    root.style.maxHeight = `${String(start)}px`;
+
+    const frame = requestAnimationFrame(() => {
+      root.style.transition = `max-height ${String(EXPAND_MS)}ms var(--open-easing)`;
+      root.style.maxHeight = `${String(target)}px`;
+    });
+
+    const release = () => {
+      root.style.maxHeight = "";
+      root.style.transition = "";
+      root.style.overflow = "";
+    };
+    // Whichever comes first: the transition, or a timer in case it never fires.
+    const timer = setTimeout(release, EXPAND_MS + 60);
+    root.addEventListener("transitionend", release, { once: true });
+
+    return () => {
+      cancelAnimationFrame(frame);
+      clearTimeout(timer);
+      root.removeEventListener("transitionend", release);
+      release();
+    };
   }, []);
 
   useEffect(() => {
@@ -61,7 +111,10 @@ export function NoteEditor({ note }: NoteEditorProps) {
       const textarea = textareaRef.current;
       if (textarea && document.activeElement !== textarea) {
         textarea.focus();
-        textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+        textarea.setSelectionRange(
+          textarea.value.length,
+          textarea.value.length,
+        );
       }
     };
     window.addEventListener("focus", refocus);
@@ -80,7 +133,11 @@ export function NoteEditor({ note }: NoteEditorProps) {
   }, [setLock]);
 
   return (
-    <section className={styles.editor} style={noteColorStyle(note.color)}>
+    <section
+      ref={rootRef}
+      className={styles.editor}
+      style={noteColorStyle(note.color)}
+    >
       <textarea
         ref={textareaRef}
         className={styles.textarea}
@@ -106,7 +163,9 @@ export function NoteEditor({ note }: NoteEditorProps) {
               styles.swatch,
               color === note.color && styles.swatchSelected,
             )}
-            style={{ "--swatch-bg": `var(--note-${color}-bg)` } as CSSProperties}
+            style={
+              { "--swatch-bg": `var(--note-${color}-bg)` } as CSSProperties
+            }
             aria-label={colorName(color)}
             aria-pressed={color === note.color}
             title={colorName(color)}
