@@ -59,18 +59,30 @@ problem (the app works with it removed *and* restored, and Tauri's
 when `devCsp` is unset); the ACL capability is correct; and the frontend
 handshake is correct under StrictMode's double-invoked effects.
 
-## Deferred — raise before M3 is signed off
+## Open gaps
 
-Agreed on 13 Sep 2026 to look at these after M3 is built, not before.
+Standing list of what is known to be wrong or unverified. Read this before
+planning a milestone; nothing here is fixed by the work that follows it.
 
-1. **Platform coverage that has never run on real hardware.** The panel over
+1. **A panel opened by the shortcut or tray receives no keystrokes until it is
+   clicked once.** `Cmd+F` does not reach it either, so the panel does not own the
+   keyboard — this is not the editor losing DOM focus. Eight approaches were
+   measured and ruled out; the table, the mitigation that is kept (one click
+   *anywhere* in the panel focuses the editor) and the next lead (first responder
+   is the content view, not the `WKWebView`) are in the M3 section below. **Do not
+   retry those eight without reading it.** Affects brief 6.11 and 8.6.
+2. **Platform coverage that has never run on real hardware.** The panel over
    full-screen apps and across Spaces; 150% and 200% scaling; a secondary monitor;
    and Windows and Linux entirely. Scaling and multi-monitor are covered by unit
-   tests only — this machine is a single 1920×1080 display at 1×. M3 assumes
-   placement is sound, so a real failure here would land on work built on top of it.
-2. **The notes database still holds test data** from the checklist runs: four
-   notes, some edited, plus tombstone rows from deleted ones. The database was
-   empty beforehand, so all of it is the agent's. Purge it when the owner says so.
+   tests only — this machine is a single 1920×1080 display at 1×. Everything built
+   since M0 assumes placement is sound, so a real failure here lands on work built
+   on top of it.
+3. **CSS wiring and the slide animation handshake have no test.** A selector that
+   matches nothing still looks identical to a passing build.
+
+Closed: the test data left in the notes database by the checklist runs was purged
+on 13 Sep 2026, settings rows included, so the database is back to a fresh-install
+state.
 
 ## Commands
 
