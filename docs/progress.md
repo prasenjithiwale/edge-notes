@@ -10,7 +10,7 @@ of every milestone. The spec is [build-brief.md](build-brief.md).
 | M0 Docking spike | Built. **The window never appeared until 12 Sep 2026**, and **typing never worked until the same day** — see below. Checklist now run on macOS except the items noted; Windows and Linux untested. |
 | M1 Notes core | Built and accepted on macOS: the checklist below was run against the running app. |
 | M2 Find and organize | Built and accepted on macOS: the checklist below was run against the running app. |
-| M3 System integration | Not started |
+| M3 System integration | Built and verified on macOS, with one known gap (keyboard focus after the shortcut). |
 | M4 Polish | Not started |
 | M5 Packaging | Not started |
 
@@ -58,6 +58,19 @@ problem (the app works with it removed *and* restored, and Tauri's
 `security.devCsp` is unnecessary here, though note that `csp` does apply in dev
 when `devCsp` is unset); the ACL capability is correct; and the frontend
 handshake is correct under StrictMode's double-invoked effects.
+
+## Deferred — raise before M3 is signed off
+
+Agreed on 13 Sep 2026 to look at these after M3 is built, not before.
+
+1. **Platform coverage that has never run on real hardware.** The panel over
+   full-screen apps and across Spaces; 150% and 200% scaling; a secondary monitor;
+   and Windows and Linux entirely. Scaling and multi-monitor are covered by unit
+   tests only — this machine is a single 1920×1080 display at 1×. M3 assumes
+   placement is sound, so a real failure here would land on work built on top of it.
+2. **The notes database still holds test data** from the checklist runs: four
+   notes, some edited, plus tombstone rows from deleted ones. The database was
+   empty beforehand, so all of it is the agent's. Purge it when the owner says so.
 
 ## Commands
 
@@ -545,6 +558,98 @@ multi-monitor placement are still unverified.
 - [ ] The panel over full-screen apps and on every Space
 - [ ] 150% and 200% scaling, and a secondary monitor (single 1× display here)
 - [ ] Windows and Linux entirely
+
+## M3: system integration
+
+Tray menu, live dock side switching, launch at login, the global shortcut, single
+instance and logging. The Linux Wayland fallback that M3 also lists was already
+built in M0 (`platform::linux::prepare_display_backend`) and is unchanged.
+
+Dependencies added, all from brief section 4: `tauri-plugin-single-instance`,
+`tauri-plugin-autostart`, `tauri-plugin-global-shortcut`, `tauri-plugin-log`, the
+`tray-icon` feature on `tauri`, and `log` as the façade the plugin logs through.
+
+### Decisions
+
+**The tray and the shortcut show the panel; they never hide it.** `dock_toggle`
+would close an already-open panel, which is wrong for a menu item called "Open
+notes". `tray::show_panel` checks the phase first and only toggles when collapsed.
+
+**Panel operations are marshalled to the main thread at the point of use.** Brief
+8.8 says panel operations run on the main thread, and `apply_rect` already did —
+but taking focus did not, and actions are applied from whatever thread fed the
+controller. The single-instance listener is one such thread, and the AppKit call
+from it threw an Objective-C exception that Rust cannot catch: **launching a
+second copy aborted the running app.** `focus` and `app_ready`'s `show` now both
+go through `run_on_main_thread`.
+
+**A blur in the first moments after a deliberate open is ignored.** macOS hands
+focus back to the previously active app about a second after an `Accessory` app
+activates itself. Brief 6.3 closes a shortcut-opened panel when another app takes
+focus, so that bounce made the panel shut itself the instant the shortcut opened
+it. `FOCUS_SETTLE` (1.5 s) distinguishes the window server settling from the user
+switching away.
+
+**Launch-at-login state is read from the OS, not mirrored into settings.** The
+user can remove the login item outside the app, so the plugin is the only honest
+source and brief 9.2 has no key for it. A `LaunchAgent` is used rather than a
+login item, so the widget returns after a restart without appearing in the user's
+Login Items list.
+
+**Creating a note closes the editor first.** Creating replaced the editor rather
+than closing it, so an empty note never went through `stopEditing` and was never
+discarded — pressing the shortcut twice left a blank card behind each time.
+
+### Deviations from the brief
+
+- Brief 6.12 asks for the dock side as a radio pair. Tauri 2.11 has no radio menu
+  item, so two check items are driven as one: selecting either sets it and clears
+  the other. It reads and behaves as a radio.
+- The tray icon is the app icon as a template image, which renders as a solid
+  silhouette in the menu bar. A real monochrome icon is M5's icon work.
+- Live application of the open/close delays and panel width is not wired; only the
+  dock side and tab offset are (brief M3 asks for "live dock side switching", and
+  the settings view that would expose the rest is M4).
+
+### Known gap: the shortcut opens the panel but does not keep the keyboard
+
+`CmdOrCtrl+Alt+N` opens the panel and puts a new note in the editor, verified on
+screen. **Keyboard focus does not stick**: the panel is made key and the window
+reports focused, then macOS returns focus to the previously active app about a
+second later, so typing goes to that app until you click into the panel once.
+
+Traced with focus logging: `focus_panel done, is_focused=Ok(true)`, then
+`window focused=true`, then `window focused=false` a second later. Tried and
+rejected: `panel.show_and_make_key()` alone (never activates the app),
+`window.set_focus()` (returns Ok, no effect on this), explicit
+`NSApplication::activate()`, and `can_become_main_window: true` (made the bounce
+immediate). The `nonactivating` style mask exists precisely to stop the app being
+activated, which is what makes this hard; the remaining avenue is dropping that
+mask around a deliberate focus and restoring it after. Clicking into the panel
+takes focus correctly, so the editor is usable — you just have to click first.
+
+### M3 acceptance checklist
+
+Verified on screen unless marked otherwise.
+
+- [x] The tray icon appears in the menu bar, with the menu of brief 6.12 in
+      sentence case: Open notes, New note, Dock on left / Dock on right,
+      Launch at login, Quit Edge Notes
+- [x] The dock-side pair behaves as a radio and shows the current side
+- [x] "Dock on left" moves the tab and panel to the left edge immediately, fully
+      mirrored, with no restart, and the choice persists
+- [x] "Dock on right" moves it back
+- [x] "New note" opens the panel with an empty note in the editor
+- [x] "Launch at login" creates `~/Library/LaunchAgents/Edge Notes.plist`, and
+      clearing it removes the file
+- [x] The global shortcut opens the panel with a new note in the editor
+- [x] The panel stays open after the shortcut rather than closing itself
+- [x] A second launch does not start a second app: it shows the running panel,
+      and the running app survives (it used to abort)
+- [x] Logs are written to `~/Library/Logs/dev.edgenotes.app/Edge Notes.log`
+- [ ] Typing straight after the shortcut, without clicking first — the known gap
+- [ ] "Quit Edge Notes" (not exercised, to keep the app running for the rest)
+- [ ] Anything on Windows or Linux, including the Wayland fallback
 
 ## M0 acceptance checklist
 

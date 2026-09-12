@@ -27,6 +27,6 @@ pub fn show(window: &WebviewWindow) {
     macos::show(window);
     #[cfg(not(target_os = "macos"))]
     if let Err(error) = window.show() {
-        eprintln!("platform: failed to show window: {error}");
+        log::error!("platform: failed to show window: {error}");
     }
 }

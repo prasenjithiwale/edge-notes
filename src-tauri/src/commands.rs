@@ -6,23 +6,33 @@ use std::sync::Arc;
 use tauri::{AppHandle, Emitter, Manager, State};
 
 use crate::db::{Database, Note, NoteColor, Settings, SettingsPatch, notes, now_ms, settings};
-use crate::dock::{DOCK_WINDOW_LABEL, Dock, Input, Phase};
+use crate::dock::{DOCK_WINDOW_LABEL, Dock, Input, Phase, poller};
 use crate::error::{AppError, AppResult};
 use crate::platform;
 
 /// Brief 9.4.
-const SETTINGS_CHANGED_EVENT: &str = "settings:changed";
+pub const SETTINGS_CHANGED_EVENT: &str = "settings:changed";
 
 /// The frontend has painted: position and show the window. Keeping it hidden
 /// until now is what avoids a white flash at startup (brief 7.5).
 #[tauri::command]
 pub fn app_ready(app: AppHandle, dock: State<'_, Arc<Dock>>) -> AppResult<()> {
-    let window = app
-        .get_webview_window(DOCK_WINDOW_LABEL)
-        .ok_or(AppError::WindowNotFound(DOCK_WINDOW_LABEL))?;
+    // Fail early and loudly if the window is missing, rather than inside the
+    // closure below where the error would have nowhere to go.
+    if app.get_webview_window(DOCK_WINDOW_LABEL).is_none() {
+        return Err(AppError::WindowNotFound(DOCK_WINDOW_LABEL));
+    }
 
     dock.input(&app, Input::MonitorChanged);
-    platform::show(&window);
+
+    // Showing converts to panel operations on macOS, which must run on the main
+    // thread (brief 8.8); command handlers do not always run there.
+    let handle = app.clone();
+    app.run_on_main_thread(move || {
+        if let Some(window) = handle.get_webview_window(DOCK_WINDOW_LABEL) {
+            platform::show(&window);
+        }
+    })?;
     Ok(())
 }
 
@@ -132,10 +142,18 @@ pub fn settings_update(
     patch: SettingsPatch,
 ) -> AppResult<Settings> {
     let updated = db.with(|connection| settings::update(connection, &patch))?;
-    // Applying dock side, delays and width live is M3; persisting and announcing
-    // them is all M1 needs.
+
+    // Brief 9.3: settings apply immediately. A dock side or tab offset that only
+    // took effect on the next launch would make the tray's radio pair look broken.
+    if patch.dock_side.is_some() || patch.dock_tab_offset.is_some() {
+        if let Some(dock) = app.try_state::<Arc<Dock>>() {
+            let geometry = poller::geometry_for(&app, updated.dock_side, updated.dock_tab_offset);
+            dock.set_geometry(&app, geometry);
+        }
+    }
+
     if let Err(error) = app.emit(SETTINGS_CHANGED_EVENT, &updated) {
-        eprintln!("settings: failed to emit change: {error}");
+        log::error!("settings: failed to emit change: {error}");
     }
     Ok(updated)
 }

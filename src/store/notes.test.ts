@@ -102,3 +102,31 @@ describe("opening a note without editing it", () => {
     expect(useNotesStore.getState().notes[0]?.updatedAt).toBe(9_999);
   });
 });
+
+describe("creating a second note", () => {
+  it("discards the first one when it was left empty", async () => {
+    // The shortcut and the tray both create notes without closing the editor
+    // first; pressing the shortcut twice used to leave a blank card behind.
+    invoke.mockImplementation((command: string) => {
+      if (command === "notes_list") {
+        return Promise.resolve([STORED]);
+      }
+      if (command === "notes_create") {
+        return Promise.resolve(note({ id: "blank", content: "", updatedAt: 2_000 }));
+      }
+      if (command === "settings_get" || command === "settings_update") {
+        return Promise.resolve({ "notes.lastColor": "yellow" });
+      }
+      return Promise.resolve(null);
+    });
+
+    await useNotesStore.getState().createNote();
+    expect(useNotesStore.getState().editingId).toBe("blank");
+
+    await useNotesStore.getState().createNote();
+
+    const deleted = invoke.mock.calls.filter(([command]) => command === "notes_delete");
+    expect(deleted.length).toBe(1);
+    expect(useNotesStore.getState().notes.filter((n) => n.content === "").length).toBe(1);
+  });
+});

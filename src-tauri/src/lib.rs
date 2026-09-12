@@ -8,12 +8,15 @@ pub mod db;
 pub mod dock;
 pub mod error;
 pub mod platform;
+pub mod tray;
 
 use std::sync::Arc;
 
 use tauri::{Manager, WindowEvent};
+use tauri_plugin_autostart::MacosLauncher;
+use tauri_plugin_global_shortcut::GlobalShortcutExt;
 
-use db::Database;
+use db::{Database, settings};
 use dock::{DOCK_WINDOW_LABEL, Dock, Input, Side, Timings, poller};
 
 /// The dock side default (brief 9.2). Settings arrive in M1.
@@ -21,8 +24,55 @@ const DEFAULT_SIDE: Side = Side::Right;
 /// Vertically centred on the work area (brief 9.2 `dock.tabOffset`).
 const DEFAULT_TAB_OFFSET: f64 = 0.5;
 
+/// Brief 6.11: one global shortcut, opening the panel with a new note ready to
+/// type into. The accelerator is a setting, so a user who has taken
+/// `CmdOrCtrl+Alt+N` for something else can move it.
+fn register_new_note_shortcut(app: &tauri::AppHandle) {
+    let accelerator = app
+        .try_state::<Database>()
+        .and_then(|db| db.with(settings::get).ok())
+        .map_or_else(
+            || db::Settings::default().shortcut_new_note,
+            |settings| settings.shortcut_new_note,
+        );
+
+    let result =
+        app.global_shortcut()
+            .on_shortcut(accelerator.as_str(), |app, _shortcut, event| {
+                // Both press and release arrive; acting on each would open two notes.
+                if event.state() == tauri_plugin_global_shortcut::ShortcutState::Pressed {
+                    tray::open_with_new_note(app);
+                }
+            });
+
+    if let Err(error) = result {
+        // A shortcut another app already owns must not stop the widget from
+        // starting: everything else still works without it.
+        log::error!("shortcut: could not register {accelerator}: {error}");
+    }
+}
+
 pub fn run() {
-    let builder = tauri::Builder::default();
+    let builder = tauri::Builder::default()
+        // Single instance must be registered first: a second launch has to be
+        // turned away before it starts building windows or opening the database.
+        // Rather than start over, it shows the panel that is already running.
+        .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
+            log::info!("a second instance was launched; showing the running panel");
+            tray::show_panel(app);
+        }))
+        .plugin(
+            tauri_plugin_log::Builder::new()
+                .level(log::LevelFilter::Info)
+                .build(),
+        )
+        .plugin(tauri_plugin_autostart::init(
+            // A LaunchAgent rather than a login item, so the widget comes back
+            // after a restart without appearing in the user's Login Items list.
+            MacosLauncher::LaunchAgent,
+            None,
+        ))
+        .plugin(tauri_plugin_global_shortcut::Builder::new().build());
 
     #[cfg(target_os = "macos")]
     let builder = builder.plugin(tauri_nspanel::init());
@@ -56,8 +106,8 @@ pub fn run() {
             // Brief 9.1: drop notes soft-deleted more than 30 days ago.
             match database.purge_expired() {
                 Ok(0) => {}
-                Ok(count) => eprintln!("db: purged {count} expired notes"),
-                Err(error) => eprintln!("db: purge failed: {error}"),
+                Ok(count) => log::info!("db: purged {count} expired notes"),
+                Err(error) => log::error!("db: purge failed: {error}"),
             }
             let dock_side = database
                 .with(db::settings::get)
@@ -91,6 +141,9 @@ pub fn run() {
                     _ => {}
                 }
             });
+
+            tray::init(&handle)?;
+            register_new_note_shortcut(&handle);
 
             poller::spawn(handle);
             Ok(())

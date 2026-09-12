@@ -60,6 +60,7 @@ export interface IpcError {
 
 const DOCK_STATE_EVENT = "dock:state";
 const SETTINGS_CHANGED_EVENT = "settings:changed";
+const NEW_NOTE_EVENT = "ui:new-note";
 
 function isIpcError(value: unknown): value is IpcError {
   return (
@@ -180,6 +181,18 @@ export function settingsGet(): Promise<Settings> {
 
 export function settingsUpdate(patch: SettingsPatch): Promise<Settings> {
   return callResult<Settings>("settings_update", { patch });
+}
+
+/**
+ * Brief 9.4: the tray and the global shortcut ask for a new note. Rust has
+ * already shown the panel by the time this arrives.
+ */
+export function onNewNoteRequested(
+  handler: () => void,
+): Promise<UnlistenFn> {
+  return listen<null>(NEW_NOTE_EVENT, () => {
+    handler();
+  });
 }
 
 export function onSettingsChanged(

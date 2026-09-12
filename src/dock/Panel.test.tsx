@@ -8,8 +8,13 @@ const invoke = vi.fn<(command: string, args?: unknown) => Promise<unknown>>();
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: (command: string, args?: unknown) => invoke(command, args),
 }));
+type EventHandler = (event: { payload: unknown }) => void;
+const listeners = new Map<string, EventHandler>();
 vi.mock("@tauri-apps/api/event", () => ({
-  listen: () => Promise.resolve(() => undefined),
+  listen: (event: string, handler: EventHandler) => {
+    listeners.set(event, handler);
+    return Promise.resolve(() => listeners.delete(event));
+  },
 }));
 
 const { Panel } = await import("./Panel");
@@ -196,6 +201,20 @@ describe("colour filter", () => {
     await renderPanel();
     await screen.findByRole("button", { name: "Pink" });
     expect(screen.queryByRole("button", { name: "Lavender" })).toBeNull();
+  });
+});
+
+describe("the tray and the global shortcut", () => {
+  it("creates a note when Rust sends ui:new-note", async () => {
+    await renderPanel();
+    // Brief 6.11: the shortcut opens the panel with a new note in the editor.
+    // Rust has already shown the panel by the time the event arrives.
+    listeners.get("ui:new-note")?.({ payload: null });
+
+    await waitFor(() => {
+      expect(commandCalls("notes_create").length).toBe(1);
+    });
+    expect(useNotesStore.getState().editingId).toBe("new");
   });
 });
 

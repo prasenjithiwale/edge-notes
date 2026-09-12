@@ -86,6 +86,12 @@ export const useNotesStore = create<NotesStore>((set, get) => ({
   },
 
   createNote: async () => {
+    // Close whatever is open first. Creating a note replaces the editor rather
+    // than closing it — pressing the shortcut twice, say — and an empty note that
+    // never goes through `stopEditing` is never discarded, so each press left
+    // another blank card behind (brief 6.9).
+    await get().stopEditing();
+
     // A new note is empty and carries the last-used colour, so any active search
     // or colour filter would hide the card the editor is supposed to open in.
     // Clearing the filters keeps the new note visible (brief 6.9).

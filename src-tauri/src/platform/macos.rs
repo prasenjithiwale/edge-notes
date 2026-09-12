@@ -4,6 +4,7 @@
 //! swapped out without touching the dock logic.
 
 use tauri::{App, Manager, WebviewWindow};
+use tauri_nspanel::objc2_app_kit::NSApplication;
 use tauri_nspanel::{
     CollectionBehavior, ManagerExt, PanelLevel, StyleMask, WebviewWindowExt, tauri_panel,
 };
@@ -33,7 +34,7 @@ tauri_panel! {
 pub fn set_activation_policy(app: &App) {
     app.handle()
         .set_activation_policy(tauri::ActivationPolicy::Accessory)
-        .unwrap_or_else(|error| eprintln!("macos: failed to set activation policy: {error}"));
+        .unwrap_or_else(|error| log::error!("macos: failed to set activation policy: {error}"));
 }
 
 /// Convert the dock window into a non-activating floating panel that joins every
@@ -42,7 +43,7 @@ pub fn configure(window: &WebviewWindow) {
     let panel = match window.to_panel::<DockPanel>() {
         Ok(panel) => panel,
         Err(error) => {
-            eprintln!("macos: failed to convert window to NSPanel: {error}");
+            log::error!("macos: failed to convert window to NSPanel: {error}");
             return;
         }
     };
@@ -66,9 +67,9 @@ pub fn show(window: &WebviewWindow) {
     match window.app_handle().get_webview_panel(DOCK_WINDOW_LABEL) {
         Ok(panel) => panel.order_front_regardless(),
         Err(error) => {
-            eprintln!("macos: panel not found, falling back to window show: {error:?}");
+            log::error!("macos: panel not found, falling back to window show: {error:?}");
             if let Err(error) = window.show() {
-                eprintln!("macos: failed to show window: {error}");
+                log::error!("macos: failed to show window: {error}");
             }
         }
     }
@@ -77,13 +78,35 @@ pub fn show(window: &WebviewWindow) {
 /// Take focus deliberately (global shortcut or tray), which is the only time
 /// the dock is allowed to become key.
 pub fn focus_panel(window: &WebviewWindow) {
-    match window.app_handle().get_webview_panel(DOCK_WINDOW_LABEL) {
-        Ok(panel) => panel.show_and_make_key(),
-        Err(error) => {
-            eprintln!("macos: panel not found, falling back to set_focus: {error:?}");
-            if let Err(error) = window.set_focus() {
-                eprintln!("macos: failed to focus window: {error}");
-            }
-        }
+    if let Ok(panel) = window.app_handle().get_webview_panel(DOCK_WINDOW_LABEL) {
+        // Orders the panel in and makes it key, but says nothing about which
+        // *application* is active.
+        panel.show_and_make_key();
     }
+
+    // An Accessory app that is not active cannot hold the keyboard, however key
+    // its window claims to be: the shortcut opened the panel and the editor drew a
+    // caret, yet every keystroke still went to the app behind it. The panel's
+    // `nonactivating` style mask is what makes it so — that mask exists precisely
+    // to stop the app being activated — so the app has to be activated by hand.
+    // Only the deliberate paths reach here (shortcut, tray); hover never does, so
+    // this cannot steal focus from someone working elsewhere.
+    activate_app();
+
+    if let Err(error) = window.set_focus() {
+        log::error!("macos: failed to focus the panel: {error}");
+    }
+}
+
+/// Bring the app forward. For an `Accessory` app this adds no Dock icon and no
+/// menu bar; it only makes the process the active one, so its key window is the
+/// one the keyboard talks to.
+fn activate_app() {
+    let Some(mtm) = tauri_nspanel::objc2_foundation::MainThreadMarker::new() else {
+        // Panel operations already require the main thread (brief 8.8); if we are
+        // somehow off it, skip rather than risk an AppKit call from the wrong one.
+        log::error!("macos: activation attempted off the main thread");
+        return;
+    };
+    NSApplication::sharedApplication(mtm).activate();
 }

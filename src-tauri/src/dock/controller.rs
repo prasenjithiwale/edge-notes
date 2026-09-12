@@ -87,6 +87,12 @@ impl Default for Timings {
     }
 }
 
+/// How long after a deliberate open a blur is treated as the window server
+/// settling rather than the user leaving. Long enough to cover the bounce
+/// observed on macOS (~1 s), short enough that letting go of the panel still
+/// feels immediate.
+const FOCUS_SETTLE: Duration = Duration::from_millis(1_500);
+
 pub struct DockController {
     geometry: DockGeometry,
     timings: Timings,
@@ -95,6 +101,12 @@ pub struct DockController {
     interaction_lock: bool,
     /// Opened by shortcut or tray: does not auto-close on cursor leave (6.3).
     opened_by_shortcut: bool,
+    /// When the panel was last opened deliberately, so a blur that arrives in the
+    /// same breath can be told from the user switching away. macOS hands focus
+    /// straight back to the previously active app when an `Accessory` app
+    /// activates itself, and brief 6.3 closes a shortcut-opened panel on blur —
+    /// so without this the panel shut itself the instant it appeared.
+    opened_deliberately_at: Option<Instant>,
     /// Set when the user dismissed the panel outright (Esc, shortcut, tray) while
     /// the cursor was still on it. Brief 6.1 reverses a close when the cursor
     /// *re-enters*, which presumes it left; without this, a cursor that never
@@ -118,6 +130,7 @@ impl DockController {
             keep_open: false,
             interaction_lock: false,
             opened_by_shortcut: false,
+            opened_deliberately_at: None,
             dismissed: false,
             hover_since: None,
             leave_since: None,
@@ -354,6 +367,14 @@ impl DockController {
         if self.keep_open || !self.phase.is_expanded() {
             return Vec::new();
         }
+        if self
+            .opened_deliberately_at
+            .is_some_and(|opened| now.duration_since(opened) < FOCUS_SETTLE)
+        {
+            // Focus bouncing back moments after we asked for it is the window
+            // server settling, not a decision by the user.
+            return Vec::new();
+        }
         // Another app took focus, so no field of ours holds focus any more.
         self.interaction_lock = false;
         if self.opened_by_shortcut {
@@ -392,6 +413,9 @@ impl DockController {
     fn begin_open(&mut self, now: Instant, by_shortcut: bool) -> Vec<Action> {
         // Whatever reopens the panel ends the dismissal.
         self.dismissed = false;
+        if by_shortcut {
+            self.opened_deliberately_at = Some(now);
+        }
         let was_expanded = self.phase.is_expanded();
         self.phase = Phase::Opening;
         self.hover_since = None;
@@ -423,6 +447,7 @@ impl DockController {
     fn finish_close(&mut self) -> Vec<Action> {
         self.phase = Phase::Collapsed;
         self.opened_by_shortcut = false;
+        self.opened_deliberately_at = None;
         self.leave_since = None;
         self.hover_since = None;
         self.ack_deadline = None;
@@ -601,6 +626,23 @@ mod tests {
         // The window is already expanded, so no SetWindowRect.
         assert_eq!(actions.len(), 1);
         assert!(matches!(actions[0], Action::EmitState(s) if s.phase == Phase::Opening));
+    }
+
+    #[test]
+    fn a_shortcut_opened_panel_ignores_the_blur_that_follows_it() {
+        // macOS hands focus back to the previously active app moments after an
+        // Accessory app activates itself. Brief 6.3 closes a shortcut-opened
+        // panel when another app takes focus, so that bounce used to shut the
+        // panel the instant the shortcut opened it.
+        let mut c = controller();
+        let t0 = Instant::now();
+
+        c.handle(Input::Toggle, t0);
+        assert_eq!(c.phase(), Phase::Opening);
+
+        c.handle(Input::WindowBlurred, ms(t0, 900));
+        assert_eq!(c.phase(), Phase::Opening);
+        assert!(c.tick(ms(t0, 1_000)).is_empty());
     }
 
     #[test]
@@ -868,7 +910,9 @@ mod tests {
         c.handle(Input::Toggle, t0);
         c.handle(Input::AnimationDone(Phase::Opening), ms(t0, 100));
 
-        c.handle(Input::WindowBlurred, ms(t0, 200));
+        // Past the settle window this is a real app switch, and brief 6.3 closes
+        // on it at once — no close delay, unlike the cursor simply leaving.
+        c.handle(Input::WindowBlurred, ms(t0, 2_000));
         assert_eq!(c.phase(), Phase::Closing);
     }
 

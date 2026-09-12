@@ -5,7 +5,12 @@ import { IconButton } from "../components/IconButton";
 import { Toast } from "../components/Toast";
 import { cx } from "../lib/cx";
 import { isExpandedPhase } from "../lib/dock";
-import { dockToggle, NOTE_COLORS, onSettingsChanged } from "../lib/ipc";
+import {
+  dockToggle,
+  NOTE_COLORS,
+  onNewNoteRequested,
+  onSettingsChanged,
+} from "../lib/ipc";
 import { facetColors, filterNotes } from "../lib/notes";
 import { moveCardFocus } from "../notes/cardFocus";
 import { ColorFilter } from "../notes/ColorFilter";
@@ -64,6 +69,19 @@ export function Panel({ className }: PanelProps) {
       });
     };
   }, [applySettings]);
+
+  // The tray and the global shortcut both arrive here (brief 6.11, 9.4). The
+  // store is read through getState() so the subscription is set up once.
+  useEffect(() => {
+    const unlisten = onNewNoteRequested(() => {
+      void useNotesStore.getState().createNote();
+    });
+    return () => {
+      void unlisten.then((stop) => {
+        stop();
+      });
+    };
+  }, []);
 
   // The filter row offers the colours of notes matching the *query*, not of the
   // colour-filtered result: filtering to one colour must not remove the dots

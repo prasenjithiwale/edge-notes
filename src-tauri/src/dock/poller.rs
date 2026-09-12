@@ -72,7 +72,10 @@ impl Dock {
         interval
     }
 
-    fn phase(&self) -> Phase {
+    /// The current phase, so the tray and the shortcut can tell "show the notes"
+    /// from "toggle them": summoning the panel deliberately must never hide it.
+    #[must_use]
+    pub fn phase(&self) -> Phase {
         match self.controller.lock() {
             Ok(controller) => controller.phase(),
             Err(poisoned) => poisoned.into_inner().phase(),
@@ -195,15 +198,28 @@ fn apply(app: &AppHandle, actions: Vec<Action>) {
                 if let Some(window) = app.get_webview_window(DOCK_WINDOW_LABEL)
                     && let Err(error) = window.emit_to(DOCK_WINDOW_LABEL, DOCK_STATE_EVENT, state)
                 {
-                    eprintln!("dock: failed to emit state: {error}");
+                    log::error!("dock: failed to emit state: {error}");
                 }
             }
-            Action::Focus => {
-                if let Some(window) = app.get_webview_window(DOCK_WINDOW_LABEL) {
-                    focus(&window);
-                }
-            }
+            Action::Focus => focus_on_main_thread(app),
         }
+    }
+}
+
+/// Taking focus touches the panel, and panel operations belong on the main
+/// thread (brief 8.8). Actions are applied from whatever thread fed the
+/// controller — the poll thread, a command, the global shortcut, or the
+/// single-instance listener — and an AppKit call from the wrong one throws an
+/// Objective-C exception that Rust cannot catch: a second launch aborted the
+/// running app outright.
+fn focus_on_main_thread(app: &AppHandle) {
+    let handle = app.clone();
+    if let Err(error) = app.run_on_main_thread(move || {
+        if let Some(window) = handle.get_webview_window(DOCK_WINDOW_LABEL) {
+            focus(&window);
+        }
+    }) {
+        log::error!("dock: failed to schedule focus: {error}");
     }
 }
 
@@ -215,7 +231,7 @@ fn focus(window: &WebviewWindow) {
 #[cfg(not(target_os = "macos"))]
 fn focus(window: &WebviewWindow) {
     if let Err(error) = window.set_focus() {
-        eprintln!("dock: failed to focus: {error}");
+        log::error!("dock: failed to focus: {error}");
     }
 }
 
@@ -248,19 +264,19 @@ fn apply_rect(app: &AppHandle, rect: Rect) {
             }
         }
     }) {
-        eprintln!("dock: failed to schedule window update: {error}");
+        log::error!("dock: failed to schedule window update: {error}");
     }
 }
 
 fn set_position(window: &WebviewWindow, position: PhysicalPosition<i32>) {
     if let Err(error) = window.set_position(position) {
-        eprintln!("dock: failed to set position: {error}");
+        log::error!("dock: failed to set position: {error}");
     }
 }
 
 fn set_size(window: &WebviewWindow, size: PhysicalSize<u32>) {
     if let Err(error) = window.set_size(size) {
-        eprintln!("dock: failed to set size: {error}");
+        log::error!("dock: failed to set size: {error}");
     }
 }
 
@@ -312,7 +328,7 @@ pub fn spawn(app: AppHandle) {
             }
         })
         .map_or_else(
-            |error| eprintln!("dock: failed to start poller: {error}"),
+            |error| log::error!("dock: failed to start poller: {error}"),
             |_| (),
         );
 }

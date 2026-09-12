@@ -69,9 +69,13 @@ A desktop notes widget: a small tab docked to the left or right screen edge, flo
 
 Layout: `src/` (dock/, notes/, components/, store/ Zustand, lib/, styles/tokens.css) and `src-tauri/src/` (dock/, platform/, db/, commands.rs, tray.rs, error.rs). Section 10 of the brief has the full tree.
 
+**Panel operations must be marshalled to the main thread at the point of use.** Actions are applied from whatever thread fed the controller — the poll thread, a command, the global shortcut, the single-instance listener — and an AppKit call from the wrong one throws an Objective-C exception Rust cannot catch, aborting the process (a second launch used to kill the running app). `apply_rect`, `focus` and `app_ready`'s `show` all go through `run_on_main_thread`.
+
+**The tray and the shortcut show the panel; they never toggle it.** `tray::show_panel` checks the phase and only opens when collapsed — a menu item called "Open notes" must not close them. Both also ignore a blur for `FOCUS_SETTLE` (1.5 s) after opening: macOS hands focus back to the previously active app about a second after an `Accessory` app activates itself, and brief 6.3's close-on-blur turned that into the panel shutting itself the instant it opened.
+
 ### Platform specifics
 
-- **macOS:** `ActivationPolicy::Accessory` (no Dock icon, no menu bar) and `tauri-nspanel` (pinned commit) to convert the window into a non-activating panel that joins all Spaces and floats over full-screen apps — while still able to become key window so typing works. Panel operations run on the main thread. Keep this isolated in `platform/macos.rs`. `macOSPrivateApi` is required for transparency and rules out the Mac App Store.
+- **macOS:** Keyboard focus after the global shortcut is a known gap — the panel becomes key, then macOS returns focus to the previous app about a second later, so you must click into the panel once before typing. `nonactivating_panel` is what makes this hard; see the M3 section of `docs/progress.md` for what has already been tried. `ActivationPolicy::Accessory` (no Dock icon, no menu bar) and `tauri-nspanel` (pinned commit) to convert the window into a non-activating panel that joins all Spaces and floats over full-screen apps — while still able to become key window so typing works. Panel operations run on the main thread. Keep this isolated in `platform/macos.rs`. `macOSPrivateApi` is required for transparency and rules out the Mac App Store.
 - **Windows:** `skipTaskbar` + `alwaysOnTop` cover most behavior. Verify expanding doesn't steal focus before adding any extended window styles.
 - **Linux:** X11 direct. When `XDG_SESSION_TYPE=wayland`, set `GDK_BACKEND=x11` at the very top of `main` before Tauri or GTK start (in Rust 2024 `set_var` is `unsafe`; call it before any threads spawn). `EDGE_NOTES_NATIVE_WAYLAND=1` opts out.
 
