@@ -12,7 +12,7 @@ of every milestone. The spec is [build-brief.md](build-brief.md).
 | M2 Find and organize | Built and accepted on macOS: the checklist below was run against the running app. |
 | M3 System integration | Built and verified on macOS, with one known gap (keyboard focus after the shortcut). |
 | M4 Polish | Built and verified on macOS. Only the GPU power measurement is outstanding, and it needs `sudo`. |
-| M5 Packaging | Not started |
+| M5 Packaging | macOS done: icons, metadata, .dmg built and installed. Windows and Linux packages cannot be built here. |
 
 Built and verified on macOS 26.6.2 (Tahoe), Apple Silicon, single 1920×1080
 display at 1× scale. Every scaling and multi-monitor case is covered by unit
@@ -77,7 +77,13 @@ planning a milestone; nothing here is fixed by the work that follows it.
    tests only — this machine is a single 1920×1080 display at 1×. Everything built
    since M0 assumes placement is sound, so a real failure here lands on work built
    on top of it.
-3. **CSS wiring and the slide animation handshake have no test.** A selector that
+3. **The tab may not float over full-screen apps.** Seen by accident on
+   13 Sep 2026: with a video full-screen, a screenshot showed no tab at the edge,
+   though the app was running. Brief 8.8 expects `full_screen_auxiliary` plus
+   `can_join_all_spaces` to put it there, and this is an M0 checklist item that
+   has never been run deliberately. Test it properly: open something full-screen,
+   then look for the tab and hover it.
+4. **CSS wiring and the slide animation handshake have no test.** A selector that
    matches nothing still looks identical to a passing build.
 
 Closed: the test data left in the notes database by the checklist runs was purged
@@ -780,6 +786,49 @@ idle, so it needs the owner.
 - [x] Contrast verified and fixed, above.
 - [x] `prefersReducedMotion` tolerates a missing `matchMedia` rather than
       throwing: an absent accessibility API must not take the editor down with it.
+
+## M5: packaging
+
+### Done
+
+**Icons are generated, not hand-made.** `tools/make_icons.py` draws the app icon,
+the Windows logo set, `icon.icns`, `icon.ico` and the menu-bar template, with its
+own small PNG and ICO writers — the build machine has no image tooling of any
+kind, and checked-in binaries with no source are a trap. The mark is what the app
+looks like: a note panel with its tab and the three recent-colour dots of
+brief 6.5. Regenerate with `python3 tools/make_icons.py`.
+
+**The tray icon is a monochrome outline.** macOS uses only a template image's
+alpha, so the coloured app icon rendered as a solid black blob in the menu bar.
+The new one is drawn as an outline for that reason and verified on screen beside
+the system's own icons.
+
+**Bundle metadata**: publisher, category, copyright, short and long descriptions,
+and macOS 12 as the minimum system version (brief 5). A custom
+`src-tauri/Info.plist` sets `LSUIElement`, verified to *merge* with what Tauri
+generates rather than replace it — Rust sets the activation policy too, but that
+runs after AppKit has already given the app a Dock icon, so without this the icon
+flashes on every launch.
+
+**The `.dmg` builds and installs.** `Edge Notes_0.1.0_aarch64.dmg`, 2.3 MB, with
+the `.app` at 4.6 MB — comfortably inside brief 11's 15 MB. The packaged
+`Info.plist` carries the right identifier, version, category, copyright and
+minimum system version. The owner installed it to `/Applications` and it runs
+there as an accessory app with the new tray icon.
+
+**The README** covers running, building, the icon generator, signing and
+notarising, the per-platform notes, where notes are stored, and the known
+limitations.
+
+### Not done, and why
+
+- **Windows and Linux packages.** Tauri builds only for the platform it runs on,
+  so the `.msi`, `.exe`, `.AppImage` and `.deb` need Windows and Linux machines or
+  CI runners. The commands are identical and are in the README.
+- **Signing and notarising** need an Apple Developer ID. The build here is
+  ad-hoc signed, which runs locally but is stopped by Gatekeeper anywhere else.
+  The steps and the environment variables are in the README, unexercised.
+- **No CI.** Nothing runs the checks or builds the other platforms automatically.
 
 ## M0 acceptance checklist
 
