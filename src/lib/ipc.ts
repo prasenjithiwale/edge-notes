@@ -131,6 +131,19 @@ export function dockToggle(): Promise<void> {
   return call("dock_toggle");
 }
 
+/**
+ * Brief M4: the tab can be dragged along the edge. Rust drives it from the
+ * cursor it already polls — the window moves with the tab, so the frontend's own
+ * coordinates shift under the pointer mid-drag.
+ */
+export function dockBeginTabDrag(): Promise<void> {
+  return call("dock_begin_tab_drag");
+}
+
+export function dockEndTabDrag(): Promise<void> {
+  return call("dock_end_tab_drag");
+}
+
 /** Linux secondary close signal (brief 8.10). */
 export function dockPointerLeft(): Promise<void> {
   return call("dock_pointer_left");

@@ -130,6 +130,37 @@ pub fn notes_restore(db: State<'_, Database>, id: String) -> AppResult<Note> {
 
 // -- Settings ---------------------------------------------------------------
 
+/// Brief M4: the tab can be dragged along the edge to reposition it.
+///
+/// Rust drives the drag because the window moves with the tab: the frontend's own
+/// coordinates shift under the pointer mid-drag, while the poller already has the
+/// cursor in desktop coordinates.
+#[tauri::command]
+pub fn dock_begin_tab_drag(app: AppHandle, dock: State<'_, Arc<Dock>>) -> AppResult<()> {
+    dock.input(&app, Input::BeginTabDrag);
+    Ok(())
+}
+
+/// Dropped: keep where it landed (brief 8.5 stores it as a ratio).
+#[tauri::command]
+pub fn dock_end_tab_drag(
+    app: AppHandle,
+    dock: State<'_, Arc<Dock>>,
+    db: State<'_, Database>,
+) -> AppResult<()> {
+    dock.input(&app, Input::EndTabDrag);
+
+    let patch = SettingsPatch {
+        dock_tab_offset: Some(dock.tab_offset()),
+        ..SettingsPatch::default()
+    };
+    let updated = db.with(|connection| settings::update(connection, &patch))?;
+    if let Err(error) = app.emit(SETTINGS_CHANGED_EVENT, &updated) {
+        log::error!("dock: failed to announce the dropped tab position: {error}");
+    }
+    Ok(())
+}
+
 /// Brief M4: write every note out as Markdown, plus a JSON backup.
 ///
 /// It goes to the documents folder rather than asking where: a save dialog would

@@ -1,4 +1,8 @@
 .tab {
+  /* The tab is the one thing that can be dragged (brief M4), and the cursor is
+     the only affordance saying so — a deliberate exception to the
+     `cursor: default` rule in brief 7.5, which is about buttons and cards. */
+  cursor: grab;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -18,6 +22,10 @@
 [data-side="left"] .tab {
   border-left: none;
   border-radius: 0 var(--radius-control) var(--radius-control) 0;
+}
+
+.tab:active {
+  cursor: grabbing;
 }
 
 .chevron {

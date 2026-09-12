@@ -127,6 +127,15 @@ impl Dock {
         self.set_geometry(app, geometry);
     }
 
+    /// Where the tab sits along the edge, so a finished drag can be persisted.
+    #[must_use]
+    pub fn tab_offset(&self) -> f64 {
+        match self.controller.lock() {
+            Ok(controller) => controller.geometry().tab_offset(),
+            Err(poisoned) => poisoned.into_inner().geometry().tab_offset(),
+        }
+    }
+
     #[must_use]
     pub fn side(&self) -> Side {
         match self.controller.lock() {

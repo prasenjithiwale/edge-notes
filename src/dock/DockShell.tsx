@@ -10,6 +10,7 @@ import {
   onDockState,
 } from "../lib/ipc";
 import { useDockStore } from "../store/dock";
+import { useSettingsStore } from "../store/settings";
 import { Panel } from "./Panel";
 import { Tab } from "./Tab";
 import styles from "./DockShell.module.css";
@@ -31,6 +32,7 @@ export function DockShell() {
   const side = useDockStore((state) => state.side);
   const tabTop = useDockStore((state) => state.tabTop);
   const applyState = useDockStore((state) => state.applyState);
+  const panelWidth = useSettingsStore((state) => state.settings["panel.width"]);
   const frameRef = useRef<number | undefined>(undefined);
   const timerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
@@ -126,7 +128,13 @@ export function DockShell() {
     transitionFor(phase) === "close" && styles.closing,
   );
 
-  const style = { "--tab-top": `${String(tabTop)}px` } as CSSProperties;
+  // Rust sizes the window from `panel.width`, so the CSS has to paint to the
+  // same number: with the token left static, a widened window simply grew a
+  // transparent margin and the panel stayed 320 px.
+  const style = {
+    "--tab-top": `${String(tabTop)}px`,
+    "--panel-width": `${String(panelWidth)}px`,
+  } as CSSProperties;
 
   return (
     <div

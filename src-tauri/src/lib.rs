@@ -52,6 +52,8 @@ pub fn run() {
             commands::dock_animation_done,
             commands::dock_toggle,
             commands::dock_pointer_left,
+            commands::dock_begin_tab_drag,
+            commands::dock_end_tab_drag,
             commands::notes_list,
             commands::notes_create,
             commands::notes_update,

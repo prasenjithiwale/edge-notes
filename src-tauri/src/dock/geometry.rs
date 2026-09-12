@@ -135,6 +135,38 @@ impl DockGeometry {
         self.tab_offset
     }
 
+    /// Same dock, new vertical position along the edge (brief M4's tab drag).
+    #[must_use]
+    pub fn with_tab_offset(&self, tab_offset: f64) -> Self {
+        Self::new(
+            self.work_area,
+            self.scale,
+            self.side,
+            tab_offset,
+            self.metrics,
+        )
+    }
+
+    /// The offset that puts the tab's centre at `centre_y` (physical, desktop
+    /// coordinates), for dragging the tab along the edge.
+    ///
+    /// Clamped to the range that keeps the tab fully inside the work area, so the
+    /// stored ratio always matches where the tab actually is. Clamping only the
+    /// pixels would let the ratio drift past the end, and dragging back would do
+    /// nothing until the drift was used up.
+    #[must_use]
+    pub fn tab_offset_for_centre(&self, centre_y: f64) -> f64 {
+        let height = f64::from(self.work_area.height as i32);
+        if height <= 0.0 {
+            return 0.5;
+        }
+        let half_tab = f64::from(self.tab_h()) / 2.0;
+        let ratio = (centre_y - f64::from(self.work_area.y)) / height;
+        // Brief 8.5 stores the position as a ratio so it survives a resolution
+        // change; the limits are a ratio for the same reason.
+        ratio.clamp(half_tab / height, 1.0 - half_tab / height)
+    }
+
     /// Same dock, new monitor: keeps the side, tab offset and metrics so the tab
     /// stays where the user put it across resolution and scale changes.
     #[must_use]

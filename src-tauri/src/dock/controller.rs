@@ -59,6 +59,9 @@ pub enum Input {
     /// Linux secondary signal (brief 8.10).
     PointerLeftWebview,
     MonitorChanged,
+    /// The tab is being dragged along the edge (brief M4).
+    BeginTabDrag,
+    EndTabDrag,
 }
 
 /// Brief 6.2 defaults, in one place so settings can override them later.
@@ -107,6 +110,9 @@ pub struct DockController {
     /// activates itself, and brief 6.3 closes a shortcut-opened panel on blur —
     /// so without this the panel shut itself the instant it appeared.
     opened_deliberately_at: Option<Instant>,
+    /// The tab is being dragged along the edge: hover and auto-close stand aside
+    /// until it is dropped.
+    dragging: bool,
     /// Set when the user dismissed the panel outright (Esc, shortcut, tray) while
     /// the cursor was still on it. Brief 6.1 reverses a close when the cursor
     /// *re-enters*, which presumes it left; without this, a cursor that never
@@ -131,6 +137,7 @@ impl DockController {
             interaction_lock: false,
             opened_by_shortcut: false,
             opened_deliberately_at: None,
+            dragging: false,
             dismissed: false,
             hover_since: None,
             leave_since: None,
@@ -215,6 +222,18 @@ impl DockController {
             Input::WindowBlurred => self.on_blur(now),
             Input::PointerLeftWebview => self.on_pointer_left(now),
             Input::MonitorChanged => self.on_monitor_changed(),
+            Input::BeginTabDrag => {
+                self.dragging = true;
+                Vec::new()
+            }
+            Input::EndTabDrag => {
+                self.dragging = false;
+                // The cursor is wherever the drag finished, which is a fresh
+                // hover sample: without this the panel would not open until the
+                // pointer moved again.
+                self.last_cursor
+                    .map_or_else(Vec::new, |(x, y)| self.on_cursor(x, y, now))
+            }
         }
     }
 
@@ -271,6 +290,20 @@ impl DockController {
 
     fn on_cursor(&mut self, x: f64, y: f64, now: Instant) -> Vec<Action> {
         self.last_cursor = Some((x, y));
+
+        if self.dragging {
+            // The tab follows the cursor; nothing else applies while it does.
+            let offset = self.geometry.tab_offset_for_centre(y);
+            if (offset - self.geometry.tab_offset()).abs() < f64::EPSILON {
+                return Vec::new();
+            }
+            self.geometry = self.geometry.with_tab_offset(offset);
+            return vec![
+                Action::SetWindowRect(self.rect_for_phase()),
+                Action::EmitState(self.state()),
+            ];
+        }
+
         let inside = self.cursor_inside(x, y);
 
         if !inside {
@@ -631,6 +664,75 @@ mod tests {
         // The window is already expanded, so no SetWindowRect.
         assert_eq!(actions.len(), 1);
         assert!(matches!(actions[0], Action::EmitState(s) if s.phase == Phase::Opening));
+    }
+
+    #[test]
+    fn dragging_the_tab_moves_it_and_leaves_hover_alone() {
+        let mut c = controller();
+        let t0 = Instant::now();
+        let before = c.geometry().tab_offset();
+
+        c.handle(Input::BeginTabDrag, t0);
+        // A cursor well above centre, which would normally be nowhere near the tab.
+        let actions = c.handle(
+            Input::Cursor {
+                x: 1_900.0,
+                y: 200.0,
+            },
+            ms(t0, 50),
+        );
+
+        assert!(c.geometry().tab_offset() < before);
+        assert!(matches!(actions[0], Action::SetWindowRect(_)));
+        // Still collapsed: a drag is not a hover, however long it takes.
+        c.tick(ms(t0, 2_000));
+        assert_eq!(c.phase(), Phase::Collapsed);
+    }
+
+    #[test]
+    fn the_tab_cannot_be_dragged_off_the_work_area() {
+        let mut c = controller();
+        let t0 = Instant::now();
+
+        c.handle(Input::BeginTabDrag, t0);
+        c.handle(
+            Input::Cursor {
+                x: 1_900.0,
+                y: -5_000.0,
+            },
+            ms(t0, 50),
+        );
+        let top = c.geometry().collapsed_tab_rect();
+        assert!(top.y >= WORK.y, "tab left the top of the work area");
+
+        c.handle(
+            Input::Cursor {
+                x: 1_900.0,
+                y: 9_000.0,
+            },
+            ms(t0, 100),
+        );
+        let bottom = c.geometry().collapsed_tab_rect();
+        assert!(
+            bottom.bottom() <= WORK.bottom(),
+            "tab left the bottom of the work area"
+        );
+    }
+
+    #[test]
+    fn dropping_the_tab_hands_the_cursor_back_to_hover() {
+        // The pointer is over the tab when the drag ends, which is a hover: the
+        // panel should open without having to move the mouse again.
+        let mut c = controller();
+        let t0 = Instant::now();
+
+        c.handle(Input::BeginTabDrag, t0);
+        let (x, y) = tab_point(&c);
+        c.handle(Input::Cursor { x, y }, ms(t0, 50));
+        c.handle(Input::EndTabDrag, ms(t0, 100));
+
+        c.tick(ms(t0, 400));
+        assert_eq!(c.phase(), Phase::Opening);
     }
 
     #[test]
