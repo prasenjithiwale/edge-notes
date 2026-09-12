@@ -95,6 +95,13 @@ pub struct DockController {
     interaction_lock: bool,
     /// Opened by shortcut or tray: does not auto-close on cursor leave (6.3).
     opened_by_shortcut: bool,
+    /// Set when the user dismissed the panel outright (Esc, shortcut, tray) while
+    /// the cursor was still on it. Brief 6.1 reverses a close when the cursor
+    /// *re-enters*, which presumes it left; without this, a cursor that never
+    /// left reopened the panel in the same breath and Esc looked broken — and
+    /// with Keep open on, nothing could dismiss the panel at all. Cleared as soon
+    /// as the cursor is seen outside.
+    dismissed: bool,
     hover_since: Option<Instant>,
     leave_since: Option<Instant>,
     ack_deadline: Option<Instant>,
@@ -111,6 +118,7 @@ impl DockController {
             keep_open: false,
             interaction_lock: false,
             opened_by_shortcut: false,
+            dismissed: false,
             hover_since: None,
             leave_since: None,
             ack_deadline: None,
@@ -252,9 +260,15 @@ impl DockController {
         self.last_cursor = Some((x, y));
         let inside = self.cursor_inside(x, y);
 
+        if !inside {
+            // The cursor has left, so a dismissal has run its course: hover may
+            // open the panel again.
+            self.dismissed = false;
+        }
+
         match self.phase {
             Phase::Collapsed => {
-                if inside {
+                if inside && !self.dismissed {
                     // Hover intent: start the clock, don't restart it every sample.
                     self.hover_since.get_or_insert(now);
                 } else {
@@ -271,7 +285,7 @@ impl DockController {
                 Vec::new()
             }
             Phase::Closing => {
-                if inside {
+                if inside && !self.dismissed {
                     // Re-entry during close reverses without resizing the window.
                     self.begin_open(now, false)
                 } else {
@@ -328,7 +342,11 @@ impl DockController {
                 actions.push(Action::Focus);
                 actions
             }
-            Phase::Opening | Phase::Open => self.begin_close(now),
+            Phase::Opening | Phase::Open => {
+                // Explicit: hold the close even if the cursor never leaves.
+                self.dismissed = true;
+                self.begin_close(now)
+            }
         }
     }
 
@@ -372,6 +390,8 @@ impl DockController {
     /// Reversing out of `closing` skips the resize, since the window is already
     /// the expanded size.
     fn begin_open(&mut self, now: Instant, by_shortcut: bool) -> Vec<Action> {
+        // Whatever reopens the panel ends the dismissal.
+        self.dismissed = false;
         let was_expanded = self.phase.is_expanded();
         self.phase = Phase::Opening;
         self.hover_since = None;
@@ -392,6 +412,8 @@ impl DockController {
     /// Close sequence: tell the frontend to slide out; the window shrinks only
     /// once it acknowledges, or when the acknowledgment times out.
     fn begin_close(&mut self, now: Instant) -> Vec<Action> {
+        // Callers that mean "dismissed" set the flag themselves; an auto-close
+        // from the cursor leaving must stay reversible on re-entry.
         self.phase = Phase::Closing;
         self.hover_since = None;
         self.ack_deadline = Some(now + self.timings.ack_timeout);
@@ -579,6 +601,85 @@ mod tests {
         // The window is already expanded, so no SetWindowRect.
         assert_eq!(actions.len(), 1);
         assert!(matches!(actions[0], Action::EmitState(s) if s.phase == Phase::Opening));
+    }
+
+    #[test]
+    fn an_explicit_dismissal_is_not_undone_by_a_cursor_that_never_left() {
+        // Esc, the shortcut and the tray all dismiss outright. Brief 6.1 reverses
+        // a close when the cursor *re-enters*, which presumes it left first: a
+        // cursor sitting on the panel the whole time used to reopen it instantly,
+        // so Esc did nothing, and with Keep open on nothing could dismiss it.
+        let mut c = controller();
+        let t0 = Instant::now();
+        hover_open(&mut c, t0);
+
+        let (x, y) = panel_point(&c);
+        c.handle(Input::Cursor { x, y }, ms(t0, 200));
+        c.handle(Input::Toggle, ms(t0, 210));
+        assert_eq!(c.phase(), Phase::Closing);
+
+        // The cursor has not moved, and must not resurrect the panel.
+        c.handle(Input::Cursor { x, y }, ms(t0, 250));
+        assert_eq!(c.phase(), Phase::Closing);
+
+        c.handle(Input::AnimationDone(Phase::Closing), ms(t0, 350));
+        assert_eq!(c.phase(), Phase::Collapsed);
+
+        // Still resting on the tab: hover intent must stay suppressed.
+        let (tx, ty) = tab_point(&c);
+        c.handle(Input::Cursor { x: tx, y: ty }, ms(t0, 400));
+        c.tick(ms(t0, 1_000));
+        assert_eq!(c.phase(), Phase::Collapsed);
+    }
+
+    #[test]
+    fn hover_works_again_once_the_cursor_leaves_after_a_dismissal() {
+        let mut c = controller();
+        let t0 = Instant::now();
+        hover_open(&mut c, t0);
+
+        let (x, y) = panel_point(&c);
+        c.handle(Input::Cursor { x, y }, ms(t0, 200));
+        c.handle(Input::Toggle, ms(t0, 210));
+        c.handle(Input::AnimationDone(Phase::Closing), ms(t0, 350));
+        assert_eq!(c.phase(), Phase::Collapsed);
+
+        // Leaving ends the dismissal...
+        c.handle(
+            Input::Cursor {
+                x: AWAY.0,
+                y: AWAY.1,
+            },
+            ms(t0, 400),
+        );
+        // ...so coming back to the tab opens it normally again.
+        let (tx, ty) = tab_point(&c);
+        c.handle(Input::Cursor { x: tx, y: ty }, ms(t0, 500));
+        c.tick(ms(t0, 700));
+        assert_eq!(c.phase(), Phase::Opening);
+    }
+
+    #[test]
+    fn an_auto_close_still_reverses_when_the_cursor_comes_back() {
+        // Only an explicit dismissal suppresses the reversal; the cursor simply
+        // leaving and returning must behave exactly as before.
+        let mut c = controller();
+        let t0 = Instant::now();
+        hover_open(&mut c, t0);
+
+        c.handle(
+            Input::Cursor {
+                x: AWAY.0,
+                y: AWAY.1,
+            },
+            ms(t0, 200),
+        );
+        c.tick(ms(t0, 600));
+        assert_eq!(c.phase(), Phase::Closing);
+
+        let (x, y) = panel_point(&c);
+        c.handle(Input::Cursor { x, y }, ms(t0, 650));
+        assert_eq!(c.phase(), Phase::Opening);
     }
 
     #[test]

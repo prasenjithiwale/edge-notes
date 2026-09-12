@@ -8,8 +8,8 @@ of every milestone. The spec is [build-brief.md](build-brief.md).
 | Milestone | Status |
 |---|---|
 | M0 Docking spike | Built. **The window never appeared until 12 Sep 2026**, and **typing never worked until the same day** — see below. Checklist now run on macOS except the items noted; Windows and Linux untested. |
-| M1 Notes core | Built; awaiting manual acceptance (checklist below). |
-| M2 Find and organize | Built; awaiting manual acceptance (checklist below). |
+| M1 Notes core | Built and accepted on macOS: the checklist below was run against the running app. |
+| M2 Find and organize | Built and accepted on macOS: the checklist below was run against the running app. |
 | M3 System integration | Not started |
 | M4 Polish | Not started |
 | M5 Packaging | Not started |
@@ -457,32 +457,42 @@ Run by driving the real cursor with `cliclick` and reading the screen with
 `screencapture`, after the owner granted Accessibility. Everything marked here was
 seen on screen or in the database, not inferred.
 
-**Two tooling limits shaped what could be covered.** Special keys — Esc, Return,
-Backspace — could not be delivered to a nonactivating panel by `cliclick` at all
-(typed characters and Cmd-combinations arrive fine; `kp:` events never landed, and
-a Return inside the editor produced no newline). So **every Esc item below is
-untested, not failed**, and needs a human at the keyboard: Esc closing the editor,
-Esc clearing search, the second Esc collapsing the panel (brief 6.9, 6.11). The
-second limit is that this machine has one 1920×1080 display at 1×, so scaling and
-multi-monitor placement remain untested.
+**On delivering keys to a nonactivating panel:** `cliclick`'s `kp:` events never
+arrive (a Return in the editor produced no newline, and Esc did nothing), while
+typed characters and Cmd-combinations do. `osascript -e 'tell application "System
+Events" to key code N'` delivers all of them correctly and is what the keyboard
+items below were verified with. Anyone re-running this checklist should use that.
 
-### Found while running it
+The remaining limit is hardware: one 1920×1080 display at 1×, so scaling and
+multi-monitor placement are still unverified.
+
+### Found while running it — all fixed on 13 Sep 2026
 
 1. **The panel could not be typed into at all** — fixed, above.
-2. **Opening a note and closing it rewrites `updated_at`.** No edit required:
-   `stopEditing` always calls `flush`, which sends `notes_update` and bumps the
-   timestamp, so merely looking at a note jumps it to the top of the list.
-   Observed twice, and it is the same class of problem the restore path already
-   avoids deliberately ("Restore does not touch `updated_at`"). `flush` should skip
-   the write when the content has not changed. **Not yet fixed.**
-3. **The panel sometimes collapses while it is being used.** Seen twice, both with
-   the cursor parked outside the panel: once when a search query filtered out the
-   note that was open in the editor (unmounting the focused textarea), and once on
-   Cmd+A in the search field. The likely path is the webview releasing first
-   responder, Rust seeing `Focused(false)`, and `on_blur` clearing the interaction
-   lock and starting the close — which is the documented "blur clears the
-   interaction lock" behaviour firing when the panel has not really lost focus to
-   another app. Needs a narrower blur signal. **Not yet fixed.**
+2. **Opening a note and closing it rewrote `updated_at`.** No edit required:
+   `stopEditing` always called `flush`, which sends `notes_update` and bumps the
+   timestamp, so merely reading a note jumped it to the top of the list — the same
+   problem the restore path already avoids deliberately. The store now remembers
+   what is in the database per note and `flush` returns early when nothing was
+   typed; the saved value is only updated after a successful write, so a failed
+   save still retries. Verified on the running app: opening a note and pressing
+   Done left `updated_at` untouched.
+3. **The panel collapsed while it was being used.** Tracing the real app showed the
+   blur path was innocent — the sequence was `lock: true` then `lock: false` with
+   no blur at all. `SearchField` took the lock in `onFocus` but released it in an
+   effect cleanup, and React's mount/cleanup/mount cycle dropped it: re-focusing an
+   already-focused input fires no event, so nothing took it back and the panel slid
+   away mid-search. The lock is now derived from state and re-asserted, never
+   acquired in one place and released in another. Verified on the running app: the
+   panel now holds with the cursor 1200 px away while a query is typed.
+4. **Esc could not dismiss the panel while the cursor rested on it.** `on_cursor`
+   reversed any close the moment it saw the cursor inside, but brief 6.1 says the
+   cursor *re-enters*, which presumes it left. With the cursor sitting on the panel
+   the close reversed instantly, so Esc appeared dead — and with Keep open on
+   nothing could dismiss the panel at all. An explicit dismissal (Esc, shortcut,
+   tray) now suppresses hover until the cursor is seen outside. This is a change in
+   `dock/controller.rs`, which the project rules put off-limits by default; the
+   dock tests were extended to 47 and run, as those rules require.
 
 ### Verified on screen
 
@@ -513,16 +523,28 @@ multi-monitor placement remain untested.
 - [x] The edited line reads "Edited 1h ago" and becomes "Edited just now" after a keystroke
 - [x] The tab shows the three most recent note colours, in order
 
-### Not covered
+### Verified after the fixes (13 Sep 2026)
 
-- [ ] Every Esc behaviour (tooling could not deliver the key — needs a human)
-- [ ] Arrow-key movement between cards and Enter to open (same reason)
-- [ ] The toast disappearing on its own after about 5 seconds
-- [ ] An empty note being discarded when the editor closes
-- [ ] Keep open holding the panel open
+- [x] Esc closes the editor, and focus returns to the card that was being edited
+- [x] A second Esc clears the search query and brings the title back
+- [x] A third Esc collapses the panel, including with the cursor resting on it
+- [x] Hover opens the panel again normally once the cursor has left and returned
+- [x] Arrow keys move focus between cards, with the focus ring visible
+- [x] Enter opens the focused card in the editor
+- [x] Keep open holds the panel open with the cursor 1200 px away, and the pin
+      turns the accent colour
+- [x] A colour swatch recolours the note and its card, and the filter row drops a
+      colour once no note uses it
+- [x] An empty note is discarded when the editor closes: no empty card, no toast
+- [x] The toast disappears on its own after about five seconds
+- [x] Opening a note and closing it no longer moves it in the list
+- [x] The panel holds open while a query is typed with the cursor far away
+
+### Still not covered
+
 - [ ] The panel over full-screen apps and on every Space
 - [ ] 150% and 200% scaling, and a secondary monitor (single 1× display here)
-- [ ] Colour swatches recolouring a note (clicked position, never confirmed on screen)
+- [ ] Windows and Linux entirely
 
 ## M0 acceptance checklist
 

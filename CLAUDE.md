@@ -81,6 +81,12 @@ Layout: `src/` (dock/, notes/, components/, store/ Zustand, lib/, styles/tokens.
 
 Never edit a migration that has shipped — append a new one. Repository functions take `now: i64` rather than reading the clock, which is what keeps them deterministic under test. Settings rows are written only when a value changes, so `Settings::default()` is the single source of the brief 9.2 defaults; a malformed stored value falls back to its default rather than failing startup.
 
+**A no-op save is not a save.** `notes_update` bumps `updated_at` and the list sorts by it, so writing when nothing was typed moves a note to the top for having been read. The store keeps what is already stored per note and `flush` returns early when the content matches, updating that record only after a successful write so a failed save still retries.
+
+**An interaction lock is derived from state, never acquired in one place and released in another.** `SearchField` took it in `onFocus` and released it in an effect cleanup, and React's mount/cleanup/mount cycle dropped it: re-focusing an already-focused input fires no event, so nothing took it back and the panel slid away mid-search. Hold a lock in a `useEffect` keyed on the state that justifies it; `setLock` is idempotent and only talks to Rust when the aggregate flips.
+
+**An explicit dismissal suppresses hover until the cursor leaves.** Brief 6.1 reverses a close when the cursor *re-enters*, which presumes it left. Without `dismissed`, Esc with the mouse resting on the panel reversed instantly and looked dead, and Keep open made the panel impossible to dismiss at all.
+
 **The notes list does not re-sort while the editor is open.** Notes sort by `updated_at` descending, so re-sorting on each keystroke would pull the card being edited out from under the cursor. `setContent` updates optimistically without reordering; the list re-sorts in `stopEditing`. Restore deliberately leaves `updated_at` alone so an undone delete returns to its old position.
 
 ## Conventions

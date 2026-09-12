@@ -21,6 +21,15 @@ const UNDO_MS = 5_000;
 const saveTimers = new Map<string, ReturnType<typeof setTimeout>>();
 let undoTimer: ReturnType<typeof setTimeout> | undefined;
 
+/**
+ * What is already in the database for each note, so `flush` can tell a real edit
+ * from a no-op. Without it, closing a note you only read still sent
+ * `notes_update`, which bumps `updated_at` and jumps the note to the top of the
+ * list — merely looking at a note reordered it. Same reasoning as restore
+ * deliberately leaving `updated_at` alone.
+ */
+const savedContent = new Map<string, string>();
+
 interface PendingUndo {
   note: Note;
 }
@@ -64,7 +73,12 @@ export const useNotesStore = create<NotesStore>((set, get) => ({
 
   load: async () => {
     try {
-      set({ notes: sortNotes(await notesList()), loaded: true });
+      const notes = await notesList();
+      savedContent.clear();
+      for (const note of notes) {
+        savedContent.set(note.id, note.content);
+      }
+      set({ notes: sortNotes(notes), loaded: true });
     } catch (error: unknown) {
       console.error("notes: load failed", error);
       set({ loaded: true });
@@ -80,6 +94,7 @@ export const useNotesStore = create<NotesStore>((set, get) => ({
     const color = useSettingsStore.getState().lastColor();
     try {
       const note = await notesCreate(color);
+      savedContent.set(note.id, note.content);
       // Straight to the top and into the editor (brief 6.9).
       set((state) => ({ notes: [note, ...state.notes], editingId: note.id }));
     } catch (error: unknown) {
@@ -135,8 +150,15 @@ export const useNotesStore = create<NotesStore>((set, get) => ({
     if (!note) {
       return;
     }
+    // Nothing typed since the last write, so there is nothing to persist. The
+    // write itself is what would reorder the list, so skipping it is the fix.
+    if (savedContent.get(id) === note.content) {
+      return;
+    }
     try {
       const saved = await notesUpdate(id, { content: note.content });
+      // Only on success: a failed write must stay pending so the next flush retries.
+      savedContent.set(id, note.content);
       set((state) => ({
         notes: state.notes.map((candidate) =>
           candidate.id === id ? { ...candidate, updatedAt: saved.updatedAt } : candidate,
@@ -167,6 +189,7 @@ export const useNotesStore = create<NotesStore>((set, get) => ({
         clearTimeout(timer);
         saveTimers.delete(editingId);
       }
+      savedContent.delete(editingId);
       set((state) => ({
         notes: state.notes.filter((candidate) => candidate.id !== editingId),
       }));
@@ -188,6 +211,7 @@ export const useNotesStore = create<NotesStore>((set, get) => ({
     if (!note) {
       return;
     }
+    savedContent.delete(id);
     set((state) => ({
       notes: state.notes.filter((candidate) => candidate.id !== id),
       editingId: state.editingId === id ? null : state.editingId,
@@ -222,6 +246,7 @@ export const useNotesStore = create<NotesStore>((set, get) => ({
 
     try {
       const restored = await notesRestore(pending.note.id);
+      savedContent.set(restored.id, restored.content);
       set((state) => ({ notes: sortNotes([...state.notes, restored]) }));
     } catch (error: unknown) {
       console.error("notes: restore failed", error);
