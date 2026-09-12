@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <!-- An accessory app from the moment it launches. Rust also sets the
+       activation policy, but that runs after AppKit has already decided to give
+       the app a Dock icon, so without this the icon flashes on every launch. -->
+  <key>LSUIElement</key>
+  <true/>
+</dict>
+</plist>

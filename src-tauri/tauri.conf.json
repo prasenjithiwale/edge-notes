@@ -43,6 +43,14 @@
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "publisher": "Edge Notes",
+    "category": "Productivity",
+    "copyright": "Copyright © 2026 Edge Notes",
+    "shortDescription": "Notes on the edge of your screen",
+    "longDescription": "A notes widget docked to the edge of your screen. Point at the tab and a panel of colour-coded notes slides out; move away and it slides back. Notes are stored locally in SQLite.",
+    "macOS": {
+      "minimumSystemVersion": "12.0"
+    }
   }
 }

@@ -3,6 +3,7 @@
 
 use std::sync::Arc;
 
+use tauri::image::Image;
 use tauri::menu::{CheckMenuItem, Menu, MenuEvent, MenuItem, PredefinedMenuItem};
 use tauri::tray::TrayIconBuilder;
 use tauri::{AppHandle, Emitter, Manager, Runtime};
@@ -203,13 +204,22 @@ pub fn init(app: &AppHandle) -> tauri::Result<()> {
             handle_event(app, &handles, &event);
         });
 
-    if let Some(icon) = app.default_window_icon() {
-        builder = builder.icon(icon.clone());
-        // The menu bar wants a monochrome template image; a real one lands in M5
-        // with the rest of the icon work.
-        #[cfg(target_os = "macos")]
-        {
-            builder = builder.icon_as_template(true);
+    // A monochrome outline, not the app icon: macOS uses only a template image's
+    // alpha, so the coloured app icon rendered as a solid black blob. Drawn at
+    // 2x so it stays crisp on a Retina menu bar; `tools/make_icons.py` builds it.
+    match Image::from_bytes(include_bytes!("../icons/tray@2x.png")) {
+        Ok(icon) => {
+            builder = builder.icon(icon);
+            #[cfg(target_os = "macos")]
+            {
+                builder = builder.icon_as_template(true);
+            }
+        }
+        Err(error) => {
+            log::error!("tray: could not load the tray icon: {error}");
+            if let Some(icon) = app.default_window_icon() {
+                builder = builder.icon(icon.clone());
+            }
         }
     }
 
