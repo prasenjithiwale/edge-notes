@@ -7,7 +7,7 @@ of every milestone. The spec is [build-brief.md](build-brief.md).
 
 | Milestone | Status |
 |---|---|
-| M0 Docking spike | Built. **The window never actually appeared until 12 Sep 2026** — see "The window was invisible" below. Partly verified now; Windows and Linux untested. |
+| M0 Docking spike | Built. **The window never appeared until 12 Sep 2026**, and **typing never worked until the same day** — see below. Checklist now run on macOS except the items noted; Windows and Linux untested. |
 | M1 Notes core | Built; awaiting manual acceptance (checklist below). |
 | M2 Find and organize | Built; awaiting manual acceptance (checklist below). |
 | M3 System integration | Not started |
@@ -119,6 +119,29 @@ Checked against the crate source and the current docs, not from memory.
 | [#15170](https://github.com/tauri-apps/tauri/issues/15170) monitor/cursor queries crash under load | closed, **unreleased** | Fixed by PR #15630, milestoned 2.12; newest published is 2.11.5. Mitigated below. Revisit when 2.12 ships. |
 | [#15471](https://github.com/tauri-apps/tauri/issues/15471) `transparent: true` recomposites every frame on macOS | open | ~620 mW vs ~75 mW GPU on a static page. Conflicts with the near-idle target in brief 11. **Unmeasured here — see known issues.** |
 | [#13415](https://github.com/tauri-apps/tauri/issues/13415) transparency lost in a bundled `.app` | open | Would surface at M5. A release bundle is built now so it can be checked early. |
+
+## The panel could never be typed into (fixed 12 Sep 2026)
+
+Found while running the M0 checklist: clicking a note opened its editor, but every
+keystroke went to the app *underneath* instead of the panel. Proof was accidental
+and unambiguous — automated keystrokes meant for the editor were typed into the
+owner's editor window and sent as a chat message.
+
+`platform/macos.rs` set `becomes_key_only_if_needed: true`. AppKit's
+`becomesKeyOnlyIfNeeded` gives a panel key status **only** when the click lands on
+a view it knows needs keys, meaning an `NSTextField`. The entire webview is one
+`NSView`, so AppKit can never tell that an HTML `<textarea>` wants input: the panel
+never became key and nothing could be typed anywhere in it — the editor or the
+search field.
+
+Now `false`. Hover still takes no focus, because hover is not a click, and
+`nonactivating_panel` still keeps a click from activating the app (verified: the
+frontmost app stays the one the user was in). Verified after the change by typing
+into a note and watching the character reach SQLite through the autosave.
+
+This is a change inside `platform/macos.rs`, which the project rules put
+off-limits by default; the dock tests (44) and the full Rust suite (72) were run
+after it, as those rules require.
 
 ## Decisions
 
@@ -427,6 +450,79 @@ to a passing build) and the slide animation handshake.
 - [ ] The next new note reuses the colour last chosen in the editor
 - [x] The tab shows up to three dots in the colours of the three most recently edited notes — verified by screenshot
 - [ ] Text on every note colour is readable in both light and dark mode, swatches included
+
+## Checklist run of 12 Sep 2026 (macOS only)
+
+Run by driving the real cursor with `cliclick` and reading the screen with
+`screencapture`, after the owner granted Accessibility. Everything marked here was
+seen on screen or in the database, not inferred.
+
+**Two tooling limits shaped what could be covered.** Special keys — Esc, Return,
+Backspace — could not be delivered to a nonactivating panel by `cliclick` at all
+(typed characters and Cmd-combinations arrive fine; `kp:` events never landed, and
+a Return inside the editor produced no newline). So **every Esc item below is
+untested, not failed**, and needs a human at the keyboard: Esc closing the editor,
+Esc clearing search, the second Esc collapsing the panel (brief 6.9, 6.11). The
+second limit is that this machine has one 1920×1080 display at 1×, so scaling and
+multi-monitor placement remain untested.
+
+### Found while running it
+
+1. **The panel could not be typed into at all** — fixed, above.
+2. **Opening a note and closing it rewrites `updated_at`.** No edit required:
+   `stopEditing` always calls `flush`, which sends `notes_update` and bumps the
+   timestamp, so merely looking at a note jumps it to the top of the list.
+   Observed twice, and it is the same class of problem the restore path already
+   avoids deliberately ("Restore does not touch `updated_at`"). `flush` should skip
+   the write when the content has not changed. **Not yet fixed.**
+3. **The panel sometimes collapses while it is being used.** Seen twice, both with
+   the cursor parked outside the panel: once when a search query filtered out the
+   note that was open in the editor (unmounting the focused textarea), and once on
+   Cmd+A in the search field. The likely path is the webview releasing first
+   responder, Rust seeing `Focused(false)`, and `on_blur` clearing the interaction
+   lock and starting the close — which is the documented "blur clears the
+   interaction lock" behaviour firing when the panel has not really lost focus to
+   another app. Needs a narrower blur signal. **Not yet fixed.**
+
+### Verified on screen
+
+- [x] Tab visible at the right edge, above other apps, no Dock icon and no menu bar
+- [x] Hovering while another app is focused opens the panel and does not steal focus
+      (frontmost app stayed the browser, before and after)
+- [x] Leaving closes the panel after the delay
+- [x] Re-entering during the close reverses it back to open
+- [x] The first click inside the panel works while another app is active
+- [x] Typing into the editor works after clicking in, and reaches SQLite (after the fix)
+- [x] No flash or jump at startup, open or close
+- [x] Cards: first line as title, rest as preview, palette colours, readable in dark mode
+- [x] The list does not re-sort while the editor is open, and re-sorts on close
+- [x] The panel stays open while the editor is open, cursor 900 px away, Keep open off
+- [x] New note (+) creates an empty card at the top, opens it, and uses the last colour
+- [x] A new note clears an active colour filter so the new card is visible
+- [x] Done closes the editor and the list re-sorts
+- [x] Delete soft-deletes and shows "Note deleted" with Undo; Undo restores the note
+- [x] Notes survive a full quit and relaunch, including an autosaved edit
+- [x] Search icon and Cmd+F both open the search field, with the accent focus ring
+- [x] Typing in search filters the list; no matches shows: No notes match “…”
+- [x] Clicking away from an empty search field restores the title
+- [x] The panel stays open while the search field has focus
+- [x] Filter row shows All plus one dot per colour in use, and no dot for unused colours
+- [x] Clicking a dot filters to it and shows the selection ring; clicking again clears it
+- [x] Filtering to one colour leaves the other dots available to switch to
+- [x] Editor footer: seven swatches with the current colour ringed, delete and Done
+- [x] The edited line reads "Edited 1h ago" and becomes "Edited just now" after a keystroke
+- [x] The tab shows the three most recent note colours, in order
+
+### Not covered
+
+- [ ] Every Esc behaviour (tooling could not deliver the key — needs a human)
+- [ ] Arrow-key movement between cards and Enter to open (same reason)
+- [ ] The toast disappearing on its own after about 5 seconds
+- [ ] An empty note being discarded when the editor closes
+- [ ] Keep open holding the panel open
+- [ ] The panel over full-screen apps and on every Space
+- [ ] 150% and 200% scaling, and a secondary monitor (single 1× display here)
+- [ ] Colour swatches recolouring a note (clicked position, never confirmed on screen)
 
 ## M0 acceptance checklist
 

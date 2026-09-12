@@ -13,12 +13,17 @@ use crate::dock::DOCK_WINDOW_LABEL;
 tauri_panel! {
     panel!(DockPanel {
         config: {
-            // Typing in the editor must work, so the panel can become key...
+            // Typing in the editor must work, so the panel can become key.
             can_become_key_window: true,
             can_become_main_window: false,
-            // ...but only when something actually needs the keyboard, so hovering
-            // never steals focus from the app the user is in.
-            becomes_key_only_if_needed: true,
+            // `becomesKeyOnlyIfNeeded` must stay off. It hands key status over
+            // only when the click lands on a view AppKit knows needs keys — an
+            // NSTextField. The whole webview is a single NSView, so AppKit can
+            // never tell that an HTML textarea wants input: with this on, the
+            // panel never became key and the editor could not be typed into at
+            // all. Hover still takes no focus, because hover is not a click, and
+            // `nonactivating_panel` below keeps a click from activating the app.
+            becomes_key_only_if_needed: false,
             is_floating_panel: true
         }
     })
