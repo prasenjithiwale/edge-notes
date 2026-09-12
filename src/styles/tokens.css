@@ -27,6 +27,12 @@
   --note-gray-bg: #ecebe8;
   --note-gray-text: #3a3936;
 
+  /* Secondary text on a note card is the note's own text colour at reduced
+     emphasis. 0.79 is the lowest opacity that still clears WCAG AA on every
+     palette colour in both themes (brief 7.3); this keeps a margin over it.
+     `src/lib/contrast.test.ts` fails if it drops too far. */
+  --note-secondary-opacity: 0.82;
+
   /* Geometry, mirrored from the Rust side (brief 6.4). */
   --tab-width: 28px;
   --tab-height: 88px;

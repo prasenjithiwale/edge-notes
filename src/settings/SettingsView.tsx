@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { ArrowLeft } from "lucide-react";
 
 import { IconButton } from "../components/IconButton";
-import { monitorsList, type Settings } from "../lib/ipc";
+import { monitorsList, notesExport, type Settings } from "../lib/ipc";
 import { useDockStore } from "../store/dock";
 import { useSettingsStore } from "../store/settings";
 import styles from "./SettingsView.module.css";
@@ -112,6 +112,8 @@ export function SettingsView({ onClose }: SettingsViewProps) {
   const [shortcutDraft, setShortcutDraft] = useState(
     settings["shortcut.newNote"],
   );
+  const [exportedTo, setExportedTo] = useState<string | null>(null);
+  const [exporting, setExporting] = useState(false);
 
   useEffect(() => {
     void monitorsList().then(setMonitors);
@@ -243,6 +245,36 @@ export function SettingsView({ onClose }: SettingsViewProps) {
             }}
           />
         </label>
+        <div className={styles.row}>
+          <span className={styles.label}>Export notes</span>
+          <button
+            type="button"
+            className={styles.action}
+            disabled={exporting}
+            onClick={() => {
+              setExporting(true);
+              void notesExport()
+                .then((path) => {
+                  setExportedTo(path);
+                })
+                .catch((error: unknown) => {
+                  console.error("settings: export failed", error);
+                  setExportedTo(null);
+                })
+                .finally(() => {
+                  setExporting(false);
+                });
+            }}
+          >
+            {exporting ? "Exporting…" : "Export"}
+          </button>
+        </div>
+        {exportedTo !== null && (
+          // Where the notes went, since nothing was asked and no folder opened.
+          <p className={styles.note} role="status">
+            Saved to {exportedTo}
+          </p>
+        )}
       </div>
     </div>
   );

@@ -19,6 +19,8 @@ pub enum AppError {
     Serde(#[from] serde_json::Error),
     #[error("{0}")]
     Tauri(#[from] tauri::Error),
+    #[error("file error: {0}")]
+    Io(#[from] std::io::Error),
 }
 
 impl AppError {
@@ -32,6 +34,7 @@ impl AppError {
             Self::Database(_) => "database",
             Self::Serde(_) => "serde",
             Self::Tauri(_) => "tauri",
+            Self::Io(_) => "io",
         }
     }
 }

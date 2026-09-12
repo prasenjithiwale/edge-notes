@@ -109,3 +109,28 @@
 .select {
   max-width: 160px;
 }
+
+.action {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 12px;
+  padding: 4px 10px;
+}
+
+.action:hover:not(:disabled) {
+  background: var(--surface-sunken);
+}
+
+.action:disabled {
+  color: var(--text-tertiary);
+}
+
+.note {
+  margin: 0;
+  font-size: 11px;
+  color: var(--text-tertiary);
+  /* A long path must wrap rather than widen the panel. */
+  overflow-wrap: anywhere;
+}

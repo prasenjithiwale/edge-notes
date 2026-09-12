@@ -175,6 +175,11 @@ export function notesRestore(id: string): Promise<Note> {
 
 // -- Settings ---------------------------------------------------------------
 
+/** Writes every note out and returns the folder they went to (brief M4). */
+export function notesExport(): Promise<string> {
+  return callResult<string>("notes_export");
+}
+
 /** Monitor names for the settings view; "primary" is handled separately. */
 export function monitorsList(): Promise<string[]> {
   return callResult<string[]>("monitors_list");

@@ -29,10 +29,11 @@
   line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
-  /* The paired text colour at reduced emphasis, so contrast stays AA. */
-  opacity: 0.75;
+  /* The paired text colour at reduced emphasis, kept above the AA threshold. */
+  opacity: var(--note-secondary-opacity);
 }
 
+/* A note with no first line yet still shows readable text, not a hint. */
 .untitled {
-  opacity: 0.6;
+  opacity: var(--note-secondary-opacity);
 }

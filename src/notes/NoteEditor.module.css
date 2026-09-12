@@ -30,7 +30,8 @@
 
 .textarea::placeholder {
   color: inherit;
-  opacity: 0.5;
+  /* A placeholder is still text, so it is held to the same AA threshold. */
+  opacity: var(--note-secondary-opacity);
 }
 
 /* The footer is two rows: seven swatches do not fit beside the actions at a
@@ -71,7 +72,7 @@
 .meta {
   margin-right: auto;
   font-size: 11px;
-  opacity: 0.7;
+  opacity: var(--note-secondary-opacity);
 }
 
 .footerButton {

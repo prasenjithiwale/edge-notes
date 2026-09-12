@@ -130,6 +130,29 @@ pub fn notes_restore(db: State<'_, Database>, id: String) -> AppResult<Note> {
 
 // -- Settings ---------------------------------------------------------------
 
+/// Brief M4: write every note out as Markdown, plus a JSON backup.
+///
+/// It goes to the documents folder rather than asking where: a save dialog would
+/// mean `tauri-plugin-dialog`, which is outside brief section 4. The path comes
+/// back so the panel can say where the notes went.
+#[tauri::command]
+pub fn notes_export(app: AppHandle, db: State<'_, Database>) -> AppResult<String> {
+    let notes = db.with(notes::list)?;
+    let parent = app
+        .path()
+        .document_dir()
+        .or_else(|_| app.path().home_dir())
+        .map_err(AppError::from)?;
+
+    let directory = crate::export::write_all(&parent, &notes, now_ms())?;
+    log::info!(
+        "export: wrote {} notes to {}",
+        notes.len(),
+        directory.display()
+    );
+    Ok(directory.to_string_lossy().into_owned())
+}
+
 /// The monitors the dock can be placed on, by name (brief 9.2 `dock.monitor`).
 /// Not in brief 9.3: the settings view cannot offer a choice it cannot enumerate.
 #[tauri::command]
