@@ -611,22 +611,45 @@ discarded — pressing the shortcut twice left a blank card behind each time.
   dock side and tab offset are (brief M3 asks for "live dock side switching", and
   the settings view that would expose the rest is M4).
 
-### Known gap: the shortcut opens the panel but does not keep the keyboard
+### Known gap: the panel gets no keystrokes until it is clicked once
 
-`CmdOrCtrl+Alt+N` opens the panel and puts a new note in the editor, verified on
-screen. **Keyboard focus does not stick**: the panel is made key and the window
-reports focused, then macOS returns focus to the previously active app about a
-second later, so typing goes to that app until you click into the panel once.
+**Still unfixed after a second, longer attempt on 13 Sep 2026.** The shortcut and
+the tray open the panel and put a new note in the editor, verified on screen —
+but nothing typed reaches it until the panel is clicked once.
 
-Traced with focus logging: `focus_panel done, is_focused=Ok(true)`, then
-`window focused=true`, then `window focused=false` a second later. Tried and
-rejected: `panel.show_and_make_key()` alone (never activates the app),
-`window.set_focus()` (returns Ok, no effect on this), explicit
-`NSApplication::activate()`, and `can_become_main_window: true` (made the bounce
-immediate). The `nonactivating` style mask exists precisely to stop the app being
-activated, which is what makes this hard; the remaining avenue is dropping that
-mask around a deliberate focus and restoring it after. Clicking into the panel
-takes focus correctly, so the editor is usable — you just have to click first.
+The decisive measurement: after the shortcut, `Cmd+F` does not open the search
+field either. **No key reaches the webview at all**, so this is not the editor
+losing DOM focus — the panel does not own the keyboard. After any click it does,
+and both typing and `Cmd+F` work normally.
+
+Ruled out, each tried and measured against a real keystroke:
+
+| Attempt | Result |
+|---|---|
+| `panel.show_and_make_key()` alone | window reports focused, no keys |
+| plus `window.set_focus()` | returns `Ok`, no keys |
+| plus `NSApplication::activate()` | no keys |
+| `activateIgnoringOtherApps(true)` | no keys |
+| dropping the `nonactivating` style mask for the call | no keys |
+| the same, without restoring the mask afterwards | no keys |
+| `ActivationPolicy::Regular` before activating | no keys |
+| `can_become_main_window: true` | no keys, and the focus bounce became instant |
+| re-focusing the textarea on the window `focus` event | no keys by itself — but see the mitigation |
+
+None of them are carried in the code: `focus_panel` is back to
+`show_and_make_key()` alone, because keeping incantations that were measured to do
+nothing would be worse than the gap itself.
+
+**Mitigation that is kept.** `NoteEditor` re-focuses its textarea when the window
+gains focus, so *one click anywhere in the panel* — not necessarily inside the
+textarea — puts the caret in the note and typing lands. Verified.
+
+**The lead worth trying next.** `show_and_make_key` sets the panel's *content
+view* as first responder. The content view is not the `WKWebView`; a click sets
+the responder to the web view itself, which is the one difference between the path
+that works and the paths that do not. Reaching it means walking the view hierarchy
+from `window.ns_window()` with `objc2` and calling `makeFirstResponder:` on the
+web view.
 
 ### M3 acceptance checklist
 
@@ -648,6 +671,7 @@ Verified on screen unless marked otherwise.
       and the running app survives (it used to abort)
 - [x] Logs are written to `~/Library/Logs/dev.edgenotes.app/Edge Notes.log`
 - [ ] Typing straight after the shortcut, without clicking first — the known gap
+- [x] One click anywhere in the panel after the shortcut puts the caret in the note
 - [ ] "Quit Edge Notes" (not exercised, to keep the app running for the rest)
 - [ ] Anything on Windows or Linux, including the Wayland fallback
 

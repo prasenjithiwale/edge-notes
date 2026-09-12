@@ -52,6 +52,24 @@ export function NoteEditor({ note }: NoteEditorProps) {
     resize();
   }, [resize]);
 
+  // The editor can mount before the window has the keyboard — the shortcut opens
+  // the panel and asks for a new note in the same breath, and `focus()` on an
+  // element in a window that is not yet key does not stick. Re-focus when the
+  // window actually gains focus, so the caret is where the typing will go.
+  useEffect(() => {
+    const refocus = () => {
+      const textarea = textareaRef.current;
+      if (textarea && document.activeElement !== textarea) {
+        textarea.focus();
+        textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+      }
+    };
+    window.addEventListener("focus", refocus);
+    return () => {
+      window.removeEventListener("focus", refocus);
+    };
+  }, []);
+
   useEffect(() => {
     // Hold the panel open while the editor is open (brief 6.3). Counted in the
     // store, because the search field can hold the same lock.

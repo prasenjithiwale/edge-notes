@@ -4,7 +4,6 @@
 //! swapped out without touching the dock logic.
 
 use tauri::{App, Manager, WebviewWindow};
-use tauri_nspanel::objc2_app_kit::NSApplication;
 use tauri_nspanel::{
     CollectionBehavior, ManagerExt, PanelLevel, StyleMask, WebviewWindowExt, tauri_panel,
 };
@@ -78,35 +77,15 @@ pub fn show(window: &WebviewWindow) {
 /// Take focus deliberately (global shortcut or tray), which is the only time
 /// the dock is allowed to become key.
 pub fn focus_panel(window: &WebviewWindow) {
-    if let Ok(panel) = window.app_handle().get_webview_panel(DOCK_WINDOW_LABEL) {
-        // Orders the panel in and makes it key, but says nothing about which
-        // *application* is active.
-        panel.show_and_make_key();
-    }
-
-    // An Accessory app that is not active cannot hold the keyboard, however key
-    // its window claims to be: the shortcut opened the panel and the editor drew a
-    // caret, yet every keystroke still went to the app behind it. The panel's
-    // `nonactivating` style mask is what makes it so — that mask exists precisely
-    // to stop the app being activated — so the app has to be activated by hand.
-    // Only the deliberate paths reach here (shortcut, tray); hover never does, so
-    // this cannot steal focus from someone working elsewhere.
-    activate_app();
-
-    if let Err(error) = window.set_focus() {
-        log::error!("macos: failed to focus the panel: {error}");
-    }
-}
-
-/// Bring the app forward. For an `Accessory` app this adds no Dock icon and no
-/// menu bar; it only makes the process the active one, so its key window is the
-/// one the keyboard talks to.
-fn activate_app() {
-    let Some(mtm) = tauri_nspanel::objc2_foundation::MainThreadMarker::new() else {
-        // Panel operations already require the main thread (brief 8.8); if we are
-        // somehow off it, skip rather than risk an AppKit call from the wrong one.
-        log::error!("macos: activation attempted off the main thread");
+    let Ok(panel) = window.app_handle().get_webview_panel(DOCK_WINDOW_LABEL) else {
+        log::error!("macos: panel not found, cannot take focus");
         return;
     };
-    NSApplication::sharedApplication(mtm).activate();
+    // This makes the panel the key window, but on macOS that is not enough for it
+    // to actually receive keystrokes — see the M3 notes in docs/progress.md for
+    // the gap and everything that has been ruled out. Activating the app,
+    // dropping the `nonactivating` style mask and switching the activation policy
+    // were all tried and none of them delivered a keystroke, so none of them are
+    // carried here.
+    panel.show_and_make_key();
 }
