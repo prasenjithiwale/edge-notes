@@ -14,7 +14,7 @@ import {
  * boolean: with one flag, closing the editor while the search field still had
  * focus would release a lock that is still needed.
  */
-export type LockOwner = "editor" | "search";
+export type LockOwner = "editor" | "search" | "settings";
 
 interface DockStore {
   phase: DockPhase;

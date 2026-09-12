@@ -175,6 +175,11 @@ export function notesRestore(id: string): Promise<Note> {
 
 // -- Settings ---------------------------------------------------------------
 
+/** Monitor names for the settings view; "primary" is handled separately. */
+export function monitorsList(): Promise<string[]> {
+  return callResult<string[]>("monitors_list");
+}
+
 export function settingsGet(): Promise<Settings> {
   return callResult<Settings>("settings_get");
 }

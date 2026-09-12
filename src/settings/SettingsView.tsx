@@ -1,0 +1,249 @@
+import { useEffect, useState } from "react";
+import { ArrowLeft } from "lucide-react";
+
+import { IconButton } from "../components/IconButton";
+import { monitorsList, type Settings } from "../lib/ipc";
+import { useDockStore } from "../store/dock";
+import { useSettingsStore } from "../store/settings";
+import styles from "./SettingsView.module.css";
+import { PANEL_WIDTH, DELAY, clampSetting, type Range } from "./limits";
+
+interface SettingsViewProps {
+  onClose: () => void;
+}
+
+interface NumberSettingProps {
+  label: string;
+  unit: string;
+  value: number;
+  range: Range;
+  step: number;
+  onCommit: (value: number) => void;
+  onFocus: () => void;
+  onBlur: () => void;
+}
+
+/**
+ * A number field that clamps when you finish, not while you type.
+ *
+ * Clamping on every keystroke made multi-digit values impossible: typing "400"
+ * into a 280–420 field went 4 → 280, then "2800" → 420. The draft is local until
+ * blur or Enter, so the value only has to be sensible once.
+ */
+function NumberSetting({
+  label,
+  unit,
+  value,
+  range,
+  step,
+  onCommit,
+  onFocus,
+  onBlur,
+}: NumberSettingProps) {
+  const [draft, setDraft] = useState(String(value));
+  const [editing, setEditing] = useState(false);
+  const [lastValue, setLastValue] = useState(value);
+
+  // Follow the stored value while the field is idle, so a change made elsewhere
+  // shows up without stamping on a half-typed number. Adjusted during render
+  // rather than in an effect — React's own recipe for this — so there is no
+  // second pass with a stale value on screen.
+  if (!editing && value !== lastValue) {
+    setLastValue(value);
+    setDraft(String(value));
+  }
+
+  const commit = () => {
+    const clamped = clampSetting(draft, range);
+    setDraft(String(clamped));
+    if (clamped !== value) {
+      onCommit(clamped);
+    }
+  };
+
+  return (
+    <label className={styles.row}>
+      <span className={styles.label}>{label}</span>
+      <span className={styles.control}>
+        <input
+          type="number"
+          className={styles.number}
+          value={draft}
+          min={range.min}
+          max={range.max}
+          step={step}
+          onFocus={() => {
+            setEditing(true);
+            onFocus();
+          }}
+          onChange={(event) => {
+            setDraft(event.target.value);
+          }}
+          onBlur={() => {
+            setEditing(false);
+            commit();
+            onBlur();
+          }}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") {
+              commit();
+            }
+          }}
+        />
+        <span className={styles.unit}>{unit}</span>
+      </span>
+    </label>
+  );
+}
+
+const THEMES: { value: Settings["theme"]; label: string }[] = [
+  { value: "system", label: "System" },
+  { value: "light", label: "Light" },
+  { value: "dark", label: "Dark" },
+];
+
+/** Brief M4: a small settings view inside the panel. */
+export function SettingsView({ onClose }: SettingsViewProps) {
+  const settings = useSettingsStore((state) => state.settings);
+  const patch = useSettingsStore((state) => state.patch);
+  const setLock = useDockStore((state) => state.setLock);
+  const [monitors, setMonitors] = useState<string[]>([]);
+  const [focused, setFocused] = useState(false);
+  const [shortcutDraft, setShortcutDraft] = useState(
+    settings["shortcut.newNote"],
+  );
+
+  useEffect(() => {
+    void monitorsList().then(setMonitors);
+  }, []);
+
+  // Same rule as the editor and the search field: a focused text field holds the
+  // panel open (brief 6.3), derived from state so it cannot be lost.
+  useEffect(() => {
+    setLock("settings", focused);
+    return () => {
+      setLock("settings", false);
+    };
+  }, [focused, setLock]);
+
+  const fieldProps = {
+    onFocus: () => {
+      setFocused(true);
+    },
+    onBlur: () => {
+      setFocused(false);
+    },
+  };
+
+  return (
+    <div className={styles.view}>
+      <div className={styles.top}>
+        <IconButton label="Back to notes" onClick={onClose}>
+          <ArrowLeft size={16} strokeWidth={1.75} />
+        </IconButton>
+        <h2 className={styles.heading}>Settings</h2>
+      </div>
+
+      <div className={styles.fields}>
+        <fieldset className={styles.group}>
+          <legend className={styles.legend}>Theme</legend>
+          <div className={styles.segmented}>
+            {THEMES.map((theme) => (
+              <button
+                key={theme.value}
+                type="button"
+                className={styles.segment}
+                aria-pressed={settings.theme === theme.value}
+                onClick={() => {
+                  void patch({ theme: theme.value });
+                }}
+              >
+                {theme.label}
+              </button>
+            ))}
+          </div>
+        </fieldset>
+
+        <NumberSetting
+          label="Open delay"
+          unit="ms"
+          value={settings["dock.openDelayMs"]}
+          range={DELAY.open}
+          step={10}
+          onCommit={(value) => {
+            void patch({ "dock.openDelayMs": value });
+          }}
+          {...fieldProps}
+        />
+
+        <NumberSetting
+          label="Close delay"
+          unit="ms"
+          value={settings["dock.closeDelayMs"]}
+          range={DELAY.close}
+          step={50}
+          onCommit={(value) => {
+            void patch({ "dock.closeDelayMs": value });
+          }}
+          {...fieldProps}
+        />
+
+        <NumberSetting
+          label="Panel width"
+          unit="px"
+          value={settings["panel.width"]}
+          range={PANEL_WIDTH}
+          step={10}
+          onCommit={(value) => {
+            void patch({ "panel.width": value });
+          }}
+          {...fieldProps}
+        />
+
+        <label className={styles.row}>
+          <span className={styles.label}>Monitor</span>
+          <select
+            className={styles.select}
+            value={settings["dock.monitor"]}
+            {...fieldProps}
+            onChange={(event) => {
+              void patch({ "dock.monitor": event.target.value });
+            }}
+          >
+            <option value="primary">Primary</option>
+            {monitors.map((monitor) => (
+              <option key={monitor} value={monitor}>
+                {monitor}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label className={styles.row}>
+          <span className={styles.label}>New note shortcut</span>
+          <input
+            type="text"
+            className={styles.text}
+            value={shortcutDraft}
+            spellCheck={false}
+            autoComplete="off"
+            onFocus={() => {
+              setFocused(true);
+            }}
+            onChange={(event) => {
+              setShortcutDraft(event.target.value);
+            }}
+            onBlur={() => {
+              setFocused(false);
+              // Rebinding on every keystroke would try to register "C", "Cm",
+              // "Cmd"... and log a failure for each.
+              if (shortcutDraft !== settings["shortcut.newNote"]) {
+                void patch({ "shortcut.newNote": shortcutDraft });
+              }
+            }}
+          />
+        </label>
+      </div>
+    </div>
+  );
+}

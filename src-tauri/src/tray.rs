@@ -7,8 +7,9 @@ use tauri::menu::{CheckMenuItem, Menu, MenuEvent, MenuItem, PredefinedMenuItem};
 use tauri::tray::TrayIconBuilder;
 use tauri::{AppHandle, Emitter, Manager, Runtime};
 use tauri_plugin_autostart::ManagerExt;
+use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
 
-use crate::db::{Database, SettingsPatch, settings};
+use crate::db::{Database, Settings, SettingsPatch, settings};
 use crate::dock::{Dock, Input, Side, poller};
 
 /// Brief 9.4: the frontend opens a new note in the editor when it sees this.
@@ -86,7 +87,7 @@ fn set_side(app: &AppHandle, side: Side) {
     };
 
     if let Some(dock) = app.try_state::<Arc<Dock>>() {
-        let geometry = poller::geometry_for(app, updated.dock_side, updated.dock_tab_offset);
+        let geometry = poller::geometry_for(app, &updated.placement());
         dock.set_geometry(app, geometry);
     }
     if let Err(error) = app.emit(crate::commands::SETTINGS_CHANGED_EVENT, &updated) {
@@ -214,4 +215,48 @@ pub fn init(app: &AppHandle) -> tauri::Result<()> {
 
     builder.build(app)?;
     Ok(())
+}
+
+/// Brief 6.11: one global shortcut, opening the panel with a new note ready to
+/// type into. The accelerator is a setting, so someone who has already given
+/// `CmdOrCtrl+Alt+N` to another app can move it.
+///
+/// `accelerator` is `None` at startup, meaning "whatever is stored".
+pub fn bind_new_note_shortcut(app: &AppHandle, accelerator: Option<&str>) {
+    let accelerator = accelerator.map_or_else(
+        || {
+            app.try_state::<Database>()
+                .and_then(|db| db.with(settings::get).ok())
+                .map_or_else(
+                    || Settings::default().shortcut_new_note,
+                    |settings| settings.shortcut_new_note,
+                )
+        },
+        ToOwned::to_owned,
+    );
+
+    let shortcuts = app.global_shortcut();
+    // Only ever one shortcut is registered, so clearing the lot is the simplest
+    // way to make rebinding idempotent.
+    if let Err(error) = shortcuts.unregister_all() {
+        log::warn!("shortcut: could not clear existing shortcuts: {error}");
+    }
+
+    let result = shortcuts.on_shortcut(accelerator.as_str(), |app, _shortcut, event| {
+        // Both press and release arrive; acting on each would open two notes.
+        if event.state() == ShortcutState::Pressed {
+            open_with_new_note(app);
+        }
+    });
+
+    if let Err(error) = result {
+        // A shortcut another app already owns must not stop the widget from
+        // starting, or from accepting the rest of a settings change.
+        log::error!("shortcut: could not register {accelerator}: {error}");
+    }
+}
+
+/// Re-bind after the setting changes, so a new accelerator works immediately.
+pub fn rebind_new_note_shortcut(app: &AppHandle, accelerator: &str) {
+    bind_new_note_shortcut(app, Some(accelerator));
 }

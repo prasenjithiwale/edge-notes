@@ -23,6 +23,9 @@ pub const DOCK_WINDOW_LABEL: &str = "dock";
 pub const DOCK_STATE_EVENT: &str = "dock:state";
 
 /// Shared dock state. Commands and the poller both drive the controller through here.
+/// `dock.monitor`'s sentinel for "wherever the primary display is" (brief 9.2).
+pub const PRIMARY_MONITOR: &str = "primary";
+
 pub struct Dock {
     controller: Mutex<DockController>,
     stopped: AtomicBool,
@@ -45,6 +48,14 @@ impl Dock {
     #[must_use]
     pub fn is_stopped(&self) -> bool {
         self.stopped.load(Ordering::Relaxed)
+    }
+
+    /// Brief 9.3: the open and close delays apply immediately, without a restart.
+    pub fn set_timings(&self, timings: Timings) {
+        match self.controller.lock() {
+            Ok(mut controller) => controller.set_timings(timings),
+            Err(poisoned) => poisoned.into_inner().set_timings(timings),
+        }
     }
 
     /// Feed an input and apply whatever the controller returns.
@@ -138,14 +149,31 @@ pub struct MonitorSnapshot {
 /// published release is 2.11.5. Marshalling monitor queries to the main thread
 /// is what the upstream fix does, so we do it here until 2.12 ships.
 pub fn monitor_snapshot(app: &AppHandle) -> Option<MonitorSnapshot> {
+    monitor_snapshot_for(app, PRIMARY_MONITOR)
+}
+
+/// The work area of the monitor the dock should live on.
+///
+/// `name` is `dock.monitor` (brief 9.2): `"primary"`, or a monitor name. A
+/// monitor that has been unplugged falls back to primary rather than leaving the
+/// tab on a screen that no longer exists (brief 8.5).
+pub fn monitor_snapshot_for(app: &AppHandle, name: &str) -> Option<MonitorSnapshot> {
     let (tx, rx) = mpsc::channel();
     let handle = app.clone();
+    let wanted = name.to_owned();
     if app
         .run_on_main_thread(move || {
-            let snapshot = handle
-                .primary_monitor()
-                .ok()
-                .flatten()
+            let chosen = if wanted == PRIMARY_MONITOR {
+                None
+            } else {
+                handle.available_monitors().ok().and_then(|monitors| {
+                    monitors
+                        .into_iter()
+                        .find(|monitor| monitor.name().is_some_and(|n| *n == wanted))
+                })
+            };
+            let snapshot = chosen
+                .or_else(|| handle.primary_monitor().ok().flatten())
                 .or_else(|| {
                     handle
                         .available_monitors()
@@ -176,17 +204,42 @@ pub fn monitor_snapshot(app: &AppHandle) -> Option<MonitorSnapshot> {
 /// Build the geometry for the current monitor, falling back to a sane default
 /// if no monitor can be read (brief 8.5: fall back to primary).
 #[must_use]
-pub fn geometry_for(app: &AppHandle, side: Side, tab_offset: f64) -> DockGeometry {
-    let snapshot = monitor_snapshot(app).unwrap_or(MonitorSnapshot {
+/// Everything from the settings table that decides where the dock sits and how
+/// big it is. Grouped so adding the next placement setting does not change every
+/// call site (brief 9.2).
+#[derive(Debug, Clone, PartialEq)]
+pub struct Placement {
+    pub side: Side,
+    pub tab_offset: f64,
+    pub panel_width: f64,
+    pub monitor: String,
+}
+
+impl Default for Placement {
+    fn default() -> Self {
+        Self {
+            side: Side::Right,
+            tab_offset: 0.5,
+            panel_width: Metrics::default().panel_width,
+            monitor: PRIMARY_MONITOR.to_owned(),
+        }
+    }
+}
+
+pub fn geometry_for(app: &AppHandle, placement: &Placement) -> DockGeometry {
+    let snapshot = monitor_snapshot_for(app, &placement.monitor).unwrap_or(MonitorSnapshot {
         work_area: Rect::new(0, 0, 1440, 900),
         scale: 1.0,
     });
     DockGeometry::new(
         snapshot.work_area,
         snapshot.scale,
-        side,
-        tab_offset,
-        Metrics::default(),
+        placement.side,
+        placement.tab_offset,
+        Metrics {
+            panel_width: placement.panel_width,
+            ..Metrics::default()
+        },
     )
 }
 

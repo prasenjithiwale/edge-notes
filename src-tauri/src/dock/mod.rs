@@ -7,4 +7,4 @@ pub mod poller;
 
 pub use controller::{Action, DockController, DockState, Input, Phase, Timings};
 pub use geometry::{DockGeometry, Metrics, Rect, Side};
-pub use poller::{DOCK_STATE_EVENT, DOCK_WINDOW_LABEL, Dock};
+pub use poller::{DOCK_STATE_EVENT, DOCK_WINDOW_LABEL, Dock, PRIMARY_MONITOR, Placement};

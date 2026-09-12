@@ -14,43 +14,9 @@ use std::sync::Arc;
 
 use tauri::{Manager, WindowEvent};
 use tauri_plugin_autostart::MacosLauncher;
-use tauri_plugin_global_shortcut::GlobalShortcutExt;
 
-use db::{Database, settings};
-use dock::{DOCK_WINDOW_LABEL, Dock, Input, Side, Timings, poller};
-
-/// The dock side default (brief 9.2). Settings arrive in M1.
-const DEFAULT_SIDE: Side = Side::Right;
-/// Vertically centred on the work area (brief 9.2 `dock.tabOffset`).
-const DEFAULT_TAB_OFFSET: f64 = 0.5;
-
-/// Brief 6.11: one global shortcut, opening the panel with a new note ready to
-/// type into. The accelerator is a setting, so a user who has taken
-/// `CmdOrCtrl+Alt+N` for something else can move it.
-fn register_new_note_shortcut(app: &tauri::AppHandle) {
-    let accelerator = app
-        .try_state::<Database>()
-        .and_then(|db| db.with(settings::get).ok())
-        .map_or_else(
-            || db::Settings::default().shortcut_new_note,
-            |settings| settings.shortcut_new_note,
-        );
-
-    let result =
-        app.global_shortcut()
-            .on_shortcut(accelerator.as_str(), |app, _shortcut, event| {
-                // Both press and release arrive; acting on each would open two notes.
-                if event.state() == tauri_plugin_global_shortcut::ShortcutState::Pressed {
-                    tray::open_with_new_note(app);
-                }
-            });
-
-    if let Err(error) = result {
-        // A shortcut another app already owns must not stop the widget from
-        // starting: everything else still works without it.
-        log::error!("shortcut: could not register {accelerator}: {error}");
-    }
-}
+use db::Database;
+use dock::{DOCK_WINDOW_LABEL, Dock, Input, poller};
 
 pub fn run() {
     let builder = tauri::Builder::default()
@@ -90,6 +56,7 @@ pub fn run() {
             commands::notes_update,
             commands::notes_delete,
             commands::notes_restore,
+            commands::monitors_list,
             commands::settings_get,
             commands::settings_update,
         ])
@@ -109,12 +76,9 @@ pub fn run() {
                 Ok(count) => log::info!("db: purged {count} expired notes"),
                 Err(error) => log::error!("db: purge failed: {error}"),
             }
-            let dock_side = database
-                .with(db::settings::get)
-                .map_or(DEFAULT_SIDE, |settings| settings.dock_side);
-            let tab_offset = database
-                .with(db::settings::get)
-                .map_or(DEFAULT_TAB_OFFSET, |settings| settings.dock_tab_offset);
+            let stored = database.with(db::settings::get).unwrap_or_default();
+            let placement = stored.placement();
+            let timings = stored.timings();
             app.manage(database);
 
             let window = handle
@@ -124,8 +88,8 @@ pub fn run() {
             // NSPanel conversion must happen before the window is positioned or shown.
             platform::configure(&window);
 
-            let geometry = poller::geometry_for(&handle, dock_side, tab_offset);
-            app.manage(Arc::new(Dock::new(geometry, Timings::default())));
+            let geometry = poller::geometry_for(&handle, &placement);
+            app.manage(Arc::new(Dock::new(geometry, timings)));
 
             // Brief 6.3: another app taking focus starts the close delay.
             let event_handle = handle.clone();
@@ -143,7 +107,7 @@ pub fn run() {
             });
 
             tray::init(&handle)?;
-            register_new_note_shortcut(&handle);
+            tray::bind_new_note_shortcut(&handle, None);
 
             poller::spawn(handle);
             Ok(())

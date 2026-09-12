@@ -45,8 +45,11 @@
   --radius-control: 8px;
 }
 
+/* The dark palette is applied through two selectors: the system preference,
+   unless the user has explicitly chosen light, and an explicit dark choice
+   (brief 9.2 `theme`). The two blocks must stay identical. */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --surface: #1c1c1e;
     --surface-sunken: #2a2a2d;
     --border: rgba(255, 255, 255, 0.08);
@@ -72,4 +75,31 @@
     --note-gray-bg: #34332f;
     --note-gray-text: #e3e2de;
   }
+}
+
+:root[data-theme="dark"] {
+  --surface: #1c1c1e;
+  --surface-sunken: #2a2a2d;
+  --border: rgba(255, 255, 255, 0.08);
+  --text-primary: #f2f2f3;
+  --text-secondary: #a1a1a6;
+  --text-tertiary: #7c7c80;
+  --accent: #5a8df0;
+  --shadow-panel:
+    0 8px 28px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.06);
+
+  --note-yellow-bg: #4a3f16;
+  --note-yellow-text: #f7e9a8;
+  --note-peach-bg: #4d2e1f;
+  --note-peach-text: #f8cdb5;
+  --note-pink-bg: #4a2333;
+  --note-pink-text: #f5c3d4;
+  --note-lavender-bg: #312a55;
+  --note-lavender-text: #d6cef7;
+  --note-blue-bg: #1e3550;
+  --note-blue-text: #bfd9f5;
+  --note-mint-bg: #1d3f31;
+  --note-mint-text: #bde8d2;
+  --note-gray-bg: #34332f;
+  --note-gray-text: #e3e2de;
 }

@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useRef } from "react";
-import { Pin, Plus, Search } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Pin, Plus, Search, Settings as SettingsIcon } from "lucide-react";
 
 import { IconButton } from "../components/IconButton";
 import { Toast } from "../components/Toast";
@@ -17,6 +17,7 @@ import { ColorFilter } from "../notes/ColorFilter";
 import { EmptyState } from "../notes/EmptyState";
 import { NoteList } from "../notes/NoteList";
 import { SearchField } from "../notes/SearchField";
+import { SettingsView } from "../settings/SettingsView";
 import { useDockStore } from "../store/dock";
 import { useNotesStore } from "../store/notes";
 import { useSettingsStore } from "../store/settings";
@@ -28,11 +29,14 @@ interface PanelProps {
 
 /** True for a field where arrow keys and Cmd+F belong to the text, not the list. */
 function isTextField(target: EventTarget | null): boolean {
-  return target instanceof HTMLTextAreaElement || target instanceof HTMLInputElement;
+  return (
+    target instanceof HTMLTextAreaElement || target instanceof HTMLInputElement
+  );
 }
 
 export function Panel({ className }: PanelProps) {
   const panelRef = useRef<HTMLElement>(null);
+  const [showSettings, setShowSettings] = useState(false);
 
   const keepOpen = useDockStore((state) => state.keepOpen);
   const setKeepOpen = useDockStore((state) => state.setKeepOpen);
@@ -86,7 +90,10 @@ export function Panel({ className }: PanelProps) {
   // The filter row offers the colours of notes matching the *query*, not of the
   // colour-filtered result: filtering to one colour must not remove the dots
   // needed to switch to another (brief 6.7).
-  const queryMatches = useMemo(() => filterNotes(notes, { query }), [notes, query]);
+  const queryMatches = useMemo(
+    () => filterNotes(notes, { query }),
+    [notes, query],
+  );
   const facets = useMemo(
     () => facetColors(queryMatches, NOTE_COLORS, colorFilter),
     [queryMatches, colorFilter],
@@ -95,6 +102,14 @@ export function Panel({ className }: PanelProps) {
     () => filterNotes(queryMatches, { color: colorFilter }),
     [queryMatches, colorFilter],
   );
+
+  // The keydown listener is registered once, so it reads the current value
+  // through a ref rather than closing over a stale one. Written in an effect,
+  // because a ref must not be touched during render.
+  const settingsOpenRef = useRef(false);
+  useEffect(() => {
+    settingsOpenRef.current = showSettings;
+  }, [showSettings]);
 
   // Keyboard handling sits on the window, not on the panel element: closing the
   // editor or the search field unmounts the focused node and focus falls back to
@@ -128,7 +143,9 @@ export function Panel({ className }: PanelProps) {
         if (isTextField(event.target)) {
           return;
         }
-        if (moveCardFocus(panelRef.current, event.key === "ArrowDown" ? 1 : -1)) {
+        if (
+          moveCardFocus(panelRef.current, event.key === "ArrowDown" ? 1 : -1)
+        ) {
           event.preventDefault();
         }
         return;
@@ -137,7 +154,9 @@ export function Panel({ className }: PanelProps) {
         // One ordered cascade (brief 6.11): the editor, then search, then the
         // panel. Deciding it in a single place beats three handlers racing to
         // swallow the same key.
-        if (notesStore.editingId !== null) {
+        if (settingsOpenRef.current) {
+          setShowSettings(false);
+        } else if (notesStore.editingId !== null) {
           void notesStore.stopEditing();
         } else if (notesStore.searching) {
           notesStore.closeSearch();
@@ -189,6 +208,16 @@ export function Panel({ className }: PanelProps) {
           <h1 className={styles.title}>Notes</h1>
         )}
         <div className={styles.actions}>
+          <IconButton
+            label={showSettings ? "Back to notes" : "Settings"}
+            active={showSettings}
+            pressed={showSettings}
+            onClick={() => {
+              setShowSettings((open) => !open);
+            }}
+          >
+            <SettingsIcon size={16} strokeWidth={1.75} />
+          </IconButton>
           {!searching && (
             <IconButton label="Search notes" onClick={openSearch}>
               <Search size={16} strokeWidth={1.75} />
@@ -216,31 +245,45 @@ export function Panel({ className }: PanelProps) {
         </div>
       </header>
 
-      {facets.length > 0 && (
-        <ColorFilter
-          colors={facets}
-          selected={colorFilter}
-          onSelect={setColorFilter}
-        />
-      )}
-
-      {/* Nothing until the first load resolves, so the panel never flashes an
-          empty state on the way in. */}
-      {!loaded ? null : isEmpty ? (
-        <EmptyState
-          kind="no-notes"
-          onCreate={() => {
-            void createNote();
+      {showSettings ? (
+        <SettingsView
+          onClose={() => {
+            setShowSettings(false);
           }}
         />
-      ) : visible.length === 0 ? (
-        query.trim() === "" ? (
-          <EmptyState kind="no-colour" />
-        ) : (
-          <EmptyState kind="no-matches" query={query.trim()} />
-        )
       ) : (
-        <NoteList notes={visible} editingId={editingId} onOpen={startEditing} />
+        <>
+          {facets.length > 0 && (
+            <ColorFilter
+              colors={facets}
+              selected={colorFilter}
+              onSelect={setColorFilter}
+            />
+          )}
+
+          {/* Nothing until the first load resolves, so the panel never flashes an
+          empty state on the way in. */}
+          {!loaded ? null : isEmpty ? (
+            <EmptyState
+              kind="no-notes"
+              onCreate={() => {
+                void createNote();
+              }}
+            />
+          ) : visible.length === 0 ? (
+            query.trim() === "" ? (
+              <EmptyState kind="no-colour" />
+            ) : (
+              <EmptyState kind="no-matches" query={query.trim()} />
+            )
+          ) : (
+            <NoteList
+              notes={visible}
+              editingId={editingId}
+              onOpen={startEditing}
+            />
+          )}
+        </>
       )}
 
       {pendingUndo && (

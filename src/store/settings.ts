@@ -20,6 +20,19 @@ const DEFAULTS: Settings = {
   "shortcut.newNote": "CmdOrCtrl+Alt+N",
 };
 
+/**
+ * Brief 9.2 `theme`. "system" leaves the attribute off so the media query in
+ * tokens.css decides; an explicit choice stamps the root and wins over it.
+ */
+function applyTheme(theme: Settings["theme"]): void {
+  const root = document.documentElement;
+  if (theme === "system") {
+    root.removeAttribute("data-theme");
+  } else {
+    root.setAttribute("data-theme", theme);
+  }
+}
+
 interface SettingsStore {
   settings: Settings;
   loaded: boolean;
@@ -34,7 +47,9 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
   loaded: false,
   load: async () => {
     try {
-      set({ settings: await settingsGet(), loaded: true });
+      const settings = await settingsGet();
+      applyTheme(settings.theme);
+      set({ settings, loaded: true });
     } catch (error: unknown) {
       // Defaults are already in place, so the panel still works.
       console.error("settings: load failed", error);
@@ -42,11 +57,14 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
     }
   },
   apply: (settings) => {
+    applyTheme(settings.theme);
     set({ settings });
   },
   patch: async (patch) => {
     try {
-      set({ settings: await settingsUpdate(patch) });
+      const settings = await settingsUpdate(patch);
+      applyTheme(settings.theme);
+      set({ settings });
     } catch (error: unknown) {
       console.error("settings: update failed", error);
     }

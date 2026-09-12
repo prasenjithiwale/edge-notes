@@ -130,6 +130,17 @@ pub fn notes_restore(db: State<'_, Database>, id: String) -> AppResult<Note> {
 
 // -- Settings ---------------------------------------------------------------
 
+/// The monitors the dock can be placed on, by name (brief 9.2 `dock.monitor`).
+/// Not in brief 9.3: the settings view cannot offer a choice it cannot enumerate.
+#[tauri::command]
+pub fn monitors_list(app: AppHandle) -> AppResult<Vec<String>> {
+    let monitors = app.available_monitors().unwrap_or_default();
+    Ok(monitors
+        .into_iter()
+        .filter_map(|monitor| monitor.name().cloned())
+        .collect())
+}
+
 #[tauri::command]
 pub fn settings_get(db: State<'_, Database>) -> AppResult<Settings> {
     db.with(settings::get)
@@ -143,13 +154,24 @@ pub fn settings_update(
 ) -> AppResult<Settings> {
     let updated = db.with(|connection| settings::update(connection, &patch))?;
 
-    // Brief 9.3: settings apply immediately. A dock side or tab offset that only
-    // took effect on the next launch would make the tray's radio pair look broken.
-    if patch.dock_side.is_some() || patch.dock_tab_offset.is_some() {
-        if let Some(dock) = app.try_state::<Arc<Dock>>() {
-            let geometry = poller::geometry_for(&app, updated.dock_side, updated.dock_tab_offset);
+    // Brief 9.3: settings apply immediately. Anything that only took effect on the
+    // next launch would make the settings view look broken.
+    if let Some(dock) = app.try_state::<Arc<Dock>>() {
+        if patch.dock_side.is_some()
+            || patch.dock_tab_offset.is_some()
+            || patch.panel_width.is_some()
+            || patch.dock_monitor.is_some()
+        {
+            let geometry = poller::geometry_for(&app, &updated.placement());
             dock.set_geometry(&app, geometry);
         }
+        if patch.dock_open_delay_ms.is_some() || patch.dock_close_delay_ms.is_some() {
+            dock.set_timings(updated.timings());
+        }
+    }
+
+    if let Some(accelerator) = patch.shortcut_new_note.as_deref() {
+        crate::tray::rebind_new_note_shortcut(&app, accelerator);
     }
 
     if let Err(error) = app.emit(SETTINGS_CHANGED_EVENT, &updated) {

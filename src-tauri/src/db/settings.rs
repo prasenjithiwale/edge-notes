@@ -40,6 +40,27 @@ pub struct Settings {
     pub shortcut_new_note: String,
 }
 
+impl Settings {
+    /// The placement half of the settings, for the dock (brief 9.2).
+    pub fn placement(&self) -> crate::dock::Placement {
+        crate::dock::Placement {
+            side: self.dock_side,
+            tab_offset: self.dock_tab_offset,
+            panel_width: self.panel_width,
+            monitor: self.dock_monitor.clone(),
+        }
+    }
+
+    /// The two hover delays, which apply without a restart (brief 9.3).
+    pub fn timings(&self) -> crate::dock::Timings {
+        crate::dock::Timings {
+            open_delay: std::time::Duration::from_millis(self.dock_open_delay_ms),
+            close_delay: std::time::Duration::from_millis(self.dock_close_delay_ms),
+            ..crate::dock::Timings::default()
+        }
+    }
+}
+
 impl Default for Settings {
     /// Brief 9.2.
     fn default() -> Self {

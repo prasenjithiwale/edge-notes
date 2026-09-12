@@ -402,6 +402,11 @@ impl DockController {
     }
 
     /// Replace the geometry (dock side switch, monitor or scale change).
+    /// Delays are read on every tick, so a change takes effect on the next one.
+    pub fn set_timings(&mut self, timings: Timings) {
+        self.timings = timings;
+    }
+
     pub fn set_geometry(&mut self, geometry: DockGeometry) -> Vec<Action> {
         self.geometry = geometry;
         self.on_monitor_changed()
