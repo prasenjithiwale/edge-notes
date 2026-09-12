@@ -14,6 +14,13 @@ import { Panel } from "./Panel";
 import { Tab } from "./Tab";
 import styles from "./DockShell.module.css";
 
+/**
+ * How long to wait for the post-paint frames before showing the window anyway.
+ * Long enough that a visible window paints first, short enough to stay inside
+ * the "visible tab in under a second" target (brief 11).
+ */
+const READY_FALLBACK_MS = 120;
+
 /** Elements whose transition end counts as "the slide finished". */
 function isSlideElement(target: EventTarget | null): boolean {
   return target instanceof HTMLElement && target.dataset["slide"] === "true";
@@ -25,27 +32,54 @@ export function DockShell() {
   const tabTop = useDockStore((state) => state.tabTop);
   const applyState = useDockStore((state) => state.applyState);
   const frameRef = useRef<number | undefined>(undefined);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   useEffect(() => {
     let unlisten: UnlistenFn | undefined;
     let cancelled = false;
+    let announced = false;
+
+    /**
+     * Show the window, once. Nothing here may be skipped or deferred
+     * indefinitely: until this runs the window is hidden, and a hidden window
+     * is a widget the user cannot see at all.
+     */
+    const announceReady = () => {
+      if (cancelled || announced) {
+        return;
+      }
+      announced = true;
+      void appReady();
+    };
 
     // The listener must be attached before app_ready, because showing the window
     // emits the first dock:state and listen() resolves asynchronously — register
     // afterwards and that first state is lost.
     void (async () => {
-      unlisten = await onDockState(applyState);
+      try {
+        unlisten = await onDockState(applyState);
+      } catch (error: unknown) {
+        // A panel that misses dock:state is broken; a window that never appears
+        // is invisible. Carry on and show it rather than stranding it hidden.
+        console.error("dock: failed to listen for dock:state", error);
+      }
       if (cancelled) {
-        unlisten();
+        unlisten?.();
         return;
       }
+
       // Two frames: the first schedules the paint, the second runs after it, so
       // the window is only shown once there is something to see (brief 7.5).
       frameRef.current = requestAnimationFrame(() => {
-        frameRef.current = requestAnimationFrame(() => {
-          void appReady();
-        });
+        frameRef.current = requestAnimationFrame(announceReady);
       });
+
+      // ...but the window starts hidden, and WebKit suspends rAF in a window
+      // that has never been ordered in, so those callbacks never run at startup:
+      // the window stayed hidden because it was hidden. This fallback is what
+      // actually fires on a cold start; the frames win on a reload, when the
+      // window is already on screen and waiting for the paint is real.
+      timerRef.current = setTimeout(announceReady, READY_FALLBACK_MS);
     })();
 
     return () => {
@@ -53,6 +87,9 @@ export function DockShell() {
       unlisten?.();
       if (frameRef.current !== undefined) {
         cancelAnimationFrame(frameRef.current);
+      }
+      if (timerRef.current !== undefined) {
+        clearTimeout(timerRef.current);
       }
     };
   }, [applyState]);

@@ -7,7 +7,7 @@ of every milestone. The spec is [build-brief.md](build-brief.md).
 
 | Milestone | Status |
 |---|---|
-| M0 Docking spike | Built, five follow-up fixes applied. **Never manually accepted** — see the note below. Windows and Linux untested. |
+| M0 Docking spike | Built. **The window never actually appeared until 12 Sep 2026** — see "The window was invisible" below. Partly verified now; Windows and Linux untested. |
 | M1 Notes core | Built; awaiting manual acceptance (checklist below). |
 | M2 Find and organize | Built; awaiting manual acceptance (checklist below). |
 | M3 System integration | Not started |
@@ -18,10 +18,46 @@ Built and verified on macOS 26.6.2 (Tahoe), Apple Silicon, single 1920×1080
 display at 1× scale. Every scaling and multi-monitor case is covered by unit
 tests but has not been seen on real hardware.
 
-**The M0 checklist was never reported as run.** M1 was started on the explicit
-instruction to proceed, so the notes UI now sits on docking behaviour that no
-human has watched. If a docking problem turns up later, that is where to look
-first — the M0 checklist is still at the bottom of this file.
+**The M0 checklist was never reported as run**, and that hid a total failure for
+three milestones: the window never became visible at all (below). Screen capture
+now works for the agent, so the collapsed tab has been seen on screen. Anything
+needing the cursor — every hover, click and keystroke item — is still unverified,
+because macOS Accessibility is not granted to the agent's host process.
+
+## The window was invisible (fixed 12 Sep 2026)
+
+For all of M0, M1 and M2 the app started, converted to an NSPanel, logged
+nothing, and **drew nothing on screen**. It was never a docking or geometry bug.
+
+`DockShell` called `app_ready` — the command that shows the window — from inside
+two nested `requestAnimationFrame` callbacks, to wait for the first paint
+(brief 7.5). But the window is created with `visible: false`, and **WebKit
+suspends `requestAnimationFrame` in a window that has never been ordered in**.
+The callbacks never ran, so `app_ready` was never called, so the window was never
+shown, so the callbacks never ran: the window stayed hidden because it was
+hidden. Nothing reached stderr, because nothing failed — the frontend was simply
+waiting for a frame that could not arrive.
+
+How it was found, after CSP and the frontend were both wrongly suspected: a
+temporary `eprintln!` in `app_ready` proved it was never called; jsdom proved the
+frontend calls it correctly when Tauri behaves (so the bug was environmental);
+and flipping the window to `visible: true` made `app_ready` fire instantly, which
+named the cause exactly.
+
+The fix, in `DockShell`: keep the double-frame wait, but race it against a 120 ms
+fallback that shows the window anyway, whichever comes first. On a cold start the
+fallback is what fires; on a reload, with the window already on screen, the frames
+win and the paint wait is real. A rejected `listen()` no longer strands the window
+either — it is caught, logged, and the window is still shown, because a panel
+that misses an event is better than a widget nobody can see.
+
+Both paths are now regression-tested in `src/dock/DockShell.test.tsx`.
+
+**Ruled out along the way, so nobody re-investigates them:** the CSP is *not* the
+problem (the app works with it removed *and* restored, and Tauri's
+`security.devCsp` is unnecessary here, though note that `csp` does apply in dev
+when `devCsp` is unset); the ACL capability is correct; and the frontend
+handshake is correct under StrictMode's double-invoked effects.
 
 ## Commands
 
@@ -186,10 +222,18 @@ and a couple of render tests before the notes UI grows.
 
 ## Known issues and untested areas
 
-1. **Nothing has been visually verified.** Screen capture and the accessibility
-   API are both blocked for the agent process on this machine, so the app was only
-   confirmed to launch, convert to an NSPanel and run without errors. Every visual
-   and interaction item in the checklist below is unverified.
+1. **Partly visually verified as of 12 Sep 2026.** Screen capture works for the
+   agent after all; the earlier note saying otherwise was wrong. Confirmed by
+   screenshot: the collapsed tab sits at the right edge, vertically centred,
+   rounded only on the inner side, above the focused app, with the chevron
+   pointing toward the screen centre — and, with notes in the database, the three
+   recent-colour dots in the right colours and order (brief 6.5).
+   **Still unverified: everything needing the cursor or keyboard.** macOS
+   Accessibility is not granted to the agent's host process, so `cliclick` cannot
+   move the pointer and System Events cannot send keys — and hover is the only way
+   to open the panel until the tray and shortcut land in M3. Granting
+   Accessibility to the terminal host (System Settings → Privacy & Security →
+   Accessibility) would unblock the rest of the checklists.
 2. **The transparency GPU cost (#15471) was not measured.** `powermetrics` needs
    `sudo` and an interactive password. Run it by hand:
    `sudo powermetrics --samplers gpu_power -i 1000 -n 5` with the panel collapsed
@@ -343,18 +387,25 @@ that also sets how often the editor re-renders for the label.
 - `usedColors` from M1 was removed: `facetColors` with no selection is exactly it,
   and two ways to do the same thing is one too many.
 
-### Still not covered by tests
+### Component tests (approved addition)
 
-The M1 note about CSS and component wiring now applies to considerably more code:
-the Esc cascade, arrow-key movement, focus restoration and the lock counting are
-all component behaviour, and Vitest runs in a `node` environment against pure
-logic only. `moveCardFocus` and the store transitions have no test at all.
+`jsdom`, `@testing-library/react` and `@testing-library/dom` were added as
+devDependencies with the owner's approval, closing the gap flagged in M0 and M1.
+They are outside brief section 4, which lists only `cargo test` and Vitest.
 
-Closing that needs a DOM environment (`jsdom` or `happy-dom`) and probably
-`@testing-library/react`, which are outside brief section 4 — **it needs your
-approval before I add them.** The pure logic those components sit on
-(`facetColors`, `recentColors`, `editedLabel`, `colorName`, `isExpandedPhase`) is
-tested: 43 frontend tests, up from 29.
+`vite.config.ts` keeps `environment: "node"` as the default so the pure-logic
+tests stay fast; component tests opt in per file with a
+`// @vitest-environment jsdom` docblock. Frontend tests: 64 across 6 files, up
+from 29 in one.
+
+What they cover: the startup handshake (both the cold-start path that was broken
+for three milestones and a failing `listen()`), the Esc cascade in all four of its
+cases including the collapsed panel, `Cmd+F` and `Cmd+N`, search filtering and the
+no-matches message, colour filtering and the facet rule that keeps the other dots
+reachable, arrow-key card movement, and the counted interaction lock.
+
+Still uncovered: CSS wiring (a selector that matches nothing still looks identical
+to a passing build) and the slide animation handshake.
 
 ### M2 acceptance checklist
 
@@ -374,7 +425,7 @@ tested: 43 frontend tests, up from 29.
 - [ ] The editor footer shows seven swatches, the selected one ringed, and clicking one recolours the note and the card
 - [ ] The footer reads "Edited just now" on a new note, and sensibly on an older one
 - [ ] The next new note reuses the colour last chosen in the editor
-- [ ] The tab shows up to three dots in the colours of the three most recently edited notes
+- [x] The tab shows up to three dots in the colours of the three most recently edited notes — verified by screenshot
 - [ ] Text on every note colour is readable in both light and dark mode, swatches included
 
 ## M0 acceptance checklist

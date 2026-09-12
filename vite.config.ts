@@ -15,7 +15,9 @@ export default defineConfig({
     target: "safari15",
   },
   test: {
+    // Pure logic runs in node; component tests opt into jsdom with a
+    // `@vitest-environment jsdom` docblock, so the fast majority stay fast.
     environment: "node",
-    include: ["src/**/*.test.ts"],
+    include: ["src/**/*.test.ts", "src/**/*.test.tsx"],
   },
 });

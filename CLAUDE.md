@@ -26,7 +26,8 @@ npm run tauri build          # release bundle (.app, .dmg)
 npm run tauri build -- --bundles app   # .app only, much faster
 
 npm run lint                 # ESLint, zero warnings allowed
-npm test                     # Vitest
+npm test                     # Vitest (node by default; component tests opt into
+                             # jsdom with a `// @vitest-environment jsdom` docblock)
 npx tsc --noEmit             # type check (not part of lint)
 npx vitest run src/lib/dock.test.ts    # one frontend test file
 npx vitest run -t "flips the chevron"  # one test by name
@@ -59,6 +60,8 @@ A desktop notes widget: a small tab docked to the left or right screen edge, flo
 **Opening never takes focus.** Focus happens only on click or shortcut. After collapse the previously active app keeps focus.
 
 **The frontend never changes layout between phases.** The tab and panel are one group anchored to the docked edge, with the closed state at `translateX(±panel-width)`. Because the collapsed and expanded windows share that edge, the same CSS puts the tab on identical screen pixels at both window sizes — which is what makes the resize invisible. Only the transform changes; don't replace this with per-phase layouts.
+
+**`app_ready` must never depend on a frame.** The window is created hidden and Rust shows it only when the frontend calls `app_ready`, but WebKit suspends `requestAnimationFrame` in a window that has never been ordered in — so waiting for a paint before calling it kept the window hidden because it was hidden, silently, for three milestones. `DockShell` races the double-frame paint wait against a 120 ms fallback, and a failing `listen()` is caught rather than allowed to skip the call. Nothing on the path to `app_ready` may be able to not happen. Covered by `src/dock/DockShell.test.tsx`.
 
 **Keyboard handling is one window-level listener, and the interaction lock is counted.** `Panel` binds a single `keydown` listener on `window` — not on the panel element, because closing the editor or the search field unmounts the focused node and a subtree handler then never sees another key. Esc resolves as one ordered cascade there (editor, then search, then panel); components handle no keys themselves. Every panel shortcut is gated on `isExpandedPhase`, since the webview can hold key focus after a collapse and Esc must never toggle a collapsed panel open. The editor and the search field can both hold the panel open, so `dock.setLock(owner, held)` keeps a set of owners and calls `dock_set_interaction_lock` only when the aggregate flips; Rust still sees one boolean. The search field locks on focus, not while mounted.
 
