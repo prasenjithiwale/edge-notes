@@ -4,6 +4,7 @@ import { cx } from "./cx";
 import {
   isAnimatingPhase,
   isClosedPhase,
+  isExpandedPhase,
   isOpenPhase,
   transitionFor,
 } from "./dock";
@@ -62,5 +63,18 @@ describe("cx", () => {
     expect(cx("a", undefined, "b")).toBe("a b");
     expect(cx(undefined, null, false)).toBe("");
     expect(cx("only")).toBe("only");
+  });
+});
+
+describe("isExpandedPhase", () => {
+  it("is true for every phase where the panel is on screen", () => {
+    expect(isExpandedPhase("opening")).toBe(true);
+    expect(isExpandedPhase("open")).toBe(true);
+    // Still on screen while sliding out, so Esc and the shortcuts still apply.
+    expect(isExpandedPhase("closing")).toBe(true);
+  });
+
+  it("is false when collapsed, so Esc cannot toggle the panel open", () => {
+    expect(isExpandedPhase("collapsed")).toBe(false);
   });
 });

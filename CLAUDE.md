@@ -60,6 +60,10 @@ A desktop notes widget: a small tab docked to the left or right screen edge, flo
 
 **The frontend never changes layout between phases.** The tab and panel are one group anchored to the docked edge, with the closed state at `translateX(±panel-width)`. Because the collapsed and expanded windows share that edge, the same CSS puts the tab on identical screen pixels at both window sizes — which is what makes the resize invisible. Only the transform changes; don't replace this with per-phase layouts.
 
+**Keyboard handling is one window-level listener, and the interaction lock is counted.** `Panel` binds a single `keydown` listener on `window` — not on the panel element, because closing the editor or the search field unmounts the focused node and a subtree handler then never sees another key. Esc resolves as one ordered cascade there (editor, then search, then panel); components handle no keys themselves. Every panel shortcut is gated on `isExpandedPhase`, since the webview can hold key focus after a collapse and Esc must never toggle a collapsed panel open. The editor and the search field can both hold the panel open, so `dock.setLock(owner, held)` keeps a set of owners and calls `dock_set_interaction_lock` only when the aggregate flips; Rust still sees one boolean. The search field locks on focus, not while mounted.
+
+**The colour filter row's dots come from the query result, not the visible result**, plus the selected colour even when nothing matches it — otherwise selecting one colour removes the dots needed to switch, and deleting the last note of a colour removes the dot that clears the filter.
+
 Layout: `src/` (dock/, notes/, components/, store/ Zustand, lib/, styles/tokens.css) and `src-tauri/src/` (dock/, platform/, db/, commands.rs, tray.rs, error.rs). Section 10 of the brief has the full tree.
 
 ### Platform specifics

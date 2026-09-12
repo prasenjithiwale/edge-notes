@@ -9,6 +9,15 @@ export function isClosedPhase(phase: DockPhase): boolean {
   return phase === "collapsed" || phase === "closing";
 }
 
+/**
+ * Phases where the panel is on screen, mirroring Rust's `Phase::is_expanded`.
+ * Panel keyboard shortcuts are scoped to these: the webview can still hold key
+ * focus after a collapse, and Esc must not toggle a collapsed panel back open.
+ */
+export function isExpandedPhase(phase: DockPhase): boolean {
+  return phase !== "collapsed";
+}
+
 /** Phases where the chevron points back toward the edge. */
 export function isOpenPhase(phase: DockPhase): boolean {
   return phase === "open" || phase === "opening";

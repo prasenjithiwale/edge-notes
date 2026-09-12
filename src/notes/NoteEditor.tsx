@@ -1,9 +1,12 @@
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, type CSSProperties } from "react";
 import { Trash2 } from "lucide-react";
 
 import { IconButton } from "../components/IconButton";
-import { dockSetInteractionLock } from "../lib/ipc";
-import type { Note } from "../lib/ipc";
+import { cx } from "../lib/cx";
+import { NOTE_COLORS, type Note } from "../lib/ipc";
+import { colorName, editedLabel } from "../lib/notes";
+import { useNow } from "../lib/useNow";
+import { useDockStore } from "../store/dock";
 import { useNotesStore } from "../store/notes";
 import { noteColorStyle } from "./NoteCard";
 import styles from "./NoteEditor.module.css";
@@ -18,8 +21,11 @@ const MAX_HEIGHT_RATIO = 0.6;
 export function NoteEditor({ note }: NoteEditorProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const setContent = useNotesStore((state) => state.setContent);
+  const setColor = useNotesStore((state) => state.setColor);
   const stopEditing = useNotesStore((state) => state.stopEditing);
   const remove = useNotesStore((state) => state.remove);
+  const setLock = useDockStore((state) => state.setLock);
+  const now = useNow();
 
   const resize = useCallback(() => {
     const textarea = textareaRef.current;
@@ -47,12 +53,13 @@ export function NoteEditor({ note }: NoteEditorProps) {
   }, [resize]);
 
   useEffect(() => {
-    // Hold the panel open while the editor has focus (brief 6.3).
-    void dockSetInteractionLock(true);
+    // Hold the panel open while the editor is open (brief 6.3). Counted in the
+    // store, because the search field can hold the same lock.
+    setLock("editor", true);
     return () => {
-      void dockSetInteractionLock(false);
+      setLock("editor", false);
     };
-  }, []);
+  }, [setLock]);
 
   return (
     <section className={styles.editor} style={noteColorStyle(note.color)}>
@@ -71,15 +78,28 @@ export function NoteEditor({ note }: NoteEditorProps) {
           // Save on blur as well as on the debounce (brief 6.9).
           void useNotesStore.getState().flush(note.id);
         }}
-        onKeyDown={(event) => {
-          if (event.key === "Escape") {
-            // Esc closes the editor first; the panel is the next Esc (brief 6.11).
-            event.stopPropagation();
-            void stopEditing();
-          }
-        }}
       />
+      <div className={styles.swatches} role="group" aria-label="Note colour">
+        {NOTE_COLORS.map((color) => (
+          <button
+            key={color}
+            type="button"
+            className={cx(
+              styles.swatch,
+              color === note.color && styles.swatchSelected,
+            )}
+            style={{ "--swatch-bg": `var(--note-${color}-bg)` } as CSSProperties}
+            aria-label={colorName(color)}
+            aria-pressed={color === note.color}
+            title={colorName(color)}
+            onClick={() => {
+              void setColor(note.id, color);
+            }}
+          />
+        ))}
+      </div>
       <footer className={styles.footer}>
+        <span className={styles.meta}>{editedLabel(note.updatedAt, now)}</span>
         <IconButton
           label="Delete note"
           className={styles.footerButton}

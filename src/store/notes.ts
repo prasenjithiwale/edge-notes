@@ -30,6 +30,11 @@ interface NotesStore {
   loaded: boolean;
   editingId: string | null;
   pendingUndo: PendingUndo | null;
+  /** Whether the header shows the search field instead of the title (brief 6.6). */
+  searching: boolean;
+  query: string;
+  /** Palette id, or null for "All" (brief 6.7). */
+  colorFilter: NoteColor | null;
 
   load: () => Promise<void>;
   createNote: () => Promise<void>;
@@ -41,6 +46,11 @@ interface NotesStore {
   remove: (id: string) => Promise<void>;
   undoRemove: () => Promise<void>;
   dismissUndo: () => void;
+
+  openSearch: () => void;
+  closeSearch: () => void;
+  setQuery: (query: string) => void;
+  setColorFilter: (color: NoteColor | null) => void;
 }
 
 export const useNotesStore = create<NotesStore>((set, get) => ({
@@ -48,6 +58,9 @@ export const useNotesStore = create<NotesStore>((set, get) => ({
   loaded: false,
   editingId: null,
   pendingUndo: null,
+  searching: false,
+  query: "",
+  colorFilter: null,
 
   load: async () => {
     try {
@@ -59,6 +72,11 @@ export const useNotesStore = create<NotesStore>((set, get) => ({
   },
 
   createNote: async () => {
+    // A new note is empty and carries the last-used colour, so any active search
+    // or colour filter would hide the card the editor is supposed to open in.
+    // Clearing the filters keeps the new note visible (brief 6.9).
+    set({ searching: false, query: "", colorFilter: null });
+
     const color = useSettingsStore.getState().lastColor();
     try {
       const note = await notesCreate(color);
@@ -216,5 +234,23 @@ export const useNotesStore = create<NotesStore>((set, get) => ({
       undoTimer = undefined;
     }
     set({ pendingUndo: null });
+  },
+
+  openSearch: () => {
+    set({ searching: true });
+  },
+
+  /** Brief 6.6: Esc clears the query and returns the header to the title. */
+  closeSearch: () => {
+    set({ searching: false, query: "" });
+  },
+
+  setQuery: (query) => {
+    set({ query });
+  },
+
+  setColorFilter: (color) => {
+    // Clicking the selected dot again clears the filter (brief 6.7).
+    set((state) => ({ colorFilter: state.colorFilter === color ? null : color }));
   },
 }));

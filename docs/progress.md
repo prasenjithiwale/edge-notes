@@ -9,7 +9,7 @@ of every milestone. The spec is [build-brief.md](build-brief.md).
 |---|---|
 | M0 Docking spike | Built, five follow-up fixes applied. **Never manually accepted** — see the note below. Windows and Linux untested. |
 | M1 Notes core | Built; awaiting manual acceptance (checklist below). |
-| M2 Find and organize | Not started |
+| M2 Find and organize | Built; awaiting manual acceptance (checklist below). |
 | M3 System integration | Not started |
 | M4 Polish | Not started |
 | M5 Packaging | Not started |
@@ -258,6 +258,124 @@ The database is created at
 - [ ] Opening a note, typing nothing and closing discards it — no empty card is left
 - [ ] Notes survive a full quit and relaunch
 - [ ] Cards use the palette colours and are readable in both light and dark mode
+
+## M2: find and organize
+
+Search, the colour filter row, keyboard navigation, the editor footer (colour
+swatches and the edited-time line), and the interaction lock while editing or
+searching. No Rust changed: every command and event M2 needs already existed
+after M0, so `dock/` and `platform/` were not touched and the dock tests were
+left as they were (still 72 passing).
+
+Also built here, having been missed in M1: the tab's three recent-note colour
+dots (brief 6.5). `Tab.tsx` carried a comment promising them for M1; they need
+note data, which only existed from M1 onwards.
+
+### Decisions
+
+**One keyboard handler on the window, not on the panel element.** Closing the
+editor or the search field unmounts the focused node and focus falls back to the
+body — a React handler bound to the panel subtree then never sees another key, so
+Esc and the arrows would go dead after exactly one use. The listener reads store
+state through `getState()`, so it registers once and cannot act on a stale
+snapshot.
+
+**The Esc cascade is one ordered decision, not three handlers.** Brief 6.11 wants
+editor, then search, then panel. That was first built as each component
+swallowing its own Esc with `stopPropagation`, which depends on React's synthetic
+propagation reaching a native window listener — subtle, and it broke as soon as
+the handler moved to the window. The cascade now lives in one place and the
+components handle no keys at all.
+
+**Panel shortcuts are scoped to an expanded panel.** A window-level listener also
+fires while the panel is collapsed, and the webview can still hold key focus
+after a collapse. Without the guard, Esc on a collapsed panel called
+`dock_toggle` and *opened* it — the opposite of what Esc means. `isExpandedPhase`
+mirrors Rust's `Phase::is_expanded`.
+
+**The interaction lock is counted by owner, not a boolean.** The editor and the
+search field can both hold the panel open (brief 6.3). With a single flag,
+closing the editor while the search field still had focus released a lock that
+was still needed. `dock.setLock(owner, held)` keeps a set and only calls
+`dock_set_interaction_lock` when the aggregate flips, so Rust still sees one
+boolean and its state machine is unchanged.
+
+**The search field locks on focus, not while mounted.** Locking for as long as
+the field existed meant opening search and walking away pinned the panel open
+indefinitely. Brief 6.3 says *has focus*, which is also the behaviour that can't
+strand the panel. Blur with an empty query returns the header to the title.
+
+**The filter row's dots come from the query result, not the visible result.**
+Deriving them from the fully filtered list would remove every other dot as soon
+as one colour was selected, leaving no way to switch colours. The selected colour
+is also always kept, even when nothing matches it any more — otherwise deleting
+the last note of that colour takes away the dot that clears the filter.
+
+**A new note clears the active filters.** It is empty and carries the last-used
+colour, so a running search or a colour filter would hide the very card the
+editor is about to open in.
+
+**Closing the editor returns focus to its card.** Otherwise focus lands on the
+body and the next arrow key re-enters the list from the top, so Enter-Esc-arrow
+silently loses your place. Arrow movement reads focus from the DOM rather than
+mirroring an index in the store, which would drift after a delete or a re-sort.
+
+**The clock is read through `useSyncExternalStore`, not `Date.now()` in render.**
+The edited-time line needs the wall clock, which is external mutable state;
+calling `Date.now()` during render is impure and the React lint rule rejects it.
+The snapshot is quantised to 30 s so repeated reads inside one render agree, and
+that also sets how often the editor re-renders for the label.
+
+### Deviations from the brief
+
+- Brief 6.9 asks for the edited-time line in tertiary text, but the editor sits on
+  a coloured card and a neutral gray on it would not hold AA. It uses the note's
+  paired text colour at reduced emphasis instead, as the card preview already does.
+- The editor footer is two rows (swatches, then the meta line with delete and
+  Done). Seven swatches plus a timestamp plus two buttons do not fit on one row at
+  a 320 px panel width without crowding.
+- `editedLabel` is self-contained rather than locale-formatted, so it is
+  deterministic under test: just now, `Xm`, `Xh`, `Xd`, then `Xmo` on 30-day
+  months. A future `updatedAt` reads as "just now" rather than a negative age.
+- Brief 6.10 names no empty state for a colour filter that matches nothing, which
+  is reachable by filtering and then searching. It shows "No notes in this
+  colour" rather than a blank panel.
+- `usedColors` from M1 was removed: `facetColors` with no selection is exactly it,
+  and two ways to do the same thing is one too many.
+
+### Still not covered by tests
+
+The M1 note about CSS and component wiring now applies to considerably more code:
+the Esc cascade, arrow-key movement, focus restoration and the lock counting are
+all component behaviour, and Vitest runs in a `node` environment against pure
+logic only. `moveCardFocus` and the store transitions have no test at all.
+
+Closing that needs a DOM environment (`jsdom` or `happy-dom`) and probably
+`@testing-library/react`, which are outside brief section 4 — **it needs your
+approval before I add them.** The pure logic those components sit on
+(`facetColors`, `recentColors`, `editedLabel`, `colorName`, `isExpandedPhase`) is
+tested: 43 frontend tests, up from 29.
+
+### M2 acceptance checklist
+
+- [ ] The search icon replaces the title with a search field, and typing filters the list
+- [ ] Esc in the search field clears it and the title comes back; a second Esc collapses the panel
+- [ ] Clicking away from an empty search field restores the title
+- [ ] The panel does not close while the search field has focus, with Keep open off
+- [ ] `Cmd+F` opens search and `Cmd+N` makes a note, both while the panel is open
+- [ ] Neither shortcut, nor Esc, does anything once the panel is collapsed
+- [ ] A search with no matches shows: No notes match “…”
+- [ ] The filter row shows All plus one dot per colour in use, and no dot for unused colours
+- [ ] Clicking a dot filters to it; clicking it again or All clears it, and the ring is visible
+- [ ] Filtering to one colour still leaves the other dots available to switch to
+- [ ] New note while a search or colour filter is active still opens its editor
+- [ ] Arrow keys move between cards, Enter opens one, and Esc puts focus back on that card
+- [ ] Arrow keys inside the editor and the search field move the caret, not the selection
+- [ ] The editor footer shows seven swatches, the selected one ringed, and clicking one recolours the note and the card
+- [ ] The footer reads "Edited just now" on a new note, and sensibly on an older one
+- [ ] The next new note reuses the colour last chosen in the editor
+- [ ] The tab shows up to three dots in the colours of the three most recently edited notes
+- [ ] Text on every note colour is readable in both light and dark mode, swatches included
 
 ## M0 acceptance checklist
 

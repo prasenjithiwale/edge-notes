@@ -33,11 +33,45 @@
   opacity: 0.5;
 }
 
+/* The footer is two rows: seven swatches do not fit beside the actions at a
+   320 px panel width without crowding either. */
+.swatches {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.swatch {
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: var(--swatch-bg);
+  flex: none;
+}
+
+/* The ring is drawn in the note's own text colour, with the gap in the card
+   background, because the swatches sit on a coloured surface. */
+.swatchSelected {
+  box-shadow:
+    0 0 0 2px var(--note-bg),
+    0 0 0 3px currentcolor;
+}
+
 .footer {
   display: flex;
   align-items: center;
   justify-content: flex-end;
   gap: 4px;
+}
+
+/* Brief 6.9 asks for tertiary text, but a neutral gray on a coloured card would
+   not hold AA. Reduced emphasis of the note's paired text colour does. */
+.meta {
+  margin-right: auto;
+  font-size: 11px;
+  opacity: 0.7;
 }
 
 .footerButton {

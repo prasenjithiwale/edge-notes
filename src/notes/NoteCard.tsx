@@ -26,6 +26,10 @@ export function NoteCard({ note, onOpen }: NoteCardProps) {
       type="button"
       className={styles.card}
       style={noteColorStyle(note.color)}
+      // Markers for arrow-key navigation and for restoring focus to this card
+      // when its editor closes (brief 6.11).
+      data-card=""
+      data-id={note.id}
       onClick={onOpen}
     >
       <div className={cx(styles.title, title === "" && styles.untitled)}>

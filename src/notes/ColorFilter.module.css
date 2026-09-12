@@ -1,0 +1,43 @@
+.row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 32px;
+  padding: 0 12px;
+  flex: none;
+}
+
+.chip {
+  border: none;
+  /* Chips are fully rounded (brief 7.1). */
+  border-radius: 999px;
+  background: var(--surface-sunken);
+  color: var(--text-secondary);
+  font-size: 12px;
+  height: 20px;
+  padding: 0 10px;
+}
+
+.chipSelected {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.dot {
+  width: 14px;
+  height: 14px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: var(--dot-bg);
+  flex: none;
+}
+
+/* Brief 6.7: a 2 px ring in --text-primary with a 2 px gap. The gap is drawn in
+   the surface colour by an inner shadow ring, which leaves the focus outline
+   free to render outside it. */
+.dotSelected {
+  box-shadow:
+    0 0 0 2px var(--surface),
+    0 0 0 4px var(--text-primary);
+}

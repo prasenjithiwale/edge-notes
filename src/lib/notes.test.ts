@@ -2,12 +2,15 @@ import { describe, expect, it } from "vitest";
 
 import type { Note } from "./ipc";
 import {
+  colorName,
+  editedLabel,
+  facetColors,
   filterNotes,
   isNoteEmpty,
   notePreview,
   noteTitle,
+  recentColors,
   sortNotes,
-  usedColors,
 } from "./notes";
 
 const PALETTE = [
@@ -136,13 +139,95 @@ describe("filterNotes", () => {
   });
 });
 
-describe("usedColors", () => {
-  it("lists only colours that have notes, in palette order", () => {
-    const notes = [note({ color: "mint" }), note({ color: "yellow" }), note({ color: "mint" })];
-    expect(usedColors(notes, PALETTE)).toEqual(["yellow", "mint"]);
+describe("facetColors", () => {
+  it("keeps palette order rather than first-seen order", () => {
+    const notes = [
+      note({ id: "a", color: "gray" }),
+      note({ id: "b", color: "peach" }),
+      note({ id: "c", color: "blue" }),
+    ];
+    expect(facetColors(notes, PALETTE)).toEqual(["peach", "blue", "gray"]);
   });
 
-  it("is empty when there are no notes", () => {
-    expect(usedColors([], PALETTE)).toEqual([]);
+  it("keeps the selected colour even when nothing matches it", () => {
+    const notes = [note({ id: "a", color: "yellow" })];
+    // Deleting the last pink note must not take the dot that clears the filter.
+    expect(facetColors(notes, PALETTE, "pink")).toEqual(["yellow", "pink"]);
+  });
+
+  it("does not duplicate a selected colour that is still in use", () => {
+    const notes = [note({ id: "a", color: "mint" })];
+    expect(facetColors(notes, PALETTE, "mint")).toEqual(["mint"]);
+  });
+
+  it("is empty when there are no notes and no selection", () => {
+    expect(facetColors([], PALETTE)).toEqual([]);
+  });
+});
+
+describe("recentColors", () => {
+  it("takes the three most recently edited, newest first", () => {
+    const notes = [
+      note({ id: "a", color: "yellow", updatedAt: 3_000 }),
+      note({ id: "b", color: "pink", updatedAt: 5_000 }),
+      note({ id: "c", color: "blue", updatedAt: 4_000 }),
+      note({ id: "d", color: "mint", updatedAt: 1_000 }),
+    ];
+    expect(recentColors(notes)).toEqual(["pink", "blue", "yellow"]);
+  });
+
+  it("sorts for itself, because the list is unsorted while editing", () => {
+    const notes = [
+      note({ id: "a", color: "gray", updatedAt: 1_000 }),
+      note({ id: "b", color: "peach", updatedAt: 9_000 }),
+    ];
+    expect(recentColors(notes)).toEqual(["peach", "gray"]);
+  });
+
+  it("keeps duplicates: three yellow notes give three yellow dots", () => {
+    const notes = [
+      note({ id: "a", color: "yellow", updatedAt: 3_000 }),
+      note({ id: "b", color: "yellow", updatedAt: 2_000 }),
+      note({ id: "c", color: "yellow", updatedAt: 1_000 }),
+    ];
+    expect(recentColors(notes)).toEqual(["yellow", "yellow", "yellow"]);
+  });
+
+  it("returns nothing for an empty list", () => {
+    expect(recentColors([])).toEqual([]);
+  });
+});
+
+describe("editedLabel", () => {
+  const now = 1_760_000_000_000;
+
+  it("reads as just now for a few seconds", () => {
+    expect(editedLabel(now - 5_000, now)).toBe("Edited just now");
+  });
+
+  it("switches to minutes at a minute", () => {
+    expect(editedLabel(now - 60_000, now)).toBe("Edited 1m ago");
+    expect(editedLabel(now - 59 * 60_000, now)).toBe("Edited 59m ago");
+  });
+
+  it("switches to hours at an hour", () => {
+    expect(editedLabel(now - 3_600_000, now)).toBe("Edited 1h ago");
+    expect(editedLabel(now - 2 * 3_600_000, now)).toBe("Edited 2h ago");
+  });
+
+  it("switches to days at a day and months at thirty", () => {
+    expect(editedLabel(now - 25 * 3_600_000, now)).toBe("Edited 1d ago");
+    expect(editedLabel(now - 31 * 24 * 3_600_000, now)).toBe("Edited 1mo ago");
+  });
+
+  it("treats a future timestamp as just now instead of a negative age", () => {
+    expect(editedLabel(now + 10_000, now)).toBe("Edited just now");
+  });
+});
+
+describe("colorName", () => {
+  it("capitalises a palette id for a label", () => {
+    expect(colorName("lavender")).toBe("Lavender");
+    expect(colorName("gray")).toBe("Gray");
   });
 });

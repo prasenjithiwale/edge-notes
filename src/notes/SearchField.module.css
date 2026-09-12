@@ -1,0 +1,15 @@
+.field {
+  flex: 1;
+  min-width: 0;
+  height: 28px;
+  padding: 0 8px;
+  border: none;
+  border-radius: var(--radius-control);
+  background: var(--surface-sunken);
+  color: var(--text-primary);
+  font-size: 13px;
+}
+
+.field::placeholder {
+  color: var(--text-tertiary);
+}
