@@ -260,3 +260,41 @@ describe("expanding a note", () => {
     expect(useNotesStore.getState()).toMatchObject({ expandedId: null, editingId: "1" });
   });
 });
+
+describe("leaving the editor after a click outside", () => {
+  it("leaves when nothing was typed", async () => {
+    useNotesStore.getState().startEditing("1");
+    await useNotesStore.getState().leaveEditorIfUnchanged();
+    expect(useNotesStore.getState().editingId).toBeNull();
+  });
+
+  it("stays once the text differs from when the editor opened", async () => {
+    useNotesStore.getState().startEditing("1");
+    useNotesStore.getState().setContent("1", "Groceries\nMilk and eggs");
+    await useNotesStore.getState().leaveEditorIfUnchanged();
+    expect(useNotesStore.getState().editingId).toBe("1");
+  });
+
+  it("leaves again when an edit is typed back to the original", async () => {
+    useNotesStore.getState().startEditing("1");
+    useNotesStore.getState().setContent("1", "Groceries\nMilk!");
+    useNotesStore.getState().setContent("1", "Groceries\nMilk");
+    await useNotesStore.getState().leaveEditorIfUnchanged();
+    expect(useNotesStore.getState().editingId).toBeNull();
+  });
+
+  it("discards a new note left empty, as Done would", async () => {
+    invoke.mockImplementation((command: string) =>
+      Promise.resolve(command === "notes_create" ? note({ id: "blank", updatedAt: 2_000 }) : null),
+    );
+    await useNotesStore.getState().createNote();
+    await useNotesStore.getState().leaveEditorIfUnchanged();
+    expect(useNotesStore.getState().editingId).toBeNull();
+    expect(useNotesStore.getState().notes.map((candidate) => candidate.id)).toEqual(["1"]);
+  });
+
+  it("does nothing with no editor open", async () => {
+    await useNotesStore.getState().leaveEditorIfUnchanged();
+    expect(updateCalls()).toEqual([]);
+  });
+});

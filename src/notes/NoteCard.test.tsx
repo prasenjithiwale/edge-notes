@@ -204,22 +204,22 @@ describe("a pinned card", () => {
     expect(text?.closest("button")).toBeNull();
   });
 
-  it("can be unpinned from the card", () => {
+  it("can be unlocked from the card", () => {
     const onUnpin = vi.fn();
     render(
       <NoteCard note={note({ pinned: true })} onOpen={() => undefined} onUnpin={onUnpin} {...noop} />,
     );
 
-    screen.getByRole("button", { name: "Unpin note" }).click();
+    screen.getByRole("button", { name: "Unlock note" }).click();
     expect(onUnpin).toHaveBeenCalledTimes(1);
   });
 
-  it("does not paint the pin in the accent colour (brief 7.1)", () => {
+  it("does not paint the lock in the accent colour (brief 7.1)", () => {
     render(
       <NoteCard note={note({ pinned: true })} onOpen={() => undefined} onUnpin={() => undefined} {...noop} />,
     );
 
-    const unpin = screen.getByRole("button", { name: "Unpin note" });
+    const unpin = screen.getByRole("button", { name: "Unlock note" });
     expect(unpin.className).not.toContain("active");
     expect(unpin.getAttribute("aria-pressed")).toBe("true");
   });

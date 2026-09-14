@@ -5,7 +5,34 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 
+/**
+ * The note palette, in the order the full colour grid shows it: around the hue
+ * wheel, then the neutrals. Tokens for each live in `tokens.css`, and Rust
+ * validates the same ids (`db::notes::NoteColor`).
+ */
 export const NOTE_COLORS = [
+  "red",
+  "peach",
+  "orange",
+  "yellow",
+  "lime",
+  "green",
+  "mint",
+  "teal",
+  "sky",
+  "blue",
+  "indigo",
+  "lavender",
+  "purple",
+  "pink",
+  "sand",
+  "gray",
+] as const;
+
+export type NoteColor = (typeof NOTE_COLORS)[number];
+
+/** Brief 7.3's original seven: the quick swatches before any colour has history. */
+export const CLASSIC_COLORS: readonly NoteColor[] = [
   "yellow",
   "peach",
   "pink",
@@ -13,9 +40,7 @@ export const NOTE_COLORS = [
   "blue",
   "mint",
   "gray",
-] as const;
-
-export type NoteColor = (typeof NOTE_COLORS)[number];
+];
 
 export interface Note {
   id: string;

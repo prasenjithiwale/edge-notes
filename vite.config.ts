@@ -19,5 +19,9 @@ export default defineConfig({
     // `@vitest-environment jsdom` docblock, so the fast majority stay fast.
     environment: "node",
     include: ["src/**/*.test.ts", "src/**/*.test.tsx"],
+    // Vitest blanks CSS by default, which also empties `?raw` imports. The
+    // contrast test reads the palette straight from tokens.css, so that one
+    // file is let through.
+    css: { include: [/tokens\.css/] },
   },
 });

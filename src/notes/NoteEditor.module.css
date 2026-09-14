@@ -42,6 +42,22 @@
   gap: 8px;
 }
 
+/* The palette button sits at the end of the swatch row, sized to it. */
+.paletteButton {
+  width: 24px;
+  height: 24px;
+  margin-left: auto;
+}
+
+/* Every colour, eight to a row: 16 px swatches with the row's 8 px gap fit the
+   narrowest panel. */
+.palette {
+  display: grid;
+  grid-template-columns: repeat(8, 16px);
+  gap: 8px;
+  padding: 4px 0;
+}
+
 .swatch {
   width: 16px;
   height: 16px;

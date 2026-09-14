@@ -20,8 +20,12 @@ Work after M5, owner-requested, newest last:
 |---|---|---|
 | Audit pass and note pinning | 13 Sep 2026 | Built; committed 14 Sep 2026 (`7c7798c`). Checklist not yet run. |
 | Tab appearance and open on click | 13 Sep 2026 | Built; committed 14 Sep 2026 (`7c7798c`). Checklist one item verified. |
-| Lightweight formatting | 14 Sep 2026 | Built, and the click paths verified on the running app. Uncommitted. |
-| Expanded notes | 14 Sep 2026 | Built, and verified on the running app; one bug found and fixed there. Uncommitted. |
+| Lightweight formatting | 14 Sep 2026 | Built, and the click paths verified on the running app. |
+| Lightweight formatting and expanded notes | 14 Sep 2026 | Committed as `8ff1fbe` and fast-forwarded into `master` (local only, no remote). |
+| Click outside to leave the editor | 14 Sep 2026 | Built and tested in jsdom; not yet run on the app. Uncommitted. |
+| Sixteen-colour palette | 14 Sep 2026 | Built; contrast tested for all 16 in both themes. Not yet run on the app. Uncommitted. |
+| Lock icons for locked (pinned) notes | 14 Sep 2026 | Built. Uncommitted. |
+| Floating pill tab | 14 Sep 2026 | Built; the collapsed pill seen on screen. Uncommitted. **The owner may ask to reset it** — see its section. |
 
 Built and verified on macOS 26.6.2 (Tahoe), Apple Silicon, single 1920×1080
 display at 1× scale. Every scaling and multi-monitor case is covered by unit
@@ -1187,6 +1191,127 @@ the full suite.
 - [ ] Change the panel width in Settings, then expand and shrink: the normal width
       is the new one
 - [ ] 150% and 200% scaling, and a secondary monitor
+
+## Click outside, colours, lock icons and the floating tab (14 Sep 2026)
+
+Four owner requests, taken after `8ff1fbe` was merged into `master`. The owner
+chose the click-outside rule and the palette approach from options; the icon and
+tab interpretations below are the agent's.
+
+### Click outside the note leaves the editor — if nothing was typed
+
+A click that starts and ends outside the editor closes it **only when the note's
+text is what it was when the editor opened**. Once something has been typed, a
+stray click keeps the editor open; Done and Esc still close it. Typing is
+autosaved either way, so this is about not interrupting, not about saving.
+
+- The store records the text at `startEditing`, `createNote` and `expand` into
+  the editor (`editBaseline`, module state like `savedContent`), and
+  `leaveEditorIfUnchanged` compares against it. Typing something and deleting it
+  again counts as unchanged.
+- Only the text counts. Changing the colour or the lock is not "typing", so a
+  click outside after recolouring still leaves.
+- The listener is the editor's own, on `window` in the capture phase, so it runs
+  before whatever was clicked: clicking another card closes the unchanged editor
+  and then opens that card cleanly. It is judged by where the press **started**,
+  so a text selection dragged out of the textarea is not a click outside.
+- An empty new note left by clicking outside is discarded, exactly as Done would.
+- "Outside" means anywhere in the widget: other cards, the header, the filter
+  row, the tab. A click in another app never reaches the webview and changes
+  nothing.
+
+### A sixteen-colour palette
+
+Brief 7.3's seven colours grew to sixteen, ordered around the hue wheel: red,
+peach, orange, yellow, lime, green, mint, teal, sky, blue, indigo, lavender,
+purple, pink, sand, gray. Nine are new; the original seven keep their exact
+values and ids, so existing notes are untouched and no migration was needed.
+Only the palette id is still stored.
+
+- **Editor:** a row of quick swatches — the note's colour, the colours of the most
+  recently edited notes, topped up from the original seven — then a palette
+  button that opens a grid of all sixteen, eight to a row. The quick row is chosen
+  when the editor opens, so picking a colour does not reshuffle it under the
+  cursor; a colour picked from the grid joins the row.
+- **Rust** validates all sixteen through `NoteColor::ALL`.
+- **Contrast:** every new colour was designed as a light and dark background/text
+  pair and **passes AA in both themes**, for titles and for reduced-emphasis text
+  at `--note-secondary-opacity` (96 checks). `contrast.test.ts` now reads the
+  palette straight from `tokens.css` instead of a copy, and also fails if a
+  palette id lacks tokens or the two dark blocks disagree. That needed
+  `test.css.include` for `tokens.css` in `vite.config.ts`: Vitest otherwise
+  blanks CSS, `?raw` imports included.
+- **The filter row wraps.** Sixteen dots do not fit one row at 320 px, so the row
+  grows instead of clipping, and is still 32 px with one row.
+
+### Lock icons for locked notes
+
+The note-pinning buttons on cards and in the editor footer now show a lock
+(locked) and an open lock (unlocked), labelled "Lock note" / "Unlock note". A
+pinned note already sorts first and opens read-only until Edit, which is what a
+lock says; it also stops the feature sharing the pin icon with Keep open, which
+was flagged as an open question on 13 Sep 2026. **Keep open in the header keeps its
+pin.** Code, IPC and the database still call it `pinned`.
+
+### The tab is a small floating pill
+
+The owner found the tab too big and asked for something small, tablet-shaped and
+floating.
+
+- The tab's window and hit area shrank from 28×88 to **22×72** logical px
+  (`Metrics::default()` in `dock/geometry.rs`, and `--tab-width`/`--tab-height`).
+- Inside it, only a **12×52 pill** is painted: fully rounded, 4 px off the docked
+  edge, with a soft shadow (`--shadow-tab`, light and dark). The rest of the box
+  is transparent room for that shadow and the gap, and **still counts as the
+  tab**, so a cursor thrown against the screen edge lands on it.
+- The chevron is 10 px and the dots 4 px, to fit a 12 px pill. While open, the
+  same 4 px gap separates the pill from the panel.
+- Translucency (`tab.appearance`) fades the pill, as it faded the tab.
+
+This changes `dock/geometry.rs`, because Rust owns the window size. Only the
+default numbers changed, no logic; the dock tests that assert tab sizes were
+updated, and all 70 pass.
+
+**Reset to default, if the owner asks.** The previous tab was 28×88, flush against
+the edge, rounded only on the side facing the screen centre (`--radius-control`),
+with a 1 px border, no shadow, a 16 px chevron and 6 px dots. Restoring it means
+putting back `tab_width: 28.0, tab_height: 88.0` in `Metrics::default()`,
+`--tab-width: 28px; --tab-height: 88px`, and `Tab.module.css` and `Tab.tsx` as they
+are in `8ff1fbe`, then the dock tests' 28/88 assertions.
+
+### Deviations from the brief
+
+- Brief 7.3 has seven note colours; there are now sixteen.
+- Brief 6.5's tab was flush and rounded on one side, and brief 7.1 gives only the
+  panel a shadow; the pill is floating, fully rounded and shadowed.
+- Brief 7.1's 16 px icons: the tab chevron is 10 px.
+- Brief 6.4's 32 px filter row can wrap to two rows.
+
+### Verified
+
+- [x] The collapsed pill on screen: small, rounded, off the edge, translucent,
+      chevron and dots visible
+- [x] Every new colour meets AA in both themes (test)
+- [x] Frontend 285 tests, lint and `tsc`; Rust 119 tests, clippy and fmt
+
+### Checklist
+
+- [ ] Open a note, type nothing, click the header or another card: the editor
+      closes (and the other card opens)
+- [ ] Open a note, type a word, click outside: the editor stays open; Done closes it
+- [ ] New note, type nothing, click outside: no blank card is left
+- [ ] Select text in the editor and release the mouse outside it: the editor stays
+- [ ] More colours opens sixteen swatches; picking one recolours the note and card,
+      closes the grid, and adds it to the quick row
+- [ ] The nine new colours look right and read well on cards in light and dark
+- [ ] With many colours in use, the filter row wraps cleanly
+- [ ] Lock icon on a locked card and in the editor footer; Keep open still a pin
+- [ ] Hovering the pill, and the screen edge beside it, opens the panel
+- [ ] The pill sits beside the open panel with a small gap, and does not jump
+      when the panel opens or closes
+- [ ] Dragging the pill along the edge still works
+- [ ] Dock on left: the pill mirrors to the left edge
+- [ ] Dark mode: the pill's shadow and border are visible
 
 ## M0 acceptance checklist
 

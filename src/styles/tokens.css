@@ -12,18 +12,36 @@
     0 8px 28px rgba(0, 0, 0, 0.12), 0 1px 3px rgba(0, 0, 0, 0.08);
 
   /* Note palette: background / text pairs, stored by id in the database. */
-  --note-yellow-bg: #fdf3c4;
-  --note-yellow-text: #5c4a00;
+  --note-red-bg: #fbdcda;
+  --note-red-text: #6e2420;
   --note-peach-bg: #fde2d2;
   --note-peach-text: #6b3419;
-  --note-pink-bg: #fadde7;
-  --note-pink-text: #6b2440;
-  --note-lavender-bg: #e6e1fa;
-  --note-lavender-text: #3a2f73;
-  --note-blue-bg: #dcebfa;
-  --note-blue-text: #173f66;
+  --note-orange-bg: #fde6c8;
+  --note-orange-text: #663a0a;
+  --note-yellow-bg: #fdf3c4;
+  --note-yellow-text: #5c4a00;
+  --note-lime-bg: #ebf4c8;
+  --note-lime-text: #3d520f;
+  --note-green-bg: #d5efd5;
+  --note-green-text: #1f5325;
   --note-mint-bg: #d9f2e6;
   --note-mint-text: #1b5238;
+  --note-teal-bg: #d2efed;
+  --note-teal-text: #145250;
+  --note-sky-bg: #d5edf7;
+  --note-sky-text: #0e4a62;
+  --note-blue-bg: #dcebfa;
+  --note-blue-text: #173f66;
+  --note-indigo-bg: #dde0fa;
+  --note-indigo-text: #2b3278;
+  --note-lavender-bg: #e6e1fa;
+  --note-lavender-text: #3a2f73;
+  --note-purple-bg: #ecdcf6;
+  --note-purple-text: #522a6e;
+  --note-pink-bg: #fadde7;
+  --note-pink-text: #6b2440;
+  --note-sand-bg: #efe3d5;
+  --note-sand-text: #54391f;
   --note-gray-bg: #ecebe8;
   --note-gray-text: #3a3936;
 
@@ -38,8 +56,16 @@
   --tab-translucent-opacity: 0.6;
 
   /* Geometry, mirrored from the Rust side (brief 6.4). */
-  --tab-width: 28px;
-  --tab-height: 88px;
+  --tab-width: 22px;
+  --tab-height: 72px;
+
+  /* The floating pill drawn inside the tab's window (owner's request, 14 Sep
+     2026): the rest of the window is the gap to the edge and room for its
+     shadow. The previous design was a 28×88 tab flush to the edge. */
+  --tab-pill-width: 12px;
+  --tab-pill-height: 52px;
+  --tab-edge-gap: 4px;
+  --shadow-tab: 0 1px 2px rgba(0, 0, 0, 0.14), 0 2px 6px rgba(0, 0, 0, 0.12);
   --panel-width: 320px;
   --shadow-margin: 12px;
 
@@ -69,19 +95,38 @@
     --accent: #5a8df0;
     --shadow-panel:
       0 8px 28px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.06);
+    --shadow-tab: 0 1px 2px rgba(0, 0, 0, 0.5), 0 2px 6px rgba(0, 0, 0, 0.4);
 
-    --note-yellow-bg: #4a3f16;
-    --note-yellow-text: #f7e9a8;
+    --note-red-bg: #4e2422;
+    --note-red-text: #f6c4c0;
     --note-peach-bg: #4d2e1f;
     --note-peach-text: #f8cdb5;
-    --note-pink-bg: #4a2333;
-    --note-pink-text: #f5c3d4;
-    --note-lavender-bg: #312a55;
-    --note-lavender-text: #d6cef7;
-    --note-blue-bg: #1e3550;
-    --note-blue-text: #bfd9f5;
+    --note-orange-bg: #4e3517;
+    --note-orange-text: #f8d3a6;
+    --note-yellow-bg: #4a3f16;
+    --note-yellow-text: #f7e9a8;
+    --note-lime-bg: #36401a;
+    --note-lime-text: #ddebb0;
+    --note-green-bg: #213f24;
+    --note-green-text: #c0e5c0;
     --note-mint-bg: #1d3f31;
     --note-mint-text: #bde8d2;
+    --note-teal-bg: #1a3f3d;
+    --note-teal-text: #b8e6e2;
+    --note-sky-bg: #1a3b4b;
+    --note-sky-text: #badff1;
+    --note-blue-bg: #1e3550;
+    --note-blue-text: #bfd9f5;
+    --note-indigo-bg: #2a2e58;
+    --note-indigo-text: #cbd0f7;
+    --note-lavender-bg: #312a55;
+    --note-lavender-text: #d6cef7;
+    --note-purple-bg: #3d2850;
+    --note-purple-text: #dec6f0;
+    --note-pink-bg: #4a2333;
+    --note-pink-text: #f5c3d4;
+    --note-sand-bg: #3e3226;
+    --note-sand-text: #e6d3be;
     --note-gray-bg: #34332f;
     --note-gray-text: #e3e2de;
   }
@@ -97,19 +142,38 @@
   --accent: #5a8df0;
   --shadow-panel:
     0 8px 28px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.06);
+  --shadow-tab: 0 1px 2px rgba(0, 0, 0, 0.5), 0 2px 6px rgba(0, 0, 0, 0.4);
 
-  --note-yellow-bg: #4a3f16;
-  --note-yellow-text: #f7e9a8;
+  --note-red-bg: #4e2422;
+  --note-red-text: #f6c4c0;
   --note-peach-bg: #4d2e1f;
   --note-peach-text: #f8cdb5;
-  --note-pink-bg: #4a2333;
-  --note-pink-text: #f5c3d4;
-  --note-lavender-bg: #312a55;
-  --note-lavender-text: #d6cef7;
-  --note-blue-bg: #1e3550;
-  --note-blue-text: #bfd9f5;
+  --note-orange-bg: #4e3517;
+  --note-orange-text: #f8d3a6;
+  --note-yellow-bg: #4a3f16;
+  --note-yellow-text: #f7e9a8;
+  --note-lime-bg: #36401a;
+  --note-lime-text: #ddebb0;
+  --note-green-bg: #213f24;
+  --note-green-text: #c0e5c0;
   --note-mint-bg: #1d3f31;
   --note-mint-text: #bde8d2;
+  --note-teal-bg: #1a3f3d;
+  --note-teal-text: #b8e6e2;
+  --note-sky-bg: #1a3b4b;
+  --note-sky-text: #badff1;
+  --note-blue-bg: #1e3550;
+  --note-blue-text: #bfd9f5;
+  --note-indigo-bg: #2a2e58;
+  --note-indigo-text: #cbd0f7;
+  --note-lavender-bg: #312a55;
+  --note-lavender-text: #d6cef7;
+  --note-purple-bg: #3d2850;
+  --note-purple-text: #dec6f0;
+  --note-pink-bg: #4a2333;
+  --note-pink-text: #f5c3d4;
+  --note-sand-bg: #3e3226;
+  --note-sand-text: #e6d3be;
   --note-gray-bg: #34332f;
   --note-gray-text: #e3e2de;
 }

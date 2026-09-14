@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 
 import type { Note, Settings } from "../lib/ipc";
 
@@ -439,5 +439,102 @@ describe("expanding a note", () => {
 
     await screen.findByLabelText("Search notes");
     expect(useNotesStore.getState().expandedId).toBeNull();
+  });
+});
+
+describe("clicking outside the editor", () => {
+  function clickOn(element: Element) {
+    fireEvent.pointerDown(element);
+    fireEvent.click(element);
+  }
+
+  it("leaves edit mode when the note is unchanged", async () => {
+    await renderPanel();
+    useNotesStore.getState().startEditing("1");
+    await screen.findByLabelText("Note content");
+
+    clickOn(screen.getByRole("heading", { name: "Notes" }));
+
+    await waitFor(() => {
+      expect(useNotesStore.getState().editingId).toBeNull();
+    });
+  });
+
+  it("stays in edit mode once something was typed", async () => {
+    await renderPanel();
+    useNotesStore.getState().startEditing("1");
+    const field = await screen.findByLabelText("Note content");
+    fireEvent.change(field, { target: { value: "Standup notes\nDeploy the fix today" } });
+
+    clickOn(screen.getByRole("heading", { name: "Notes" }));
+
+    await Promise.resolve();
+    expect(useNotesStore.getState().editingId).toBe("1");
+  });
+
+  it("ignores clicks inside the note, and a selection dragged out of it", async () => {
+    await renderPanel();
+    useNotesStore.getState().startEditing("1");
+    const field = await screen.findByLabelText("Note content");
+
+    clickOn(screen.getByRole("button", { name: "Bold" }));
+    clickOn(field);
+    // Pressed inside, released outside: the click lands on a common ancestor.
+    fireEvent.pointerDown(field);
+    fireEvent.click(document.body);
+
+    await Promise.resolve();
+    expect(useNotesStore.getState().editingId).toBe("1");
+  });
+
+  it("opens the card that was clicked, after closing the unchanged one", async () => {
+    await renderPanel();
+    useNotesStore.getState().startEditing("1");
+    await screen.findByLabelText("Note content");
+
+    const groceries = screen.getByRole("button", { name: "Groceries" });
+    fireEvent.pointerDown(groceries);
+    groceries.click();
+
+    await waitFor(() => {
+      expect(useNotesStore.getState().editingId).toBe("2");
+    });
+  });
+});
+
+describe("the colour palette", () => {
+  it("offers every colour behind More colours and applies the one picked", async () => {
+    await renderPanel();
+    useNotesStore.getState().startEditing("1");
+    await screen.findByLabelText("Note content");
+
+    // The quick row: at most seven plus the palette button.
+    const quickRow = screen.getByRole("group", { name: "Note colour" });
+    expect(quickRow.querySelectorAll("button[aria-pressed]").length).toBeLessThanOrEqual(8);
+    expect(screen.queryByRole("group", { name: "All colours" })).toBeNull();
+
+    screen.getByRole("button", { name: "More colours" }).click();
+    const grid = await screen.findByRole("group", { name: "All colours" });
+    expect(grid.querySelectorAll("button")).toHaveLength(16);
+
+    const teal = Array.from(grid.querySelectorAll("button")).find(
+      (button) => button.getAttribute("aria-label") === "Teal",
+    );
+    teal?.click();
+
+    await waitFor(() => {
+      expect(commandCalls("notes_update")).toContainEqual(
+        expect.objectContaining({ id: "1", color: "teal" }),
+      );
+    });
+    // The grid closes, and the picked colour joins the quick row, selected.
+    await waitFor(() => {
+      expect(screen.queryByRole("group", { name: "All colours" })).toBeNull();
+    });
+    const picked = within(screen.getByRole("group", { name: "Note colour" })).getByRole(
+      "button",
+      { name: "Teal" },
+    );
+    expect(picked.getAttribute("aria-pressed")).toBe("true");
   });
 });

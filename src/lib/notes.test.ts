@@ -7,6 +7,7 @@ import {
   facetColors,
   filterNotes,
   isNoteEmpty,
+  quickColors,
   recentColors,
   sortNotes,
 } from "./notes";
@@ -214,5 +215,25 @@ describe("recentColors with pinned notes", () => {
       note({ id: "d", color: "mint", updatedAt: 3_000 }),
     ];
     expect(recentColors(notes)).toEqual(["pink", "blue", "mint"]);
+  });
+});
+
+describe("quickColors", () => {
+  const WHEEL = ["red", "yellow", "teal", "blue", "pink", "gray"] as const;
+  const CLASSIC = ["yellow", "pink", "blue", "gray"] as const;
+
+  it("keeps the current colour, then recent note colours, topped up from the defaults", () => {
+    const notes = [
+      note({ id: "a", color: "blue", updatedAt: 30 }),
+      note({ id: "b", color: "red", updatedAt: 20 }),
+    ];
+    // Palette order, not recency order, so the row does not reshuffle.
+    expect(quickColors("teal", notes, WHEEL, CLASSIC, 4)).toEqual(["red", "yellow", "teal", "blue"]);
+  });
+
+  it("never repeats a colour or exceeds the count", () => {
+    const notes = [note({ id: "a", color: "pink" }), note({ id: "b", color: "pink" })];
+    const colors = quickColors("pink", notes, WHEEL, CLASSIC, 3);
+    expect(colors).toEqual(["yellow", "blue", "pink"]);
   });
 });

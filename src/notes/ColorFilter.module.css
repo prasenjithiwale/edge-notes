@@ -1,9 +1,13 @@
 .row {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
-  height: 32px;
-  padding: 0 12px;
+  gap: 6px 8px;
+  /* 32 px for one row (brief 6.4). With sixteen colours in use the dots no
+     longer fit one row at 320 px, so the row wraps rather than clipping. */
+  box-sizing: border-box;
+  min-height: 32px;
+  padding: 6px 12px;
   flex: none;
 }
 

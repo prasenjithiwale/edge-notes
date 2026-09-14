@@ -93,6 +93,12 @@ Never edit a migration that has shipped — append a new one. Repository functio
 
 **A no-op save is not a save.** `notes_update` bumps `updated_at` and the list sorts by it, so writing when nothing was typed moves a note to the top for having been read. The store keeps what is already stored per note and `flush` returns early when the content matches, updating that record only after a successful write so a failed save still retries.
 
+**A click outside the note leaves the editor only if its text is unchanged.** The store records the text when editing starts (`editBaseline`); `NoteEditor` listens on `window` in the capture phase, judged by where the press started, and calls `leaveEditorIfUnchanged`. Capture phase matters: it closes the editor before a clicked card opens itself.
+
+**The tab is a floating pill inside a larger hit box.** `Metrics` `tab_width`/`tab_height` (22×72) are the window and hit area and reach the screen edge; `Tab.module.css` paints a 12×52 pill inside. The owner may ask to reset it to the previous 28×88 flush tab — the progress log's 14 Sep 2026 section records exactly what that was.
+
+**The palette has sixteen colours**, defined in three places that must agree: `NOTE_COLORS` in `ipc.ts`, `NoteColor::ALL` in `db/notes.rs`, and the light and both dark blocks of `tokens.css`. `contrast.test.ts` reads `tokens.css` directly and fails if any of them drift or a pair misses AA.
+
 **An interaction lock is derived from state, never acquired in one place and released in another.** `SearchField` took it in `onFocus` and released it in an effect cleanup, and React's mount/cleanup/mount cycle dropped it: re-focusing an already-focused input fires no event, so nothing took it back and the panel slid away mid-search. Hold a lock in a `useEffect` keyed on the state that justifies it; `setLock` is idempotent and only talks to Rust when the aggregate flips.
 
 **An explicit dismissal suppresses hover until the cursor leaves.** Brief 6.1 reverses a close when the cursor *re-enters*, which presumes it left. Without `dismissed`, Esc with the mouse resting on the panel reversed instantly and looked dead, and Keep open made the panel impossible to dismiss at all.

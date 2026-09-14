@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, type CSSProperties } from "react";
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import {
   Bold,
   Italic,
@@ -7,7 +7,9 @@ import {
   ListOrdered,
   Maximize2,
   Minimize2,
-  Pin,
+  Palette,
+  Lock,
+  LockOpen,
   Strikethrough,
   Trash2,
   type LucideIcon,
@@ -15,9 +17,9 @@ import {
 
 import { IconButton } from "../components/IconButton";
 import { cx } from "../lib/cx";
-import { NOTE_COLORS, type Note } from "../lib/ipc";
+import { CLASSIC_COLORS, NOTE_COLORS, type Note, type NoteColor } from "../lib/ipc";
 import { prefersReducedMotion } from "../lib/motion";
-import { colorName, editedLabel } from "../lib/notes";
+import { colorName, editedLabel, quickColors } from "../lib/notes";
 import { useNow } from "../lib/useNow";
 import { useDockStore } from "../store/dock";
 import { useNotesStore } from "../store/notes";
@@ -88,6 +90,15 @@ export function NoteEditor({ note, large = false }: NoteEditorProps) {
   const shrink = useNotesStore((state) => state.shrink);
   const setLock = useDockStore((state) => state.setLock);
   const now = useNow();
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  // Chosen once, when the editor opens: picking a colour must not reshuffle the
+  // row under the cursor. A colour picked from the full palette joins it.
+  const [quick] = useState(() =>
+    quickColors(note.color, useNotesStore.getState().notes, NOTE_COLORS, CLASSIC_COLORS),
+  );
+  const shownColors = NOTE_COLORS.filter(
+    (color) => quick.includes(color) || color === note.color,
+  );
 
   const resize = useCallback(() => {
     const textarea = textareaRef.current;
@@ -191,6 +202,32 @@ export function NoteEditor({ note, large = false }: NoteEditorProps) {
     };
   }, []);
 
+  // A click outside the note leaves the editor when nothing was typed (owner's
+  // request). Judged by where the press *started*: a text selection dragged from
+  // inside the textarea and released outside is not a click outside. Capture
+  // phase, so it runs before whatever was clicked reacts — a card's click then
+  // opens that card cleanly after this editor has closed.
+  useEffect(() => {
+    let pressedOutside = false;
+    const isOutside = (target: EventTarget | null) =>
+      target instanceof Node && !rootRef.current?.contains(target);
+    const onPointerDown = (event: Event) => {
+      pressedOutside = isOutside(event.target);
+    };
+    const onClick = (event: Event) => {
+      if (pressedOutside && isOutside(event.target)) {
+        void useNotesStore.getState().leaveEditorIfUnchanged();
+      }
+      pressedOutside = false;
+    };
+    window.addEventListener("pointerdown", onPointerDown, true);
+    window.addEventListener("click", onClick, true);
+    return () => {
+      window.removeEventListener("pointerdown", onPointerDown, true);
+      window.removeEventListener("click", onClick, true);
+    };
+  }, []);
+
   useEffect(() => {
     // Hold the panel open while the editor is open (brief 6.3). Counted in the
     // store, because the search field can hold the same lock.
@@ -275,43 +312,62 @@ export function NoteEditor({ note, large = false }: NoteEditorProps) {
         }}
       />
       <div className={styles.swatches} role="group" aria-label="Note colour">
-        {NOTE_COLORS.map((color) => (
-          <button
+        {shownColors.map((color) => (
+          <Swatch
             key={color}
-            type="button"
-            className={cx(
-              styles.swatch,
-              color === note.color && styles.swatchSelected,
-            )}
-            style={
-              { "--swatch-bg": `var(--note-${color}-bg)` } as CSSProperties
-            }
-            aria-label={colorName(color)}
-            aria-pressed={color === note.color}
-            title={colorName(color)}
-            onClick={() => {
+            color={color}
+            selected={color === note.color}
+            onPick={() => {
               void setColor(note.id, color);
             }}
           />
         ))}
+        <IconButton
+          label="More colours"
+          className={cx(styles.footerButton, styles.paletteButton)}
+          pressed={paletteOpen}
+          keepFocus
+          onClick={() => {
+            setPaletteOpen((open) => !open);
+          }}
+        >
+          <Palette size={16} strokeWidth={1.75} />
+        </IconButton>
       </div>
+      {paletteOpen && (
+        <div className={styles.palette} role="group" aria-label="All colours">
+          {NOTE_COLORS.map((color) => (
+            <Swatch
+              key={color}
+              color={color}
+              selected={color === note.color}
+              onPick={() => {
+                void setColor(note.id, color);
+                setPaletteOpen(false);
+              }}
+            />
+          ))}
+        </div>
+      )}
       <footer className={styles.footer}>
         <span className={styles.meta}>{editedLabel(note.updatedAt, now)}</span>
         <IconButton
-          label={note.pinned ? "Unpin note" : "Pin note"}
+          // A pinned note is locked: it sorts first and opens read-only. Shown as
+          // a lock (owner's request) so it no longer shares the pin with Keep
+          // open; not accent-coloured, which is reserved for focus rings and
+          // Keep open (brief 7.1).
+          label={note.pinned ? "Unlock note" : "Lock note"}
           className={styles.footerButton}
-          // Filled rather than accent-coloured when on: accent is reserved for
-          // focus rings and Keep open (brief 7.1).
           pressed={note.pinned}
           onClick={() => {
             void setPinned(note.id, !note.pinned);
           }}
         >
-          <Pin
-            size={16}
-            strokeWidth={1.75}
-            fill={note.pinned ? "currentColor" : "none"}
-          />
+          {note.pinned ? (
+            <Lock size={16} strokeWidth={1.75} />
+          ) : (
+            <LockOpen size={16} strokeWidth={1.75} />
+          )}
         </IconButton>
         <IconButton
           label="Delete note"
@@ -333,5 +389,29 @@ export function NoteEditor({ note, large = false }: NoteEditorProps) {
         </button>
       </footer>
     </section>
+  );
+}
+
+interface SwatchProps {
+  color: NoteColor;
+  selected: boolean;
+  onPick: () => void;
+}
+
+function Swatch({ color, selected, onPick }: SwatchProps) {
+  return (
+    <button
+      type="button"
+      className={cx(styles.swatch, selected && styles.swatchSelected)}
+      style={{ "--swatch-bg": `var(--note-${color}-bg)` } as CSSProperties}
+      aria-label={colorName(color)}
+      aria-pressed={selected}
+      title={colorName(color)}
+      // The palette sits under the textarea; keep the caret where it was.
+      onMouseDown={(event) => {
+        event.preventDefault();
+      }}
+      onClick={onPick}
+    />
   );
 }

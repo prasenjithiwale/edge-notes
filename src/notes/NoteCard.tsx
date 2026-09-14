@@ -1,5 +1,5 @@
 import { useMemo, type CSSProperties, type MouseEvent } from "react";
-import { Maximize2, Pencil, Pin } from "lucide-react";
+import { Lock, Maximize2, Pencil } from "lucide-react";
 
 import { IconButton } from "../components/IconButton";
 import { cx } from "../lib/cx";
@@ -132,14 +132,14 @@ export function NoteCard({ note, onOpen, onUnpin, onExpand, onToggleTask }: Note
       </div>
       <div className={styles.tools}>
         {/* Not `active`: accent is reserved for focus rings and Keep open
-            (brief 7.1). A filled pin in the note's own colour says "pinned". */}
+            (brief 7.1). A lock in the note's own colour says "locked". */}
         <IconButton
-          label="Unpin note"
+          label="Unlock note"
           className={styles.tool}
           pressed
           onClick={onUnpin}
         >
-          <Pin size={14} strokeWidth={1.75} fill="currentColor" />
+          <Lock size={14} strokeWidth={1.75} />
         </IconButton>
         <IconButton
           label="Edit note"

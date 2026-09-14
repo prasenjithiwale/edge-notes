@@ -86,6 +86,37 @@ export function recentColors(notes: Note[], limit = 3): string[] {
     .map((note) => note.color);
 }
 
+/** How many swatches the editor shows before the full palette is opened. */
+export const QUICK_COLOR_COUNT = 7;
+
+/**
+ * The editor's quick swatches: the note's own colour, then the colours of the
+ * most recently edited notes, topped up from `defaults` (brief 7.3's original
+ * seven), shown in palette order so they do not reshuffle as recency changes.
+ */
+export function quickColors<T extends string>(
+  current: T,
+  notes: Note[],
+  palette: readonly T[],
+  defaults: readonly T[],
+  count = QUICK_COLOR_COUNT,
+): T[] {
+  const picked = new Set<string>([current]);
+  for (const note of [...notes].sort(byRecentEdit)) {
+    if (picked.size >= count) {
+      break;
+    }
+    picked.add(note.color);
+  }
+  for (const color of defaults) {
+    if (picked.size >= count) {
+      break;
+    }
+    picked.add(color);
+  }
+  return palette.filter((color) => picked.has(color));
+}
+
 const MINUTE_MS = 60_000;
 const HOUR_MS = 60 * MINUTE_MS;
 const DAY_MS = 24 * HOUR_MS;

@@ -1,3 +1,5 @@
+/* The box: the tab's window and hit area, transparent. It keeps the grab
+   cursor, so the whole area that can be dragged says so. */
 .tab {
   /* The tab is the one thing that can be dragged (brief M4), and the cursor is
      the only affordance saying so — a deliberate exception to the
@@ -5,30 +7,45 @@
   cursor: grab;
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 6px;
+}
+
+/* The pill sits a small gap off the docked edge, which is what makes it float.
+   While open the same gap separates it from the panel. */
+[data-side="right"] .tab {
+  justify-content: flex-end;
+  padding-right: var(--tab-edge-gap);
+}
+
+[data-side="left"] .tab {
+  justify-content: flex-start;
+  padding-left: var(--tab-edge-gap);
+}
+
+/* A small floating pill (owner's request, 14 Sep 2026), replacing brief 6.5's
+   edge-flush tab rounded on one side. It carries a shadow of its own, a
+   deliberate departure from brief 7.1's "only the panel has a shadow": without
+   one a pill this small does not read as floating. */
+.pill {
+  box-sizing: border-box;
+  width: var(--tab-pill-width);
+  height: var(--tab-pill-height);
+  display: flex;
   flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  border-radius: 999px;
   background: var(--surface);
   border: 1px solid var(--border);
+  box-shadow: var(--shadow-tab);
   color: var(--text-secondary);
   /* Solid as the panel slides out, see-through again as it slides away. The
      slide handshake ignores this: only `data-slide` elements acknowledge. */
   transition: opacity var(--open-duration) var(--open-easing);
 }
 
-/* Rounded only on the side facing the screen centre (brief 6.5). */
-[data-side="right"] .tab {
-  border-right: none;
-  border-radius: var(--radius-control) 0 0 var(--radius-control);
-}
-
-[data-side="left"] .tab {
-  border-left: none;
-  border-radius: 0 var(--radius-control) var(--radius-control) 0;
-}
-
 /* `tab.appearance`: see-through while collapsed, so the tab sits more quietly
-   over whatever is behind it. The whole tab fades, border and dots included — a
+   over whatever is behind it. The whole pill fades, border and dots included — a
    translucent fill alone left an opaque outline that read as a frame. Deliberate
    departure from the flat, solid surfaces of brief 7.1, chosen by the owner. */
 .translucent {
@@ -66,24 +83,24 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .tab,
+  .pill,
   .chevron {
     transition: none;
   }
 }
 
-/* Up to three colour dots under the chevron (brief 6.5). The tab is 28 px wide,
-   so they stack vertically. */
+/* Up to three colour dots under the chevron (brief 6.5), stacked because the
+   pill is 12 px wide. */
 .dots {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 4px;
+  gap: 3px;
 }
 
 .dot {
-  width: 6px;
-  height: 6px;
+  width: 4px;
+  height: 4px;
   border-radius: 50%;
   background: var(--dot-bg);
 }

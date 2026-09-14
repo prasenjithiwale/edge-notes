@@ -1467,7 +1467,7 @@ mod tests {
         let actions = c.handle(Input::SetLarge(true), ms(t0, 200));
         assert_eq!(c.phase(), Phase::Open);
         let large_rect = c.geometry().expanded_window_rect();
-        assert_eq!(large_rect.width, 12 + 28 + 760);
+        assert_eq!(large_rect.width, 12 + 22 + 760);
         // Resize first, then tell the frontend the width to paint.
         assert_eq!(actions[0], Action::SetWindowRect(large_rect));
         assert!(matches!(actions[1], Action::EmitState(s) if s.large && s.panel_width == 760.0));
@@ -1582,7 +1582,7 @@ mod tests {
             actions[0],
             Action::SetWindowRect(c.geometry().expanded_window_rect())
         );
-        assert_eq!(c.geometry().expanded_window_rect().width, 12 + 28 + 320);
+        assert_eq!(c.geometry().expanded_window_rect().width, 12 + 22 + 320);
     }
 
     #[test]

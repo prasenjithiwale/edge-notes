@@ -89,8 +89,12 @@ pub struct Metrics {
 impl Default for Metrics {
     fn default() -> Self {
         Self {
-            tab_width: 28.0,
-            tab_height: 88.0,
+            // The tab's window and hit area. The visible tab is a smaller floating
+            // pill drawn inside it (`Tab.module.css`); the rest is room for its
+            // shadow and the gap to the edge, and still counts as the tab, so a
+            // cursor thrown against the screen edge lands on it.
+            tab_width: 22.0,
+            tab_height: 72.0,
             panel_width: 320.0,
             panel_max_height: 640.0,
             panel_height_ratio: 0.8,
@@ -434,8 +438,8 @@ mod tests {
     fn collapsed_window_is_exactly_the_tab() {
         let g = geom(Side::Right, 1.0, 0.5);
         assert_eq!(g.collapsed_window_rect(), g.collapsed_tab_rect());
-        assert_eq!(g.collapsed_window_rect().width, 28);
-        assert_eq!(g.collapsed_window_rect().height, 88);
+        assert_eq!(g.collapsed_window_rect().width, 22);
+        assert_eq!(g.collapsed_window_rect().height, 72);
     }
 
     #[test]
@@ -502,7 +506,7 @@ mod tests {
     #[test]
     fn scale_factors_convert_logical_to_physical() {
         for (scale, tab_w, panel_w, margin) in
-            [(1.0, 28, 320, 12), (1.5, 42, 480, 18), (2.0, 56, 640, 24)]
+            [(1.0, 22, 320, 12), (1.5, 33, 480, 18), (2.0, 44, 640, 24)]
         {
             let g = geom(Side::Right, scale, 0.5);
             assert_eq!(g.collapsed_tab_rect().width, tab_w, "scale {scale}");
@@ -563,7 +567,7 @@ mod tests {
 
         let bottom = geom(Side::Right, 1.0, 1.0);
         let w = bottom.expanded_window_rect();
-        assert_eq!(bottom.tab_top_logical(), f64::from(w.height as i32 - 88));
+        assert_eq!(bottom.tab_top_logical(), f64::from(w.height as i32 - 72));
     }
 
     #[test]
@@ -582,9 +586,10 @@ mod tests {
 
         assert_eq!(g.collapsed_tab_rect().right(), 0);
         assert_eq!(g.panel_rect().right(), 0);
-        assert_eq!(g.expanded_window_rect().x, -360);
-        // Centred on a monitor spanning y -300..750, so the tab sits at +225.
-        assert_eq!(g.collapsed_tab_rect().y, 181);
+        assert_eq!(g.expanded_window_rect().x, -354);
+        // Centred on a monitor spanning y -300..750, so the tab's centre sits at
+        // +225 and its top half a tab above.
+        assert_eq!(g.collapsed_tab_rect().y, 189);
         assert!(g.expanded_window_rect().y >= -300);
         assert!(g.expanded_window_rect().bottom() <= 750);
 
@@ -674,7 +679,7 @@ mod tests {
         // Still flush to the docked edge, with the tab on its inner side.
         let window = g.expanded_window_rect();
         assert_eq!(window.right(), work_area().right());
-        assert_eq!(g.open_tab_rect().x, g.panel_rect().x - 28);
+        assert_eq!(g.open_tab_rect().x, g.panel_rect().x - 22);
         assert!(window.y >= work_area().y && window.bottom() <= work_area().bottom());
     }
 
@@ -712,7 +717,7 @@ mod tests {
 
     #[test]
     fn apply_order_keeps_the_window_on_screen() {
-        let small = Rect::new(1892, 100, 28, 88);
+        let small = Rect::new(1898, 100, 22, 72);
         let large = Rect::new(1560, 60, 360, 664);
         assert_eq!(apply_order(small, large), ApplyOrder::MoveThenResize);
         assert_eq!(apply_order(large, small), ApplyOrder::ResizeThenMove);

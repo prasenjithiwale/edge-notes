@@ -18,6 +18,10 @@ interface TabProps {
  * The always-visible handle: a chevron pointing toward the screen centre, plus
  * up to three dots carrying the colours of the most recently edited notes
  * (brief 6.5).
+ *
+ * Drawn as a small floating pill inside a larger transparent box. The box is the
+ * window and the hit area, and it reaches the screen edge, so a cursor thrown
+ * against the edge still finds the tab; only the pill is painted.
  */
 export function Tab({ className }: TabProps) {
   const phase = useDockStore((state) => state.phase);
@@ -54,31 +58,29 @@ export function Tab({ className }: TabProps) {
 
   return (
     <div
-      className={cx(
-        className,
-        styles.tab,
-        isOpen && styles.open,
-        translucent && styles.translucent,
-      )}
+      className={cx(className, styles.tab, isOpen && styles.open)}
       data-appearance={translucent ? "translucent" : "solid"}
       onPointerDown={() => {
         dragging.current = true;
         void dockBeginTabDrag();
       }}
     >
-      <ChevronLeft className={styles.chevron} size={16} strokeWidth={1.75} />
-      {dots.length > 0 && (
-        <div className={styles.dots} aria-hidden="true">
-          {dots.map((color, index) => (
-            <span
-              // Colours repeat, so the index is the only stable key here.
-              key={index}
-              className={styles.dot}
-              style={{ "--dot-bg": `var(--note-${color}-bg)` } as CSSProperties}
-            />
-          ))}
-        </div>
-      )}
+      <div className={cx(styles.pill, translucent && styles.translucent)}>
+        {/* 10 px rather than brief 7.1's 16: the pill is 12 px wide. */}
+        <ChevronLeft className={styles.chevron} size={10} strokeWidth={2} />
+        {dots.length > 0 && (
+          <div className={styles.dots} aria-hidden="true">
+            {dots.map((color, index) => (
+              <span
+                // Colours repeat, so the index is the only stable key here.
+                key={index}
+                className={styles.dot}
+                style={{ "--dot-bg": `var(--note-${color}-bg)` } as CSSProperties}
+              />
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

@@ -6,45 +6,78 @@ use serde::{Deserialize, Serialize};
 
 use crate::error::{AppError, AppResult};
 
-/// Palette ids from brief 7.3. Only the id is stored, never a hex value, so the
+/// Palette ids: brief 7.3's seven, grown to sixteen at the owner's request.
+/// Only the id is stored, never a hex value, so the
 /// palette can be retuned without touching the database.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum NoteColor {
-    Yellow,
+    Red,
     Peach,
-    Pink,
-    Lavender,
-    Blue,
+    Orange,
+    Yellow,
+    Lime,
+    Green,
     Mint,
+    Teal,
+    Sky,
+    Blue,
+    Indigo,
+    Lavender,
+    Purple,
+    Pink,
+    Sand,
     Gray,
 }
 
 impl NoteColor {
+    /// Every palette colour, in palette order.
+    pub const ALL: [Self; 16] = [
+        Self::Red,
+        Self::Peach,
+        Self::Orange,
+        Self::Yellow,
+        Self::Lime,
+        Self::Green,
+        Self::Mint,
+        Self::Teal,
+        Self::Sky,
+        Self::Blue,
+        Self::Indigo,
+        Self::Lavender,
+        Self::Purple,
+        Self::Pink,
+        Self::Sand,
+        Self::Gray,
+    ];
+
     #[must_use]
     pub fn as_str(self) -> &'static str {
         match self {
-            Self::Yellow => "yellow",
+            Self::Red => "red",
             Self::Peach => "peach",
-            Self::Pink => "pink",
-            Self::Lavender => "lavender",
-            Self::Blue => "blue",
+            Self::Orange => "orange",
+            Self::Yellow => "yellow",
+            Self::Lime => "lime",
+            Self::Green => "green",
             Self::Mint => "mint",
+            Self::Teal => "teal",
+            Self::Sky => "sky",
+            Self::Blue => "blue",
+            Self::Indigo => "indigo",
+            Self::Lavender => "lavender",
+            Self::Purple => "purple",
+            Self::Pink => "pink",
+            Self::Sand => "sand",
             Self::Gray => "gray",
         }
     }
 
     pub fn parse(value: &str) -> AppResult<Self> {
-        match value {
-            "yellow" => Ok(Self::Yellow),
-            "peach" => Ok(Self::Peach),
-            "pink" => Ok(Self::Pink),
-            "lavender" => Ok(Self::Lavender),
-            "blue" => Ok(Self::Blue),
-            "mint" => Ok(Self::Mint),
-            "gray" => Ok(Self::Gray),
-            other => Err(AppError::UnknownColor(other.to_owned())),
-        }
+        Self::ALL
+            .into_iter()
+            .find(|color| color.as_str() == value)
+            .ok_or_else(|| AppError::UnknownColor(value.to_owned()))
     }
 }
 
@@ -226,6 +259,26 @@ mod tests {
         let mut connection = Connection::open_in_memory().expect("in-memory database");
         migrations::run(&mut connection).expect("migrate");
         connection
+    }
+
+    #[test]
+    fn every_palette_colour_round_trips_and_serializes_as_its_id() {
+        assert_eq!(NoteColor::ALL.len(), 16);
+        for color in NoteColor::ALL {
+            assert_eq!(NoteColor::parse(color.as_str()).ok(), Some(color));
+            let json = serde_json::to_string(&color).expect("serialize");
+            assert_eq!(json, format!("\"{}\"", color.as_str()));
+        }
+        assert!(NoteColor::parse("magenta").is_err());
+        assert!(NoteColor::parse("Yellow").is_err());
+    }
+
+    #[test]
+    fn a_note_can_be_stored_in_a_new_palette_colour() {
+        let c = db();
+        let note = create(&c, NoteColor::Teal, T0).expect("create");
+        assert_eq!(list(&c).expect("list")[0].color, NoteColor::Teal);
+        assert_eq!(note.color, NoteColor::Teal);
     }
 
     #[test]

@@ -32,6 +32,17 @@ let undoTimer: ReturnType<typeof setTimeout> | undefined;
  */
 const savedContent = new Map<string, string>();
 
+/**
+ * The note's text when the editor opened on it, so a click outside can tell a
+ * note that was only looked at from one that was written in. Not state: nothing
+ * renders from it.
+ */
+let editBaseline: { id: string; content: string } | null = null;
+
+function beginEdit(id: string, content: string) {
+  editBaseline = { id, content };
+}
+
 interface PendingUndo {
   note: Note;
 }
@@ -64,6 +75,12 @@ interface NotesStore {
   flushAll: () => Promise<void>;
   startEditing: (id: string) => void;
   stopEditing: () => Promise<void>;
+  /**
+   * Leave the editor after a click outside it, but only if the text is what it
+   * was when the editor opened. Once something has been typed, a stray click
+   * must not end the edit; Done and Esc still do.
+   */
+  leaveEditorIfUnchanged: () => Promise<void>;
   /** Show a note in the large panel, in the editor when `edit` is true. */
   expand: (id: string, options: { edit: boolean }) => Promise<void>;
   /** Back to the list. An open editor stays open, at its normal size. */
@@ -119,6 +136,7 @@ export const useNotesStore = create<NotesStore>((set, get) => ({
     try {
       const note = await notesCreate(color);
       savedContent.set(note.id, note.content);
+      beginEdit(note.id, note.content);
       // Straight to the top and into the editor (brief 6.9) — and into the large
       // panel if a note was expanded, rather than hiding the new note behind it.
       set((state) => ({
@@ -241,7 +259,22 @@ export const useNotesStore = create<NotesStore>((set, get) => ({
   },
 
   startEditing: (id) => {
+    const note = get().notes.find((candidate) => candidate.id === id);
+    if (get().editingId !== id) {
+      beginEdit(id, note?.content ?? "");
+    }
     set({ editingId: id });
+  },
+
+  leaveEditorIfUnchanged: async () => {
+    const { editingId, notes } = get();
+    if (editingId === null || editBaseline?.id !== editingId) {
+      return;
+    }
+    const note = notes.find((candidate) => candidate.id === editingId);
+    if (note && note.content === editBaseline.content) {
+      await get().stopEditing();
+    }
   },
 
   stopEditing: async () => {
@@ -340,6 +373,9 @@ export const useNotesStore = create<NotesStore>((set, get) => ({
     // behind the large panel, and an empty one would never be discarded.
     if (editingId !== null && editingId !== id) {
       await get().stopEditing();
+    }
+    if (edit && get().editingId !== id) {
+      beginEdit(id, get().notes.find((candidate) => candidate.id === id)?.content ?? "");
     }
     set((state) => ({
       expandedId: id,
