@@ -9,11 +9,15 @@ To release, see "Releasing" in the README.
 
 ## [Unreleased]
 
+## [0.0.2] - 2026-09-14
+
+macOS (universal), Linux (x86_64) and Windows (x64).
+
 ### Added
 
 - **Tasks tab.** Tabs at the top of the panel switch between Notes and Tasks. The
-  Tasks tab gathers every checklist item from every note, grouped by note, with
-  the number still open on the tab. Tick tasks there and the note updates; a task
+  Tasks tab gathers every checklist item from every note, with the number still
+  open on the tab. Tick tasks there and the note updates; a task
   ticked stays in place until you leave the tab, then moves under "Done". "Add a
   task" adds to the note titled Tasks (or To-Do), creating it the first time.
   Pressing a task's note name opens the note. Switching tabs slides.
