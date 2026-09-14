@@ -27,10 +27,14 @@ Work after M5, owner-requested, newest last:
 | Lock icons for locked (pinned) notes | 14 Sep 2026 | Built. Uncommitted. |
 | Floating pill tab | 14 Sep 2026 | Built; the collapsed pill seen on screen. **The owner may ask to reset it** — see its section. |
 | Tasks tab, task details, reminders, translucency, card elevation | 14 Sep 2026 | Released in **v0.0.2**. |
+| Linux: tab kept at the screen edge after closing | 15 Sep 2026 | Released in **v0.0.3**; unverified on Linux hardware. |
 
 **Releases:** [v0.0.1](https://github.com/prasenjithiwale/edge-notes/releases/tag/v0.0.1)
 and [v0.0.2](https://github.com/prasenjithiwale/edge-notes/releases/tag/v0.0.2),
-both published 14 Sep 2026 for macOS (universal), Windows (x64) and Linux
+both published 14 Sep 2026, and
+[v0.0.3](https://github.com/prasenjithiwale/edge-notes/releases/tag/v0.0.3) on
+15 Sep 2026 (the Linux placement fix, whose Linux-only code was first compiled by
+the release runner and passed its tests there). All for macOS (universal), Windows (x64) and Linux
 (x86_64). v0.0.2's Linux and Windows builds passed lint and both test suites on
 those systems before bundling; its macOS `.dmg` was verified universal, at
 version 0.0.2, and byte-identical after upload. None of the released builds has
