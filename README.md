@@ -17,6 +17,23 @@ nvm use && npm install
 npm run tauri dev
 ```
 
+## Installing on Debian and Ubuntu with apt
+
+Every release is published to a signed APT repository,
+[prasenjithiwale.github.io/edge-notes-apt](https://prasenjithiwale.github.io/edge-notes-apt/),
+so it installs and updates like any other package (x86_64, Ubuntu 22.04+ or
+Debian 12+):
+
+```bash
+sudo install -d -m 0755 /etc/apt/keyrings
+curl -fsSL https://prasenjithiwale.github.io/edge-notes-apt/key.gpg \
+  | sudo gpg --dearmor -o /etc/apt/keyrings/edge-notes.gpg
+echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/edge-notes.gpg] https://prasenjithiwale.github.io/edge-notes-apt stable main" \
+  | sudo tee /etc/apt/sources.list.d/edge-notes.list
+sudo apt update
+sudo apt install edge-notes
+```
+
 ## Versions and releases
 
 The version lives in `package.json`; `tauri.conf.json` reads it from there, and
@@ -48,9 +65,16 @@ step. A test fails if they ever disagree. Every release has an entry in
 4. The tag starts the **Release** workflow (`.github/workflows/release.yml`), which
    tests and builds the Linux `.deb` and `.AppImage` on Ubuntu 22.04 and the
    Windows `setup.exe` and `.msi` on Windows, and attaches them to the same
-   release, usually within 20 minutes. It can also be run from the Actions tab
+   release, usually within 20 minutes. It then adds the `.deb` to the APT
+   repository, re-signs it, and installs it from the live repository on Ubuntu
+   24.04 to prove it works. It can also be run from the Actions tab
    for an existing tag and a chosen platform
-   (`gh workflow run release.yml -f tag=v0.0.2 -f platforms=windows`).
+   (`gh workflow run release.yml -f tag=v0.0.2 -f platforms=windows`, or
+   `platforms=apt` to publish an existing release's `.deb`).
+
+The APT job needs two repository secrets: `APT_SIGNING_KEY` (the armored private
+key that signs the repository) and `APT_DEPLOY_KEY` (an SSH deploy key with write
+access to `edge-notes-apt`).
 
 Neither Linux nor Windows can be built on a Mac: Tauri bundles only for the
 platform it runs on, so each needs its own machine or a CI runner.

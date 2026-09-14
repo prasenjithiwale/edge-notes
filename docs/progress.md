@@ -1768,6 +1768,54 @@ placement reaches Tauri only in `poller.rs`, so the fix could not live elsewhere
 - [ ] Dock on left behaves the same
 - [ ] A plain X11 session, and GNOME, if available
 
+## APT repository for the .deb (15 Sep 2026)
+
+The owner asked to publish the `.deb` from GitHub Actions and chose, from options,
+a **signed APT repository** (over making the downloads public, a hosted package
+service, or a Launchpad PPA).
+
+### How it is set up
+
+- **`prasenjithiwale/edge-notes-apt`**, a new **public** repository served by
+  GitHub Pages at <https://prasenjithiwale.github.io/edge-notes-apt/>. Public and
+  separate because this repository is private, and GitHub Pages cannot serve a
+  private repository on a free plan. It holds only packages, the signed index, the
+  public key, a README and a landing page with the install commands.
+- **Signing key:** "Edge Notes APT repository", RSA 4096, no expiry, no passphrase
+  (the workflow signs unattended), fingerprint
+  `BA717EAAFC819ABAB0ED6B517A4EFAFF5DAC007C`. Generated in a throwaway keyring.
+  The private key exists only as the `APT_SIGNING_KEY` Actions secret and in a
+  backup the owner was asked to move somewhere safe:
+  `~/Edge Notes APT signing key.asc` (mode 600). Losing it means a new key, which
+  every user would have to re-download.
+- **Deploy key:** an ed25519 SSH key with write access to `edge-notes-apt` only,
+  stored as `APT_DEPLOY_KEY`; the local copy was deleted after upload.
+- **`tools/publish_apt.sh`** copies packages into `pool/` (old versions are kept),
+  rebuilds `dists/stable/main/binary-amd64/Packages` with `apt-ftparchive`, writes
+  and signs `Release` (`InRelease` and `Release.gpg`), exports `key.gpg`, and
+  verifies both signatures before anything is pushed.
+- **The `apt` job** in the Release workflow runs after the Linux job (or alone,
+  with `platforms=apt`, using the `.deb` already on the release). It publishes,
+  waits for Pages to serve the new version, then on **Ubuntu 24.04** adds the
+  repository exactly as a user would and runs `apt install edge-notes=<version>`.
+  A release is only green if that install succeeds.
+- The package's `Depends: libappindicator3-1` was checked: Ubuntu still ships it
+  (universe) in 22.04, 24.04 and 25.10, so no build change was needed.
+
+Hiccup, recorded because a secret was involved: the first key generation failed
+(GnuPG's agent socket path was too long in the scratchpad directory) and, before
+the failure was caught, an **empty** `APT_SIGNING_KEY` secret was stored. It was
+overwritten with the real key minutes later, before any workflow used it. GnuPG
+was installed on this Mac with Homebrew for the key generation.
+
+### Checklist
+
+- [ ] On Kubuntu, the install commands on the landing page work, and
+      `edge-notes` appears in the application launcher
+- [ ] `sudo apt upgrade` picks up the next release after it is published
+- [ ] The signing key backup has been moved into a password manager and deleted
+      from the home folder
+
 ## M0 acceptance checklist
 
 From brief section 12. Run `npm run tauri dev`, then work through these with
