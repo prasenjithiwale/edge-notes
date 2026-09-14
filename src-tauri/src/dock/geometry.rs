@@ -421,6 +421,18 @@ pub fn apply_order(current: Rect, target: Rect) -> ApplyOrder {
     }
 }
 
+/// Whether the window manager put the window where it was asked, give or take a
+/// pixel for rounding between physical and logical pixels. On Linux moves and
+/// resizes land asynchronously and a window manager may adjust them, so the
+/// placement is checked rather than assumed.
+#[must_use]
+pub fn rect_settled(actual: Rect, target: Rect) -> bool {
+    (actual.x - target.x).abs() <= 1
+        && (actual.y - target.y).abs() <= 1
+        && actual.width.abs_diff(target.width) <= 1
+        && actual.height.abs_diff(target.height) <= 1
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -713,6 +725,16 @@ mod tests {
         assert!(!g.with_large(false).is_large());
         // A fresh geometry never starts large.
         assert!(!geom(Side::Right, 1.0, 0.5).is_large());
+    }
+
+    #[test]
+    fn a_rect_is_settled_within_a_pixel_and_not_beyond() {
+        let target = Rect::new(1898, 504, 22, 72);
+        assert!(rect_settled(target, target));
+        assert!(rect_settled(Rect::new(1899, 503, 23, 71), target));
+        // The Kubuntu report: the tab left where the open panel's edge had been.
+        assert!(!rect_settled(Rect::new(1566, 504, 22, 72), target));
+        assert!(!rect_settled(Rect::new(1898, 504, 354, 72), target));
     }
 
     #[test]

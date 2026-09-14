@@ -239,7 +239,7 @@ impl DockController {
 
     /// The window rect the current phase should be showing.
     #[must_use]
-    fn rect_for_phase(&self) -> Rect {
+    pub fn rect_for_phase(&self) -> Rect {
         if self.phase.is_expanded() {
             self.geometry.expanded_window_rect()
         } else {

@@ -12,7 +12,7 @@ use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter, Manager, PhysicalPosition, PhysicalSize, WebviewWindow};
 
 use super::controller::{Action, DockController, Input, Phase, Timings};
-use super::geometry::{ApplyOrder, DockGeometry, Metrics, Rect, Side, apply_order};
+use super::geometry::{ApplyOrder, DockGeometry, Metrics, Rect, Side, apply_order, rect_settled};
 
 /// Brief 8.5: re-evaluate placement every 2 seconds while collapsed.
 const MONITOR_REFRESH: Duration = Duration::from_secs(2);
@@ -133,6 +133,15 @@ impl Dock {
         match self.controller.lock() {
             Ok(controller) => controller.geometry().tab_offset(),
             Err(poisoned) => poisoned.into_inner().geometry().tab_offset(),
+        }
+    }
+
+    /// Where the window should be right now, for checking where it actually is.
+    #[must_use]
+    pub fn expected_window_rect(&self) -> Rect {
+        match self.controller.lock() {
+            Ok(controller) => controller.rect_for_phase(),
+            Err(poisoned) => poisoned.into_inner().rect_for_phase(),
         }
     }
 
@@ -299,10 +308,20 @@ fn focus(window: &WebviewWindow) {
 
 /// Move and resize the window.
 ///
+/// Linux takes its own path (`settle_rect`): there a move and a resize are
+/// separate asynchronous requests, and the window manager may adjust either.
+#[cfg(target_os = "linux")]
+fn apply_rect(app: &AppHandle, rect: Rect) {
+    spawn_settle(app, rect);
+}
+
+/// Move and resize the window.
+///
 /// Tauri 2.11 has no atomic bounds API, so this is two calls. Both are issued
 /// inside one main-thread closure so they land in the same run-loop turn and the
 /// compositor presents a single update. If a jump ever shows up on macOS, the
 /// next step is `NSPanel::setFrame_display_` through the panel handle.
+#[cfg(not(target_os = "linux"))]
 fn apply_rect(app: &AppHandle, rect: Rect) {
     let handle = app.clone();
     if let Err(error) = app.run_on_main_thread(move || {
@@ -348,12 +367,150 @@ fn current_rect(window: &WebviewWindow) -> Option<Rect> {
     Some(Rect::new(position.x, position.y, size.width, size.height))
 }
 
+// ---------------------------------------------------------------------------
+// Linux: place the window, then check that it stayed placed
+// ---------------------------------------------------------------------------
+//
+// Found on Kubuntu (KDE Plasma, XWayland): after the panel closed, the tab sat
+// where the open panel's left edge had been instead of at the screen edge, and
+// the next open started from there.
+//
+// GTK sends a move to the window manager straight away but queues a resize until
+// its next layout pass (gtk_window_move / gtk_window_resize, GTK 3.24). So
+// `set_size` then `set_position` reaches the window manager move-first. Shrinking
+// a right dock, that moves the still-wide window mostly off the screen; KWin pulls
+// it back fully on screen, and the resize that follows shrinks it from the left,
+// stranding the tab inwards. Growing is unaffected: there the move comes first by
+// design and keeps the window on screen.
+//
+// So on Linux a shrink waits for the new size to land before moving, and every
+// placement is checked against where the window actually is, and applied again if
+// the window manager put it elsewhere. The code compiles everywhere, so it is
+// checked on every platform, but only Linux calls it.
+
+/// Bumped on every placement, so a slower settle for an older target gives up
+/// instead of dragging the window back to where it no longer belongs.
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+static PLACEMENT_GENERATION: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+/// How long to wait for a request to show up in the window's reported geometry.
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+const SETTLE_TIMEOUT: Duration = Duration::from_millis(400);
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+const SETTLE_POLL: Duration = Duration::from_millis(8);
+/// Placement attempts before giving up and logging; the drift check retries later.
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+const SETTLE_ATTEMPTS: u32 = 3;
+
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+fn spawn_settle(app: &AppHandle, target: Rect) {
+    let generation = PLACEMENT_GENERATION.fetch_add(1, Ordering::SeqCst) + 1;
+    let handle = app.clone();
+    if let Err(error) = std::thread::Builder::new()
+        .name("dock-placement".into())
+        .spawn(move || settle_rect(&handle, target, generation))
+    {
+        log::error!("dock: failed to start placement: {error}");
+    }
+}
+
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+fn window_rect(app: &AppHandle) -> Option<Rect> {
+    app.get_webview_window(DOCK_WINDOW_LABEL)
+        .and_then(|window| current_rect(&window))
+}
+
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+fn on_main(app: &AppHandle, apply: impl FnOnce(&WebviewWindow) + Send + 'static) {
+    let handle = app.clone();
+    if let Err(error) = app.run_on_main_thread(move || {
+        if let Some(window) = handle.get_webview_window(DOCK_WINDOW_LABEL) {
+            apply(&window);
+        }
+    }) {
+        log::error!("dock: failed to schedule window update: {error}");
+    }
+}
+
+/// Wait until the window's geometry satisfies `done`. False on timeout, or at
+/// once if a newer placement has started.
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+fn wait_for(app: &AppHandle, generation: u64, done: impl Fn(Rect) -> bool) -> bool {
+    let deadline = Instant::now() + SETTLE_TIMEOUT;
+    while Instant::now() < deadline {
+        if PLACEMENT_GENERATION.load(Ordering::SeqCst) != generation {
+            return false;
+        }
+        if window_rect(app).is_some_and(&done) {
+            return true;
+        }
+        std::thread::sleep(SETTLE_POLL);
+    }
+    false
+}
+
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+fn settle_rect(app: &AppHandle, target: Rect, generation: u64) {
+    for attempt in 1..=SETTLE_ATTEMPTS {
+        if PLACEMENT_GENERATION.load(Ordering::SeqCst) != generation {
+            return;
+        }
+        let Some(current) = window_rect(app) else {
+            return;
+        };
+        if rect_settled(current, target) {
+            return;
+        }
+        if attempt > 1 {
+            log::warn!(
+                "dock: window is at {current:?}, not {target:?}; placing it again (attempt {attempt})"
+            );
+        }
+
+        let position = PhysicalPosition::new(target.x, target.y);
+        let size = PhysicalSize::new(target.width, target.height);
+        match apply_order(current, target) {
+            ApplyOrder::MoveThenResize => {
+                on_main(app, move |window| {
+                    set_position(window, position);
+                    set_size(window, size);
+                });
+            }
+            ApplyOrder::ResizeThenMove => {
+                on_main(app, move |window| set_size(window, size));
+                // Move only once the smaller size has landed, so the window is
+                // never wide and past the screen edge at the same time.
+                let sized = wait_for(app, generation, |rect| {
+                    rect.width.abs_diff(target.width) <= 1
+                        && rect.height.abs_diff(target.height) <= 1
+                });
+                if !sized && PLACEMENT_GENERATION.load(Ordering::SeqCst) != generation {
+                    return;
+                }
+                on_main(app, move |window| set_position(window, position));
+            }
+        }
+
+        if wait_for(app, generation, |rect| rect_settled(rect, target)) {
+            if attempt > 1 {
+                log::info!("dock: window placed at {target:?} on attempt {attempt}");
+            }
+            return;
+        }
+    }
+    if let Some(current) = window_rect(app) {
+        log::warn!("dock: could not place the window at {target:?}; it is at {current:?}");
+    }
+}
+
 /// Start the one and only polling thread.
 pub fn spawn(app: AppHandle) {
     std::thread::Builder::new()
         .name("dock-poller".into())
         .spawn(move || {
             let mut next_monitor_check = Instant::now() + MONITOR_REFRESH;
+            #[cfg(target_os = "linux")]
+            let mut last_drift: Option<Rect> = None;
             loop {
                 let Some(dock) = app.try_state::<std::sync::Arc<Dock>>() else {
                     return;
@@ -372,6 +529,26 @@ pub fn spawn(app: AppHandle) {
                         && !dock.geometry_matches(&snapshot)
                     {
                         dock.retarget_monitor(&app, snapshot);
+                    }
+
+                    // Linux: a window manager can move the window after it was
+                    // placed. While collapsed, put the tab back if it drifted.
+                    #[cfg(target_os = "linux")]
+                    if dock.phase() == Phase::Collapsed
+                        && let Some(actual) = window_rect(&app)
+                    {
+                        let expected = dock.expected_window_rect();
+                        if !rect_settled(actual, expected) {
+                            // Once per position, so a window manager that keeps
+                            // the tab somewhere else cannot fill the log.
+                            if last_drift != Some(actual) {
+                                log::warn!(
+                                    "dock: tab drifted to {actual:?}, expected {expected:?}; moving it back"
+                                );
+                                last_drift = Some(actual);
+                            }
+                            spawn_settle(&app, expected);
+                        }
                     }
                 }
 

@@ -109,15 +109,18 @@ planning a milestone; nothing here is fixed by the work that follows it.
    tests only — this machine is a single 1920×1080 display at 1×. Everything built
    since M0 assumes placement is sound, so a real failure here lands on work built
    on top of it.
-3. **The tab may not float over full-screen apps.** Seen by accident on
+3. **Linux placement fix is unverified on real hardware** (14 Sep 2026). See
+   "The tab moved inwards on Kubuntu" below: diagnosed from the GTK source, not
+   reproduced — there is no Linux machine here.
+4. **The tab may not float over full-screen apps.** Seen by accident on
    13 Sep 2026: with a video full-screen, a screenshot showed no tab at the edge,
    though the app was running. Brief 8.8 expects `full_screen_auxiliary` plus
    `can_join_all_spaces` to put it there, and this is an M0 checklist item that
    has never been run deliberately. Test it properly: open something full-screen,
    then look for the tab and hover it.
-4. **CSS wiring and the slide animation handshake have no test.** A selector that
+5. **CSS wiring and the slide animation handshake have no test.** A selector that
    matches nothing still looks identical to a passing build.
-5. **Formatting keystrokes are unverified on the running app** (14 Sep 2026).
+6. **Formatting keystrokes are unverified on the running app** (14 Sep 2026).
    `Cmd+B`, `Cmd+I`, `Cmd+Shift+X/7/8/9`, Enter continuing a list, and `Cmd+Z`
    undoing a toolbar change were tested in jsdom only. No keys were sent to the
    real app, because a key that misses the panel lands in the owner's editor —
@@ -1699,6 +1702,67 @@ its new shadow being clipped at the top of the Notes list.
 
 - [ ] Click "Add a task": the whole focus ring is visible
 - [ ] Tab to the first note card: its ring and shadow are complete at the top
+
+## The tab moved inwards on Kubuntu (14 Sep 2026)
+
+**The first report from real Linux hardware**, on v0.0.2: Kubuntu (KDE Plasma,
+which runs Wayland by default, so the app runs under XWayland per brief 8.10).
+After the panel opened and closed, the tab sat inwards from the right screen edge
+instead of at it, and the next open started from that position, half visible.
+
+### Cause, from the GTK source
+
+Tao applies `set_position` and `set_size` on Linux as `gtk_window_move` and
+`gtk_window_resize`. In GTK 3.24 (`gtk/gtkwindow.c`) these behave differently on a
+mapped window: **a move is sent to the window manager immediately**
+(`gdk_window_move`), while **a resize is only queued** and sent on GTK's next
+layout pass. So `poller::apply_rect`'s shrink order — resize, then move — reaches
+the window manager as move, then resize.
+
+For a right dock that means the still-wide expanded window is first moved so its
+left edge is 22 px from the screen edge, i.e. almost entirely off screen. KWin
+keeps windows on screen and pulls it back so its right edge meets the screen
+edge; the resize then shrinks it to 22 px keeping its left edge — which is where
+the open panel's left edge was. That is exactly the reported position. Growing is
+unaffected, because its move-first order is the order that keeps the window on
+screen, which fits "fine until the first close". A left dock never goes off
+screen. macOS applies both calls in one run-loop turn, so it never showed.
+
+Not ruled out: KWin adjusting the window for another reason. The fix below also
+covers that, because it checks the result rather than trusting the order.
+
+### Fix (Linux only, `dock/poller.rs`)
+
+- **A shrink waits for the new size to land before moving**, so the window is
+  never wide and past the screen edge at the same time.
+- **Every placement is verified** against the geometry the window reports back
+  (tao updates it from configure events), within a pixel (`geometry::rect_settled`),
+  and applied again if the window manager put it elsewhere, up to three attempts.
+- **A drift check** runs with the 2-second monitor refresh while collapsed and puts
+  the tab back if it is not where the controller expects.
+- A newer placement cancels an older one still settling (a generation counter),
+  so fast open/close cannot drag the window back to a stale position.
+- Corrections are logged as warnings (each drift position once), so a log from an
+  affected machine confirms or refutes the diagnosis.
+
+The settling code compiles on every platform, so clippy checks it here, but only
+Linux calls it; macOS and Windows keep the original two-call path. The drift
+check itself is Linux-only code, so its statement form was compiled separately.
+One new geometry test (71 dock tests, 126 in all).
+
+This changes `dock/`, which the project rules put off-limits by default: window
+placement reaches Tauri only in `poller.rs`, so the fix could not live elsewhere.
+
+### Checklist (Linux, ideally the Kubuntu machine that reported it)
+
+- [ ] Open and close the panel ten times: the tab returns to the screen edge each
+      time, and the panel always opens fully on screen
+- [ ] At most a brief flicker of the tab at the end of a close
+- [ ] The log (`~/.local/share/dev.edgenotes.app/logs/`) shows no repeated
+      "could not place the window" warnings
+- [ ] Dragging the tab along the edge still follows the cursor
+- [ ] Dock on left behaves the same
+- [ ] A plain X11 session, and GNOME, if available
 
 ## M0 acceptance checklist
 
