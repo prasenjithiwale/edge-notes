@@ -9,6 +9,20 @@ To release, see "Releasing" in the README.
 
 ## [Unreleased]
 
+## [0.0.3] - 2026-09-15
+
+A fix for Linux. macOS (universal), Linux (x86_64) and Windows (x64).
+
+### Fixed
+
+- **Linux: the tab no longer moves inwards after the panel closes.** On KDE Plasma
+  (seen on Kubuntu) the tab ended up where the open panel's left edge had been,
+  and the next open started from there, half on screen. The window manager
+  received the window's move before its resize and pulled the still-wide window
+  back on screen. The tab now waits for its new size before moving, checks where
+  it actually landed and corrects it, and is put back at the edge if anything
+  moves it later.
+
 ## [0.0.2] - 2026-09-14
 
 macOS (universal), Linux (x86_64) and Windows (x64).
