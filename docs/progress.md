@@ -25,7 +25,16 @@ Work after M5, owner-requested, newest last:
 | Click outside to leave the editor | 14 Sep 2026 | Built and tested in jsdom; not yet run on the app. Uncommitted. |
 | Sixteen-colour palette | 14 Sep 2026 | Built; contrast tested for all 16 in both themes. Not yet run on the app. Uncommitted. |
 | Lock icons for locked (pinned) notes | 14 Sep 2026 | Built. Uncommitted. |
-| Floating pill tab | 14 Sep 2026 | Built; the collapsed pill seen on screen. Uncommitted. **The owner may ask to reset it** — see its section. |
+| Floating pill tab | 14 Sep 2026 | Built; the collapsed pill seen on screen. **The owner may ask to reset it** — see its section. |
+| Tasks tab, task details, reminders, translucency, card elevation | 14 Sep 2026 | Released in **v0.0.2**. |
+
+**Releases:** [v0.0.1](https://github.com/prasenjithiwale/edge-notes/releases/tag/v0.0.1)
+and [v0.0.2](https://github.com/prasenjithiwale/edge-notes/releases/tag/v0.0.2),
+both published 14 Sep 2026 for macOS (universal), Windows (x64) and Linux
+(x86_64). v0.0.2's Linux and Windows builds passed lint and both test suites on
+those systems before bundling; its macOS `.dmg` was verified universal, at
+version 0.0.2, and byte-identical after upload. None of the released builds has
+been installed and run yet.
 
 Built and verified on macOS 26.6.2 (Tahoe), Apple Silicon, single 1920×1080
 display at 1× scale. Every scaling and multi-monitor case is covered by unit
