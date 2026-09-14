@@ -8,6 +8,7 @@ pub mod db;
 pub mod dock;
 pub mod error;
 pub mod export;
+pub mod links;
 pub mod platform;
 pub mod tray;
 
@@ -55,6 +56,7 @@ pub fn run() {
             commands::dock_pointer_left,
             commands::dock_begin_tab_drag,
             commands::dock_end_tab_drag,
+            commands::dock_set_large,
             commands::notes_list,
             commands::notes_create,
             commands::notes_update,
@@ -62,6 +64,7 @@ pub fn run() {
             commands::notes_delete,
             commands::notes_restore,
             commands::notes_export,
+            commands::open_url,
             commands::monitors_list,
             commands::settings_get,
             commands::settings_update,

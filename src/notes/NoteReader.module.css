@@ -1,0 +1,57 @@
+.reader {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 16px;
+  background: var(--note-bg);
+  color: var(--note-text);
+  border-radius: var(--radius-card);
+}
+
+.toolbar {
+  display: flex;
+  justify-content: flex-end;
+  gap: 4px;
+  margin: -4px -6px 0;
+}
+
+.button {
+  color: inherit;
+}
+
+.button:hover {
+  background: rgb(0 0 0 / 8%);
+}
+
+.body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  font-size: 14px;
+  line-height: 1.5;
+  /* Reading at length is what the large panel is for, so the text can be
+     selected and copied, as on a pinned card. */
+  user-select: text;
+  -webkit-user-select: text;
+  cursor: text;
+}
+
+.title {
+  font-weight: 600;
+}
+
+.line {
+  font-weight: 400;
+}
+
+.blank {
+  height: 0.75em;
+}
+
+.footer {
+  font-size: 11px;
+  opacity: var(--note-secondary-opacity);
+}

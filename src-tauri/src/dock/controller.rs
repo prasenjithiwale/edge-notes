@@ -34,6 +34,12 @@ pub struct DockState {
     pub side: Side,
     pub tab_top: f64,
     pub keep_open: bool,
+    /// Logical width the panel is painted at: `panel.width`, or the large panel's
+    /// width while a note is expanded. Sent rather than derived in CSS, because the
+    /// large width depends on the monitor.
+    pub panel_width: f64,
+    /// A note is expanded into the large panel.
+    pub large: bool,
 }
 
 /// What the caller must do. `poller.rs` is the only thing that applies these.
@@ -62,6 +68,9 @@ pub enum Input {
     /// The tab is being dragged along the edge (brief M4).
     BeginTabDrag,
     EndTabDrag,
+    /// Grow the panel so a note can be read and edited at a comfortable size, or
+    /// return it to normal. Only meaningful while the panel is out.
+    SetLarge(bool),
 }
 
 /// What opens a collapsed panel (`dock.openOn`).
@@ -114,6 +123,13 @@ impl Default for Timings {
 /// feels immediate.
 const FOCUS_SETTLE: Duration = Duration::from_millis(1_500);
 
+/// How long a panel just returned from its large size stays out with the cursor
+/// outside it. The shrink button sits where the normal panel is not, so the
+/// cursor is outside at the moment of the click — without this the panel slid
+/// away under a click that asked to go back to the list. Long enough to move the
+/// pointer across; after it the normal close delay applies.
+const SHRINK_GRACE: Duration = Duration::from_millis(2_000);
+
 /// How far the cursor must travel before a press on the tab becomes a drag.
 /// Below it the press is a click, and the tab does not move: a hand is never
 /// perfectly still, and a click that nudged the tab a pixel would be a bug.
@@ -160,6 +176,9 @@ pub struct DockController {
     /// with Keep open on, nothing could dismiss the panel at all. Cleared as soon
     /// as the cursor is seen outside.
     dismissed: bool,
+    /// When an expanded note last returned the panel to normal size; see
+    /// `SHRINK_GRACE`. Cleared once the cursor is seen inside the panel.
+    shrunk_at: Option<Instant>,
     hover_since: Option<Instant>,
     leave_since: Option<Instant>,
     ack_deadline: Option<Instant>,
@@ -179,6 +198,7 @@ impl DockController {
             opened_deliberately_at: None,
             press: None,
             dismissed: false,
+            shrunk_at: None,
             hover_since: None,
             leave_since: None,
             ack_deadline: None,
@@ -212,6 +232,8 @@ impl DockController {
                 0.0
             },
             keep_open: self.keep_open,
+            panel_width: self.geometry.panel_width_logical(),
+            large: self.geometry.is_large(),
         }
     }
 
@@ -262,6 +284,7 @@ impl DockController {
             Input::WindowBlurred => self.on_blur(now),
             Input::PointerLeftWebview => self.on_pointer_left(now),
             Input::MonitorChanged => self.on_monitor_changed(),
+            Input::SetLarge(large) => self.on_set_large(large, now),
             Input::BeginTabDrag => {
                 self.press = Some(TabPress::default());
                 Vec::new()
@@ -329,8 +352,15 @@ impl DockController {
         if self.keep_open || self.interaction_lock || self.opened_by_shortcut {
             return false;
         }
-        self.leave_since
-            .is_some_and(|since| now.duration_since(since) >= self.timings.close_delay)
+        let Some(left) = self.leave_since else {
+            return false;
+        };
+        // A grace after shrinking pushes the start of the close delay back.
+        let since = self
+            .shrunk_at
+            .map_or(left, |at| left.max(at + SHRINK_GRACE));
+        now.checked_duration_since(since)
+            .is_some_and(|waited| waited >= self.timings.close_delay)
     }
 
     fn on_cursor(&mut self, x: f64, y: f64, now: Instant) -> Vec<Action> {
@@ -384,6 +414,7 @@ impl DockController {
             Phase::Opening | Phase::Open => {
                 if inside {
                     self.leave_since = None;
+                    self.shrunk_at = None;
                 } else {
                     self.leave_since.get_or_insert(now);
                 }
@@ -519,8 +550,26 @@ impl DockController {
     }
 
     pub fn set_geometry(&mut self, geometry: DockGeometry) -> Vec<Action> {
-        self.geometry = geometry;
+        // Settings and monitor changes rebuild the geometry from scratch; an
+        // expanded note must survive them rather than snap back mid-read.
+        self.geometry = geometry.with_large(self.geometry.is_large());
         self.on_monitor_changed()
+    }
+
+    /// Resize in place: the window grows or shrinks around the docked edge and the
+    /// phase does not change. A collapsed panel cannot be large — there is nothing
+    /// on screen to enlarge, and the next open must be the normal panel.
+    fn on_set_large(&mut self, large: bool, now: Instant) -> Vec<Action> {
+        let large = large && self.phase.is_expanded();
+        if large == self.geometry.is_large() {
+            return Vec::new();
+        }
+        self.geometry = self.geometry.with_large(large);
+        self.shrunk_at = if large { None } else { Some(now) };
+        vec![
+            Action::SetWindowRect(self.rect_for_phase()),
+            Action::EmitState(self.state()),
+        ]
     }
 
     /// Brief 8.4 open sequence: resize first, then tell the frontend to slide in.
@@ -562,6 +611,9 @@ impl DockController {
 
     fn finish_close(&mut self) -> Vec<Action> {
         self.phase = Phase::Collapsed;
+        // An expanded note ends with the panel: the next open is the normal panel.
+        self.geometry = self.geometry.with_large(false);
+        self.shrunk_at = None;
         self.opened_by_shortcut = false;
         self.opened_deliberately_at = None;
         self.leave_since = None;
@@ -1403,5 +1455,146 @@ mod tests {
 
         hover_open(&mut c, t0);
         assert_eq!(c.state().tab_top, c.geometry().tab_top_logical());
+    }
+
+    #[test]
+    fn expanding_a_note_grows_the_open_panel_in_place() {
+        let mut c = controller();
+        let t0 = Instant::now();
+        hover_open(&mut c, t0);
+        assert_eq!(c.state().panel_width, 320.0);
+
+        let actions = c.handle(Input::SetLarge(true), ms(t0, 200));
+        assert_eq!(c.phase(), Phase::Open);
+        let large_rect = c.geometry().expanded_window_rect();
+        assert_eq!(large_rect.width, 12 + 28 + 760);
+        // Resize first, then tell the frontend the width to paint.
+        assert_eq!(actions[0], Action::SetWindowRect(large_rect));
+        assert!(matches!(actions[1], Action::EmitState(s) if s.large && s.panel_width == 760.0));
+
+        // Asking again changes nothing.
+        assert!(c.handle(Input::SetLarge(true), ms(t0, 210)).is_empty());
+
+        let actions = c.handle(Input::SetLarge(false), ms(t0, 220));
+        assert_eq!(c.phase(), Phase::Open);
+        assert_eq!(
+            actions[0],
+            Action::SetWindowRect(c.geometry().expanded_window_rect())
+        );
+        assert!(matches!(actions[1], Action::EmitState(s) if !s.large && s.panel_width == 320.0));
+    }
+
+    #[test]
+    fn the_large_panel_is_what_the_cursor_is_tested_against() {
+        let mut c = controller();
+        let t0 = Instant::now();
+        hover_open(&mut c, t0);
+        c.handle(Input::SetLarge(true), ms(t0, 200));
+
+        // Far left of where the normal panel ends, but inside the large one.
+        let panel = c.geometry().panel_rect();
+        let (x, y) = (f64::from(panel.x + 20), f64::from(panel.y + 20));
+        c.handle(Input::Cursor { x, y }, ms(t0, 210));
+        c.tick(ms(t0, 2_000));
+        assert_eq!(c.phase(), Phase::Open);
+    }
+
+    #[test]
+    fn shrinking_does_not_close_the_panel_under_the_click() {
+        let mut c = controller();
+        let t0 = Instant::now();
+        hover_open(&mut c, t0);
+        c.handle(Input::SetLarge(true), ms(t0, 200));
+
+        // The shrink button: top corner of the large panel, above the normal one.
+        let large = c.geometry().panel_rect();
+        let (x, y) = (f64::from(large.x + 20), f64::from(large.y + 10));
+        c.handle(Input::SetLarge(false), ms(t0, 300));
+        c.handle(Input::Cursor { x, y }, ms(t0, 310));
+        assert!(
+            !c.geometry().hit_open(x, y, 8.0),
+            "the click point is outside now"
+        );
+
+        // Past the close delay, but inside the grace: still open.
+        c.tick(ms(t0, 1_500));
+        assert_eq!(c.phase(), Phase::Open);
+
+        // The grace pushes the delay back rather than closing the instant it ends.
+        c.tick(ms(t0, 300 + 2_000 + 399));
+        assert_eq!(c.phase(), Phase::Open);
+        c.tick(ms(t0, 300 + 2_000 + 400));
+        assert_eq!(c.phase(), Phase::Closing);
+    }
+
+    #[test]
+    fn after_shrinking_the_cursor_entering_restores_normal_closing() {
+        let mut c = controller();
+        let t0 = Instant::now();
+        hover_open(&mut c, t0);
+        c.handle(Input::SetLarge(true), ms(t0, 200));
+        c.handle(Input::SetLarge(false), ms(t0, 300));
+
+        let (x, y) = panel_point(&c);
+        c.handle(Input::Cursor { x, y }, ms(t0, 400));
+        c.handle(
+            Input::Cursor {
+                x: AWAY.0,
+                y: AWAY.1,
+            },
+            ms(t0, 500),
+        );
+        c.tick(ms(t0, 900));
+        assert_eq!(c.phase(), Phase::Closing);
+    }
+
+    #[test]
+    fn a_collapsed_panel_cannot_be_made_large() {
+        let mut c = controller();
+        let t0 = Instant::now();
+        assert!(c.handle(Input::SetLarge(true), t0).is_empty());
+        assert!(!c.geometry().is_large());
+    }
+
+    #[test]
+    fn closing_ends_the_expanded_note_and_the_next_open_is_normal() {
+        let mut c = controller();
+        let t0 = Instant::now();
+        hover_open(&mut c, t0);
+        c.handle(Input::SetLarge(true), ms(t0, 200));
+
+        c.handle(Input::Toggle, ms(t0, 300));
+        let actions = c.handle(Input::AnimationDone(Phase::Closing), ms(t0, 450));
+        assert_eq!(c.phase(), Phase::Collapsed);
+        assert!(!c.geometry().is_large());
+        assert!(matches!(actions[1], Action::EmitState(s) if !s.large && s.panel_width == 320.0));
+
+        // Toggle was a dismissal, so the cursor has to leave before hover reopens.
+        c.handle(
+            Input::Cursor {
+                x: AWAY.0,
+                y: AWAY.1,
+            },
+            ms(t0, 4_000),
+        );
+        let actions = hover_open(&mut c, ms(t0, 5_000));
+        assert_eq!(
+            actions[0],
+            Action::SetWindowRect(c.geometry().expanded_window_rect())
+        );
+        assert_eq!(c.geometry().expanded_window_rect().width, 12 + 28 + 320);
+    }
+
+    #[test]
+    fn a_settings_change_keeps_the_note_expanded() {
+        let mut c = controller();
+        let t0 = Instant::now();
+        hover_open(&mut c, t0);
+        c.handle(Input::SetLarge(true), ms(t0, 200));
+
+        let left = DockGeometry::new(WORK, 1.0, Side::Left, 0.5, Metrics::default());
+        let actions = c.set_geometry(left);
+        assert!(c.geometry().is_large());
+        assert!(matches!(actions[1], Action::EmitState(s) if s.large && s.side == Side::Left));
     }
 }

@@ -1,16 +1,19 @@
-import type { CSSProperties } from "react";
-import { Pencil, Pin } from "lucide-react";
+import { useMemo, type CSSProperties, type MouseEvent } from "react";
+import { Maximize2, Pencil, Pin } from "lucide-react";
 
 import { IconButton } from "../components/IconButton";
 import { cx } from "../lib/cx";
 import type { Note } from "../lib/ipc";
-import { notePreview, noteTitle } from "../lib/notes";
+import { cardPreview, parseInline, plainText } from "../lib/markdown";
+import { FlowText, InlineText, LineRow } from "./NoteText";
 import styles from "./NoteCard.module.css";
 
 interface NoteCardProps {
   note: Note;
   onOpen: () => void;
   onUnpin: () => void;
+  onExpand: () => void;
+  onToggleTask: (line: number) => void;
 }
 
 export function noteColorStyle(color: string): CSSProperties {
@@ -20,50 +23,112 @@ export function noteColorStyle(color: string): CSSProperties {
   } as CSSProperties;
 }
 
-function Body({ note }: { note: Note }) {
-  const title = noteTitle(note.content);
-  const preview = notePreview(note.content);
+/** A tool on the card must not also count as a click on the card. */
+function stop(event: MouseEvent) {
+  event.stopPropagation();
+}
+
+function Body({ note, onToggleTask }: Pick<NoteCardProps, "note" | "onToggleTask">) {
+  const preview = useMemo(() => cardPreview(note.content), [note.content]);
+  const { title, layout, body, hidden } = preview;
 
   return (
     <>
-      <div className={cx(styles.title, title === "" && styles.untitled)}>
-        {title === "" ? "New note" : title}
-      </div>
-      {preview !== "" && <div className={styles.preview}>{preview}</div>}
+      {title === null ? (
+        <div className={cx(styles.title, styles.untitled)}>New note</div>
+      ) : title.kind === "paragraph" ? (
+        <div className={styles.title}>
+          <InlineText text={title.text} />
+        </div>
+      ) : (
+        <LineRow
+          line={title}
+          className={styles.title}
+          onToggle={() => {
+            onToggleTask(title.index);
+          }}
+        />
+      )}
+      {body.length > 0 &&
+        (layout === "flow" ? (
+          <div className={styles.preview}>
+            <FlowText lines={body.map((line) => line.text)} />
+          </div>
+        ) : (
+          <div className={styles.rows}>
+            {body.map((line) => (
+              <LineRow
+                key={line.index}
+                line={line}
+                className={styles.row}
+                onToggle={() => {
+                  onToggleTask(line.index);
+                }}
+              />
+            ))}
+            {hidden > 0 && (
+              <div className={cx(styles.row, styles.more)}>{`${String(hidden)} more`}</div>
+            )}
+          </div>
+        ))}
     </>
   );
 }
 
+/** The accessible name of the card's open button: its title, markers removed. */
+function cardLabel(note: Note): string {
+  const title = cardPreview(note.content).title;
+  return title === null ? "New note" : plainText(parseInline(title.text));
+}
+
 /**
- * An unpinned card is one big button: click anywhere and the editor opens
- * (brief 6.8).
+ * An unpinned card opens the editor from a click anywhere on it (brief 6.8). It
+ * is not a <button>, because a checkbox or a link inside a button is invalid and
+ * unreachable; instead a transparent button covers the card, carrying the focus
+ * ring and the keyboard path, and the text above it passes clicks through to the
+ * card.
  *
- * A pinned one is not. Its text is selectable so it can be read and copied
- * without touching it, and the only way into the editor is the pencil — the
- * point of pinning a note is that you stop editing it by accident.
+ * A pinned one does not open on click. Its text is selectable so it can be read
+ * and copied without touching it, and the only way into the editor is the
+ * pencil — the point of pinning a note is that you stop editing it by accident.
  */
-export function NoteCard({ note, onOpen, onUnpin }: NoteCardProps) {
+export function NoteCard({ note, onOpen, onUnpin, onExpand, onToggleTask }: NoteCardProps) {
+  const expand = (
+    <IconButton label="Expand note" className={styles.tool} onClick={onExpand}>
+      <Maximize2 size={14} strokeWidth={1.75} />
+    </IconButton>
+  );
+
   if (!note.pinned) {
     return (
-      <button
-        type="button"
-        className={styles.card}
+      <div
+        className={cx(styles.card, styles.openable)}
         style={noteColorStyle(note.color)}
-        // Markers for arrow-key navigation and for restoring focus to this card
-        // when its editor closes (brief 6.11).
-        data-card=""
-        data-id={note.id}
         onClick={onOpen}
       >
-        <Body note={note} />
-      </button>
+        <button
+          type="button"
+          className={styles.cover}
+          aria-label={cardLabel(note)}
+          // Markers for arrow-key navigation and for restoring focus to this card
+          // when its editor closes (brief 6.11). A click on it bubbles to the card.
+          data-card=""
+          data-id={note.id}
+        />
+        <div className={styles.text}>
+          <Body note={note} onToggleTask={onToggleTask} />
+        </div>
+        <div className={styles.tools} onClick={stop}>
+          {expand}
+        </div>
+      </div>
     );
   }
 
   return (
     <div className={cx(styles.card, styles.pinned)} style={noteColorStyle(note.color)}>
-      <div className={styles.text}>
-        <Body note={note} />
+      <div className={cx(styles.text, styles.selectable)}>
+        <Body note={note} onToggleTask={onToggleTask} />
       </div>
       <div className={styles.tools}>
         {/* Not `active`: accent is reserved for focus rings and Keep open
@@ -87,6 +152,7 @@ export function NoteCard({ note, onOpen, onUnpin }: NoteCardProps) {
         >
           <Pencil size={14} strokeWidth={1.75} />
         </IconButton>
+        {expand}
       </div>
     </div>
   );

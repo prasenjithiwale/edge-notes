@@ -56,6 +56,10 @@ export interface DockState {
   /** Offset of the tab from the top of the window, in logical pixels. */
   tabTop: number;
   keepOpen: boolean;
+  /** Logical width to paint the panel at: `panel.width`, or the large panel's. */
+  panelWidth: number;
+  /** A note is expanded into the large panel. */
+  large: boolean;
 }
 
 /** The shape Rust serializes `AppError` into. */
@@ -141,6 +145,16 @@ export function dockAnimationDone(phase: DockPhase): Promise<void> {
 
 export function dockToggle(): Promise<void> {
   return call("dock_toggle");
+}
+
+/** Grow the open panel for an expanded note, or return it to normal. */
+export function dockSetLarge(value: boolean): Promise<void> {
+  return call("dock_set_large", { value });
+}
+
+/** Open a web link from a note in the default browser. */
+export function openUrl(url: string): Promise<void> {
+  return call("open_url", { url });
 }
 
 /**

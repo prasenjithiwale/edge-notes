@@ -79,6 +79,21 @@ pub fn dock_toggle(app: AppHandle, dock: State<'_, Arc<Dock>>) -> AppResult<()> 
     Ok(())
 }
 
+/// Grow the open panel so a note can be read and edited at a comfortable size,
+/// or return it to normal. Ignored while collapsed.
+#[tauri::command]
+pub fn dock_set_large(app: AppHandle, dock: State<'_, Arc<Dock>>, value: bool) -> AppResult<()> {
+    dock.input(&app, Input::SetLarge(value));
+    Ok(())
+}
+
+/// Open a web link from a note in the default browser. See `links` for why this
+/// is a command rather than a navigation.
+#[tauri::command]
+pub fn open_url(url: String) -> AppResult<()> {
+    crate::links::open(&url)
+}
+
 /// The pointer left the webview. Brief 8.2 and 8.10: on Linux the polled cursor
 /// can go stale once the pointer is over a native Wayland window, so this backs
 /// it up. The controller ignores it unless the cursor really is outside, which

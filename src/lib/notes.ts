@@ -1,40 +1,9 @@
 /**
- * Pure note logic: title and preview derivation, sorting and filtering.
- * No IPC, no React — brief 11 calls these out for unit testing.
+ * Pure note logic: sorting, filtering and labels. No IPC, no React — brief 11
+ * calls these out for unit testing. What a card shows (title, preview, list
+ * rows) is derived with the formatting in `markdown.ts`.
  */
 import type { Note } from "./ipc";
-
-/**
- * The title is the first non-empty line; there is no separate title field
- * (brief 6.8). Leading blank lines are skipped rather than yielding an empty
- * title above visible text.
- */
-export function noteTitle(content: string): string {
-  for (const line of content.split("\n")) {
-    const trimmed = line.trim();
-    if (trimmed.length > 0) {
-      return trimmed;
-    }
-  }
-  return "";
-}
-
-/**
- * Everything after the title line, collapsed to a single string. The card
- * clamps it to two lines in CSS, so newlines become spaces here.
- */
-export function notePreview(content: string): string {
-  const lines = content.split("\n");
-  const titleIndex = lines.findIndex((line) => line.trim().length > 0);
-  if (titleIndex === -1) {
-    return "";
-  }
-  return lines
-    .slice(titleIndex + 1)
-    .join(" ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
 
 /** A note with nothing but whitespace is discarded when the editor closes. */
 export function isNoteEmpty(content: string): boolean {

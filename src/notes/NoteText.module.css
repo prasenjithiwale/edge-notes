@@ -1,0 +1,83 @@
+/* Two weights only (brief 7.1): bold is the 600 the titles already use. */
+.bold {
+  font-weight: 600;
+}
+
+.italic {
+  font-style: italic;
+}
+
+.strike {
+  text-decoration: line-through;
+}
+
+/* A link is not accent-coloured — accent is reserved for focus rings and Keep
+   open (brief 7.1). The note's own text colour, underlined, reads as a link. */
+.link {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  /* Native text views show the pointing hand over links; this is a link, not a
+     button, so the `cursor: default` rule for controls does not apply. */
+  cursor: pointer;
+}
+
+.row {
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+  min-width: 0;
+}
+
+.rowText {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* The reader has the room a card does not: lines wrap, and a long link breaks
+   rather than pushing the panel sideways. */
+.wrap .rowText {
+  white-space: pre-wrap;
+  overflow: visible;
+  overflow-wrap: anywhere;
+}
+
+/* Sized to the text's line box so a row with a marker is no taller than one
+   without, which keeps the card's line clamp honest. */
+.marker {
+  flex: none;
+  min-width: 12px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.checkbox {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 16px;
+  height: 1.4em;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+}
+
+.checkbox:hover:not(:disabled) {
+  background: rgb(0 0 0 / 8%);
+}
+
+.checkbox:disabled {
+  opacity: 1;
+}
+
+/* A ticked item steps back without dropping below AA: the same reduced emphasis
+   the preview uses, which the contrast test holds above the threshold. */
+.done {
+  text-decoration: line-through;
+  opacity: var(--note-secondary-opacity);
+}

@@ -1,5 +1,17 @@
 import { useCallback, useEffect, useRef, type CSSProperties } from "react";
-import { Pin, Trash2 } from "lucide-react";
+import {
+  Bold,
+  Italic,
+  List,
+  ListChecks,
+  ListOrdered,
+  Maximize2,
+  Minimize2,
+  Pin,
+  Strikethrough,
+  Trash2,
+  type LucideIcon,
+} from "lucide-react";
 
 import { IconButton } from "../components/IconButton";
 import { cx } from "../lib/cx";
@@ -10,11 +22,35 @@ import { useNow } from "../lib/useNow";
 import { useDockStore } from "../store/dock";
 import { useNotesStore } from "../store/notes";
 import { noteColorStyle } from "./NoteCard";
+import {
+  applyFormat,
+  EDITOR_FIELD_ATTRIBUTE,
+  FORMAT_SHORTCUTS,
+  shortcutLabel,
+  type FormatCommand,
+} from "./formatting";
 import styles from "./NoteEditor.module.css";
 
 interface NoteEditorProps {
   note: Note;
+  /** Filling the large panel: no expand animation and no height cap. */
+  large?: boolean;
 }
+
+const FORMAT_ICONS: Record<FormatCommand, LucideIcon> = {
+  bold: Bold,
+  italic: Italic,
+  strike: Strikethrough,
+  bullet: List,
+  ordered: ListOrdered,
+  task: ListChecks,
+};
+
+/** Text styles, then lists: two groups, separated by space rather than a rule. */
+const FORMAT_GROUPS: readonly (readonly FormatCommand[])[] = [
+  ["bold", "italic", "strike"],
+  ["bullet", "ordered", "task"],
+];
 
 /** Brief 6.9: the textarea grows to about 60% of the panel, then scrolls. */
 const MAX_HEIGHT_RATIO = 0.6;
@@ -30,7 +66,17 @@ const EXPAND_MS = 160;
  */
 const CARD_HEIGHT_GUESS = 64;
 
-export function NoteEditor({ note }: NoteEditorProps) {
+/**
+ * Where the caret was when an editor last unmounted. Expanding or shrinking a
+ * note swaps one editor for another, and without this the caret would jump to
+ * the end of a long note at the moment the user wanted a better look at it.
+ */
+const caretMemory = { id: "", selectionStart: 0, selectionEnd: 0, at: 0 };
+
+/** Long enough to span the swap; short enough that reopening a note later does not count. */
+const CARET_MEMORY_MS = 1_000;
+
+export function NoteEditor({ note, large = false }: NoteEditorProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const rootRef = useRef<HTMLElement>(null);
   const setContent = useNotesStore((state) => state.setContent);
@@ -38,12 +84,20 @@ export function NoteEditor({ note }: NoteEditorProps) {
   const stopEditing = useNotesStore((state) => state.stopEditing);
   const remove = useNotesStore((state) => state.remove);
   const setPinned = useNotesStore((state) => state.setPinned);
+  const expand = useNotesStore((state) => state.expand);
+  const shrink = useNotesStore((state) => state.shrink);
   const setLock = useDockStore((state) => state.setLock);
   const now = useNow();
 
   const resize = useCallback(() => {
     const textarea = textareaRef.current;
     if (!textarea) {
+      return;
+    }
+    if (large) {
+      // The large panel lays the textarea out to fill it and scroll; an inline
+      // height from the normal editor would fight that.
+      textarea.style.height = "";
       return;
     }
     const panel = textarea.closest("[data-panel]");
@@ -53,7 +107,7 @@ export function NoteEditor({ note }: NoteEditorProps) {
         : Number.POSITIVE_INFINITY;
     textarea.style.height = "auto";
     textarea.style.height = `${String(Math.min(textarea.scrollHeight, max))}px`;
-  }, []);
+  }, [large]);
 
   // Brief 6.9: the card expands in place rather than being swapped for a taller
   // box. Animating `max-height` from roughly the card's height to the editor's
@@ -61,7 +115,7 @@ export function NoteEditor({ note }: NoteEditorProps) {
   // textarea could not grow as you type.
   useEffect(() => {
     const root = rootRef.current;
-    if (!root || prefersReducedMotion()) {
+    if (!root || large || prefersReducedMotion()) {
       return;
     }
 
@@ -90,18 +144,31 @@ export function NoteEditor({ note }: NoteEditorProps) {
       root.removeEventListener("transitionend", release);
       release();
     };
-  }, []);
+  }, [large]);
 
   useEffect(() => {
     const textarea = textareaRef.current;
     if (!textarea) {
       return;
     }
+    // Switching between the list and the large panel remounts the editor; the
+    // caret should stay where it was rather than jump to the end.
+    const { selectionStart, selectionEnd } = caretMemory;
     textarea.focus();
-    // Caret at the end, so typing continues rather than overwrites.
-    textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+    if (caretMemory.id === note.id && Date.now() - caretMemory.at < CARET_MEMORY_MS) {
+      textarea.setSelectionRange(selectionStart, selectionEnd);
+    } else {
+      // Caret at the end, so typing continues rather than overwrites.
+      textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+    }
     resize();
-  }, [resize]);
+    return () => {
+      caretMemory.id = note.id;
+      caretMemory.selectionStart = textarea.selectionStart;
+      caretMemory.selectionEnd = textarea.selectionEnd;
+      caretMemory.at = Date.now();
+    };
+  }, [note.id, resize]);
 
   // The editor can mount before the window has the keyboard — the shortcut opens
   // the panel and asks for a new note in the same breath, and `focus()` on an
@@ -133,12 +200,63 @@ export function NoteEditor({ note }: NoteEditorProps) {
     };
   }, [setLock]);
 
+  const format = (command: FormatCommand) => {
+    const textarea = textareaRef.current;
+    if (textarea) {
+      applyFormat(textarea, command);
+    }
+  };
+
   return (
     <section
       ref={rootRef}
-      className={styles.editor}
+      className={cx(styles.editor, large && styles.large)}
       style={noteColorStyle(note.color)}
     >
+      <div className={styles.toolbar}>
+        <div className={styles.formatting} role="toolbar" aria-label="Formatting">
+          {FORMAT_GROUPS.map((group, index) => (
+            <div key={index} className={styles.group}>
+              {group.map((command) => {
+                const shortcut = FORMAT_SHORTCUTS.find((item) => item.command === command);
+                const Icon = FORMAT_ICONS[command];
+                return (
+                  <IconButton
+                    key={command}
+                    label={shortcut?.label ?? command}
+                    shortcut={shortcut ? shortcutLabel(shortcut) : undefined}
+                    className={styles.footerButton}
+                    keepFocus
+                    onClick={() => {
+                      format(command);
+                    }}
+                  >
+                    <Icon size={16} strokeWidth={1.75} />
+                  </IconButton>
+                );
+              })}
+            </div>
+          ))}
+        </div>
+        <IconButton
+          label={large ? "Shrink note" : "Expand note"}
+          className={styles.footerButton}
+          keepFocus
+          onClick={() => {
+            if (large) {
+              shrink();
+            } else {
+              void expand(note.id, { edit: true });
+            }
+          }}
+        >
+          {large ? (
+            <Minimize2 size={16} strokeWidth={1.75} />
+          ) : (
+            <Maximize2 size={16} strokeWidth={1.75} />
+          )}
+        </IconButton>
+      </div>
       <textarea
         ref={textareaRef}
         className={styles.textarea}
@@ -146,6 +264,7 @@ export function NoteEditor({ note }: NoteEditorProps) {
         rows={1}
         aria-label="Note content"
         placeholder="Write a note"
+        {...{ [EDITOR_FIELD_ATTRIBUTE]: "" }}
         onChange={(event) => {
           setContent(note.id, event.target.value);
           resize();

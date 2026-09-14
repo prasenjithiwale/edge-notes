@@ -20,6 +20,26 @@
   text-overflow: ellipsis;
 }
 
+/* List and checklist rows: one line each, so markers and boxes line up. */
+.rows {
+  display: flex;
+  flex-direction: column;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.4;
+}
+
+/* The row's text and marker step back like the paragraph preview does, but a
+   checkbox is a control and stays at full strength so it reads as pressable. */
+.row > :not(button),
+.more {
+  opacity: var(--note-secondary-opacity);
+}
+
+.more {
+  padding-left: 20px;
+}
+
 .preview {
   font-size: 12px;
   font-weight: 400;
@@ -38,18 +58,51 @@
   opacity: var(--note-secondary-opacity);
 }
 
-/* A pinned card is a surface, not a button: its text can be selected and copied
-   in place, and only the pencil opens the editor. */
-.pinned {
+/* Text on the left, tools stacked on the right. */
+.pinned,
+.openable {
   display: flex;
   align-items: flex-start;
   gap: 8px;
   cursor: default;
 }
 
+/* An unpinned card: a transparent button covers it, and everything painted
+   above that button lets clicks fall through to the card except its controls. */
+.openable {
+  position: relative;
+}
+
+.cover {
+  position: absolute;
+  inset: 0;
+  padding: 0;
+  border: none;
+  border-radius: inherit;
+  background: transparent;
+}
+
+.openable .text,
+.openable .tools {
+  position: relative;
+}
+
+.openable .text {
+  pointer-events: none;
+}
+
+.openable .text :is(a, button) {
+  pointer-events: auto;
+}
+
 .text {
   flex: 1;
   min-width: 0;
+}
+
+/* A pinned card is a surface, not a button: its text can be selected and copied
+   in place, and only the pencil opens the editor. */
+.selectable {
   /* The whole point of pinning: read and copy without opening anything. A
      deliberate exception to the `user-select: none` chrome rule in brief 7.5,
      which is there to stop stray selection, not to prevent copying on purpose. */

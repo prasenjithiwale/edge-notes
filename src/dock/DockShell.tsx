@@ -10,7 +10,6 @@ import {
   onDockState,
 } from "../lib/ipc";
 import { useDockStore } from "../store/dock";
-import { useSettingsStore } from "../store/settings";
 import { Panel } from "./Panel";
 import { Tab } from "./Tab";
 import styles from "./DockShell.module.css";
@@ -32,7 +31,7 @@ export function DockShell() {
   const side = useDockStore((state) => state.side);
   const tabTop = useDockStore((state) => state.tabTop);
   const applyState = useDockStore((state) => state.applyState);
-  const panelWidth = useSettingsStore((state) => state.settings["panel.width"]);
+  const panelWidth = useDockStore((state) => state.panelWidth);
   const frameRef = useRef<number | undefined>(undefined);
   const timerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
@@ -128,9 +127,10 @@ export function DockShell() {
     transitionFor(phase) === "close" && styles.closing,
   );
 
-  // Rust sizes the window from `panel.width`, so the CSS has to paint to the
-  // same number: with the token left static, a widened window simply grew a
-  // transparent margin and the panel stayed 320 px.
+  // Rust sizes the window, so the CSS has to paint to the same width: with the
+  // token left static, a widened window simply grew a transparent margin and the
+  // panel stayed 320 px. The width comes with dock:state rather than from
+  // `panel.width`, because an expanded note's large panel depends on the monitor.
   const style = {
     "--tab-top": `${String(tabTop)}px`,
     "--panel-width": `${String(panelWidth)}px`,

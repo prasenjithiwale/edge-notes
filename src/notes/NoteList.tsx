@@ -8,9 +8,18 @@ interface NoteListProps {
   editingId: string | null;
   onOpen: (id: string) => void;
   onUnpin: (id: string) => void;
+  onExpand: (id: string) => void;
+  onToggleTask: (id: string, line: number) => void;
 }
 
-export function NoteList({ notes, editingId, onOpen, onUnpin }: NoteListProps) {
+export function NoteList({
+  notes,
+  editingId,
+  onOpen,
+  onUnpin,
+  onExpand,
+  onToggleTask,
+}: NoteListProps) {
   return (
     <div className={styles.list}>
       {notes.map((note) =>
@@ -26,6 +35,12 @@ export function NoteList({ notes, editingId, onOpen, onUnpin }: NoteListProps) {
             }}
             onUnpin={() => {
               onUnpin(note.id);
+            }}
+            onExpand={() => {
+              onExpand(note.id);
+            }}
+            onToggleTask={(line) => {
+              onToggleTask(note.id, line);
             }}
           />
         ),

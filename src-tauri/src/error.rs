@@ -21,6 +21,8 @@ pub enum AppError {
     Tauri(#[from] tauri::Error),
     #[error("file error: {0}")]
     Io(#[from] std::io::Error),
+    #[error("not a web link: {0}")]
+    InvalidUrl(String),
 }
 
 impl AppError {
@@ -35,6 +37,7 @@ impl AppError {
             Self::Serde(_) => "serde",
             Self::Tauri(_) => "tauri",
             Self::Io(_) => "io",
+            Self::InvalidUrl(_) => "invalid_url",
         }
     }
 }

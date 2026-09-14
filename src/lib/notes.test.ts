@@ -7,8 +7,6 @@ import {
   facetColors,
   filterNotes,
   isNoteEmpty,
-  notePreview,
-  noteTitle,
   recentColors,
   sortNotes,
 } from "./notes";
@@ -34,51 +32,6 @@ function note(overrides: Partial<Note> = {}): Note {
     ...overrides,
   };
 }
-
-describe("noteTitle", () => {
-  it("uses the first non-empty line", () => {
-    expect(noteTitle("Standup notes\nDeploy the fix")).toBe("Standup notes");
-  });
-
-  it("skips leading blank lines rather than returning nothing", () => {
-    expect(noteTitle("\n\n  \nGroceries\nMilk")).toBe("Groceries");
-  });
-
-  it("trims the line it picks", () => {
-    expect(noteTitle("   Padded   \nrest")).toBe("Padded");
-  });
-
-  it("is empty for an empty note", () => {
-    expect(noteTitle("")).toBe("");
-    expect(noteTitle("   \n  ")).toBe("");
-  });
-
-  it("handles a single line with no body", () => {
-    expect(noteTitle("Just this")).toBe("Just this");
-  });
-});
-
-describe("notePreview", () => {
-  it("is everything after the title line", () => {
-    expect(notePreview("Groceries\nMilk, eggs\ncoffee")).toBe("Milk, eggs coffee");
-  });
-
-  it("is empty when there is only a title", () => {
-    expect(notePreview("Just this")).toBe("");
-  });
-
-  it("starts after the title even when blank lines precede it", () => {
-    expect(notePreview("\n\nTitle\nBody")).toBe("Body");
-  });
-
-  it("collapses runs of whitespace so the clamp measures real text", () => {
-    expect(notePreview("Title\n\n\nBody    with   gaps")).toBe("Body with gaps");
-  });
-
-  it("is empty for an empty note", () => {
-    expect(notePreview("")).toBe("");
-  });
-});
 
 describe("isNoteEmpty", () => {
   it("treats whitespace-only content as empty, so it gets discarded", () => {

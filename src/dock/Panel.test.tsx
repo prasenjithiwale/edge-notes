@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 
 import type { Note, Settings } from "../lib/ipc";
 
@@ -79,11 +79,12 @@ beforeEach(() => {
     }
     return Promise.resolve(null);
   });
-  useDockStore.setState({ locks: new Set() });
+  useDockStore.setState({ locks: new Set(), large: false, panelWidth: 320 });
   useNotesStore.setState({
     notes: [],
     loaded: false,
     editingId: null,
+    expandedId: null,
     pendingUndo: null,
     searching: false,
     query: "",
@@ -249,5 +250,194 @@ describe("quitting from the tray (brief 11: flush on quit)", () => {
     const order = invoke.mock.calls.map(([command]) => command);
     expect(order.indexOf("notes_update")).toBeGreaterThan(-1);
     expect(order.indexOf("notes_update")).toBeLessThan(order.indexOf("app_quit"));
+  });
+});
+
+/** Stand in for Rust: `dock_set_large` resizes and echoes the state back. */
+function answerLargeLikeRust() {
+  const fallback = invoke.getMockImplementation();
+  invoke.mockImplementation((command: string, args?: unknown) => {
+    if (command === "dock_set_large") {
+      const { value } = args as { value: boolean };
+      const dock = useDockStore.getState();
+      dock.applyState({
+        phase: dock.phase,
+        side: dock.side,
+        tabTop: dock.tabTop,
+        keepOpen: dock.keepOpen,
+        large: value,
+        panelWidth: value ? 760 : 320,
+      });
+      return Promise.resolve(null);
+    }
+    return fallback ? fallback(command, args) : Promise.resolve(null);
+  });
+}
+
+function contentOf(id: string): string | undefined {
+  return useNotesStore.getState().notes.find((candidate) => candidate.id === id)?.content;
+}
+
+async function openEditorWith(content: string, selection: [number, number]) {
+  await renderPanel();
+  useNotesStore.getState().setContent("1", content);
+  useNotesStore.getState().startEditing("1");
+  const field = await screen.findByLabelText<HTMLTextAreaElement>("Note content");
+  field.setSelectionRange(selection[0], selection[1]);
+  return field;
+}
+
+describe("formatting in the editor", () => {
+  it("bolds the selection with Cmd+B and keeps the text selected", async () => {
+    const field = await openEditorWith("Standup notes", [0, 7]);
+
+    fireEvent.keyDown(field, { key: "b", code: "KeyB", metaKey: true });
+
+    await waitFor(() => {
+      expect(contentOf("1")).toBe("**Standup** notes");
+    });
+    expect([field.selectionStart, field.selectionEnd]).toEqual([2, 9]);
+  });
+
+  it("turns the line into a checklist item with Cmd+Shift+9", async () => {
+    const field = await openEditorWith("Groceries\nmilk", [12, 12]);
+
+    fireEvent.keyDown(field, { key: "(", code: "Digit9", metaKey: true, shiftKey: true });
+
+    await waitFor(() => {
+      expect(contentOf("1")).toBe("Groceries\n- [ ] milk");
+    });
+  });
+
+  it("continues a list on Enter, and leaves a plain Enter alone", async () => {
+    const field = await openEditorWith("Groceries\n- milk", [16, 16]);
+
+    const handled = !fireEvent.keyDown(field, { key: "Enter", code: "Enter" });
+    expect(handled).toBe(true);
+    await waitFor(() => {
+      expect(contentOf("1")).toBe("Groceries\n- milk\n- ");
+    });
+
+    field.setSelectionRange(9, 9);
+    // Not a list line: the browser inserts the newline itself.
+    expect(fireEvent.keyDown(field, { key: "Enter", code: "Enter" })).toBe(true);
+    // Shift+Enter is always a plain line break.
+    field.setSelectionRange(16, 16);
+    expect(fireEvent.keyDown(field, { key: "Enter", code: "Enter", shiftKey: true })).toBe(true);
+  });
+
+  it("does not continue a list while an input method is composing", async () => {
+    const field = await openEditorWith("- milk", [6, 6]);
+    expect(fireEvent.keyDown(field, { key: "Enter", code: "Enter", isComposing: true })).toBe(
+      true,
+    );
+    expect(contentOf("1")).toBe("- milk");
+  });
+
+  it("formats from the toolbar", async () => {
+    const field = await openEditorWith("Standup notes", [8, 13]);
+
+    screen.getByRole("button", { name: "Strikethrough" }).click();
+
+    await waitFor(() => {
+      expect(contentOf("1")).toBe("Standup ~~notes~~");
+    });
+    expect(field.selectionStart).toBe(10);
+  });
+
+  it("ticks a checklist item from its card", async () => {
+    await renderPanel();
+    useNotesStore.getState().setContent("2", "Groceries\n- [ ] milk");
+
+    const box = await screen.findByRole("checkbox", { name: "milk" });
+    box.click();
+
+    await waitFor(() => {
+      expect(contentOf("2")).toBe("Groceries\n- [x] milk");
+    });
+    // Ticking is not opening.
+    expect(useNotesStore.getState().editingId).toBeNull();
+  });
+});
+
+describe("expanding a note", () => {
+  it("opens an unpinned note in the large editor", async () => {
+    answerLargeLikeRust();
+    await renderPanel();
+
+    const [expand] = screen.getAllByRole("button", { name: "Expand note" });
+    expand?.click();
+
+    await screen.findByRole("button", { name: "Shrink note" });
+    expect(commandCalls("dock_set_large")).toContainEqual({ value: true });
+    expect(useNotesStore.getState()).toMatchObject({ expandedId: "1", editingId: "1" });
+    expect(screen.getByLabelText("Note content")).toBeTruthy();
+    // The list and its chrome make way for the note.
+    expect(screen.queryByText("Groceries")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Search notes" })).toBeNull();
+    // Held open while reading, like the editor and search are.
+    expect(useDockStore.getState().locks.has("expanded")).toBe(true);
+  });
+
+  it("opens a pinned note to read, with Edit as the way in", async () => {
+    answerLargeLikeRust();
+    await renderPanel();
+    useNotesStore.setState((state) => ({
+      notes: state.notes.map((candidate) =>
+        candidate.id === "2" ? { ...candidate, pinned: true } : candidate,
+      ),
+    }));
+
+    await useNotesStore.getState().expand("2", { edit: false });
+
+    await screen.findByRole("button", { name: "Shrink note" });
+    expect(screen.queryByLabelText("Note content")).toBeNull();
+    expect(screen.getByText("Milk and coffee")).toBeTruthy();
+
+    screen.getByRole("button", { name: "Edit note" }).click();
+    await screen.findByLabelText("Note content");
+  });
+
+  it("backs out one level per Esc: editor, then the large panel", async () => {
+    answerLargeLikeRust();
+    await renderPanel();
+    await useNotesStore.getState().expand("1", { edit: true });
+    await screen.findByLabelText("Note content");
+
+    press("Escape");
+    // The editor closes into the reader, still large.
+    await screen.findByRole("button", { name: "Edit note" });
+    expect(useNotesStore.getState().expandedId).toBe("1");
+
+    press("Escape");
+    await screen.findByText("Groceries");
+    expect(commandCalls("dock_set_large")).toContainEqual({ value: false });
+    expect(useDockStore.getState().locks.has("expanded")).toBe(false);
+    expect(commandCalls("dock_toggle")).toEqual([]);
+  });
+
+  it("ends when the panel collapses, so the next open shows the list", async () => {
+    answerLargeLikeRust();
+    await renderPanel();
+    await useNotesStore.getState().expand("1", { edit: false });
+    await screen.findByRole("button", { name: "Shrink note" });
+
+    useDockStore.setState({ phase: "collapsed", large: false });
+
+    await waitFor(() => {
+      expect(useNotesStore.getState().expandedId).toBeNull();
+    });
+  });
+
+  it("gives way to search, which needs the list", async () => {
+    answerLargeLikeRust();
+    await renderPanel();
+    await useNotesStore.getState().expand("1", { edit: false });
+    await screen.findByRole("button", { name: "Shrink note" });
+
+    press("f", { metaKey: true });
+
+    await screen.findByLabelText("Search notes");
+    expect(useNotesStore.getState().expandedId).toBeNull();
   });
 });

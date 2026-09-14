@@ -39,7 +39,13 @@ beforeEach(async () => {
     }
     return Promise.resolve(null);
   });
-  useNotesStore.setState({ notes: [], loaded: false, editingId: null, pendingUndo: null });
+  useNotesStore.setState({
+    notes: [],
+    loaded: false,
+    editingId: null,
+    expandedId: null,
+    pendingUndo: null,
+  });
   await useNotesStore.getState().load();
   invoke.mockClear();
 });
@@ -190,5 +196,67 @@ describe("flushAll, before quitting (brief 11)", () => {
   it("writes nothing when nothing is pending", async () => {
     await useNotesStore.getState().flushAll();
     expect(updateCalls()).toEqual([]);
+  });
+});
+
+describe("ticking a task", () => {
+  it("rewrites that line and saves it like an edit", async () => {
+    useNotesStore.getState().setContent("1", "Groceries\n- [ ] milk");
+    await useNotesStore.getState().flush("1");
+    invoke.mockClear();
+
+    useNotesStore.getState().toggleTask("1", 1);
+    expect(useNotesStore.getState().notes[0]?.content).toBe("Groceries\n- [x] milk");
+
+    await useNotesStore.getState().flush("1");
+    expect(updateCalls()).toHaveLength(1);
+  });
+
+  it("ignores a line that is not a task", () => {
+    useNotesStore.getState().toggleTask("1", 0);
+    expect(useNotesStore.getState().notes[0]?.content).toBe("Groceries\nMilk");
+  });
+});
+
+describe("expanding a note", () => {
+  it("closes an editor left open on another note, discarding it if empty", async () => {
+    invoke.mockImplementation((command: string) => {
+      if (command === "notes_create") {
+        return Promise.resolve(note({ id: "blank", updatedAt: 2_000 }));
+      }
+      return Promise.resolve(null);
+    });
+    await useNotesStore.getState().createNote();
+    expect(useNotesStore.getState().editingId).toBe("blank");
+
+    await useNotesStore.getState().expand("1", { edit: false });
+
+    const state = useNotesStore.getState();
+    expect(state).toMatchObject({ expandedId: "1", editingId: null });
+    expect(state.notes.map((candidate) => candidate.id)).toEqual(["1"]);
+  });
+
+  it("ends when the expanded note is deleted", async () => {
+    await useNotesStore.getState().expand("1", { edit: true });
+    await useNotesStore.getState().remove("1");
+    expect(useNotesStore.getState()).toMatchObject({ expandedId: null, editingId: null });
+  });
+
+  it("follows a new note rather than hiding it behind the old one", async () => {
+    invoke.mockImplementation((command: string) => {
+      if (command === "notes_create") {
+        return Promise.resolve(note({ id: "fresh", updatedAt: 2_000 }));
+      }
+      return Promise.resolve(null);
+    });
+    await useNotesStore.getState().expand("1", { edit: false });
+    await useNotesStore.getState().createNote();
+    expect(useNotesStore.getState()).toMatchObject({ expandedId: "fresh", editingId: "fresh" });
+  });
+
+  it("keeps the editor open when shrinking", async () => {
+    await useNotesStore.getState().expand("1", { edit: true });
+    useNotesStore.getState().shrink();
+    expect(useNotesStore.getState()).toMatchObject({ expandedId: null, editingId: "1" });
   });
 });

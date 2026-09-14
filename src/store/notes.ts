@@ -10,6 +10,7 @@ import {
   type Note,
   type NoteColor,
 } from "../lib/ipc";
+import { toggleTaskLine } from "../lib/markdown";
 import { isNoteEmpty, sortNotes } from "../lib/notes";
 import { useSettingsStore } from "./settings";
 
@@ -39,6 +40,11 @@ interface NotesStore {
   notes: Note[];
   loaded: boolean;
   editingId: string | null;
+  /**
+   * The note shown in the large panel, or null for the normal list. It is shown
+   * in the editor when it is also `editingId`, and read-only otherwise.
+   */
+  expandedId: string | null;
   pendingUndo: PendingUndo | null;
   /** Whether the header shows the search field instead of the title (brief 6.6). */
   searching: boolean;
@@ -51,11 +57,17 @@ interface NotesStore {
   setContent: (id: string, content: string) => void;
   setColor: (id: string, color: NoteColor) => Promise<void>;
   setPinned: (id: string, pinned: boolean) => Promise<void>;
+  /** Tick or untick the task on line `line` of a note, from a card or the reader. */
+  toggleTask: (id: string, line: number) => void;
   flush: (id: string) => Promise<void>;
   /** Write everything still pending, before quitting (brief 11: flush on quit). */
   flushAll: () => Promise<void>;
   startEditing: (id: string) => void;
   stopEditing: () => Promise<void>;
+  /** Show a note in the large panel, in the editor when `edit` is true. */
+  expand: (id: string, options: { edit: boolean }) => Promise<void>;
+  /** Back to the list. An open editor stays open, at its normal size. */
+  shrink: () => void;
   remove: (id: string) => Promise<void>;
   undoRemove: () => Promise<void>;
   dismissUndo: () => void;
@@ -70,6 +82,7 @@ export const useNotesStore = create<NotesStore>((set, get) => ({
   notes: [],
   loaded: false,
   editingId: null,
+  expandedId: null,
   pendingUndo: null,
   searching: false,
   query: "",
@@ -94,6 +107,7 @@ export const useNotesStore = create<NotesStore>((set, get) => ({
     // than closing it — pressing the shortcut twice, say — and an empty note that
     // never goes through `stopEditing` is never discarded, so each press left
     // another blank card behind (brief 6.9).
+    const wasExpanded = get().expandedId !== null;
     await get().stopEditing();
 
     // A new note is empty and carries the last-used colour, so any active search
@@ -105,8 +119,13 @@ export const useNotesStore = create<NotesStore>((set, get) => ({
     try {
       const note = await notesCreate(color);
       savedContent.set(note.id, note.content);
-      // Straight to the top and into the editor (brief 6.9).
-      set((state) => ({ notes: [note, ...state.notes], editingId: note.id }));
+      // Straight to the top and into the editor (brief 6.9) — and into the large
+      // panel if a note was expanded, rather than hiding the new note behind it.
+      set((state) => ({
+        notes: [note, ...state.notes],
+        editingId: note.id,
+        expandedId: wasExpanded ? note.id : null,
+      }));
     } catch (error: unknown) {
       console.error("notes: create failed", error);
     }
@@ -173,6 +192,17 @@ export const useNotesStore = create<NotesStore>((set, get) => ({
     }
   },
 
+  toggleTask: (id, line) => {
+    const note = get().notes.find((candidate) => candidate.id === id);
+    const content = note ? toggleTaskLine(note.content, line) : null;
+    if (content === null) {
+      return;
+    }
+    // A tick is an edit like any other: debounced, flushed on quit, and — like
+    // typing — it does not re-sort the list under the cursor.
+    get().setContent(id, content);
+  },
+
   /** Write pending content now: on blur, on close, and on the debounce firing. */
   flush: async (id) => {
     const timer = saveTimers.get(id);
@@ -233,6 +263,7 @@ export const useNotesStore = create<NotesStore>((set, get) => ({
       savedContent.delete(editingId);
       set((state) => ({
         notes: state.notes.filter((candidate) => candidate.id !== editingId),
+        expandedId: state.expandedId === editingId ? null : state.expandedId,
       }));
       try {
         await notesDelete(editingId);
@@ -256,6 +287,7 @@ export const useNotesStore = create<NotesStore>((set, get) => ({
     set((state) => ({
       notes: state.notes.filter((candidate) => candidate.id !== id),
       editingId: state.editingId === id ? null : state.editingId,
+      expandedId: state.expandedId === id ? null : state.expandedId,
       pendingUndo: { note },
     }));
 
@@ -302,8 +334,26 @@ export const useNotesStore = create<NotesStore>((set, get) => ({
     set({ pendingUndo: null });
   },
 
+  expand: async (id, { edit }) => {
+    const { editingId } = get();
+    // One editor at a time: an editor left open on another note would sit hidden
+    // behind the large panel, and an empty one would never be discarded.
+    if (editingId !== null && editingId !== id) {
+      await get().stopEditing();
+    }
+    set((state) => ({
+      expandedId: id,
+      editingId: edit ? id : state.editingId,
+    }));
+  },
+
+  shrink: () => {
+    set({ expandedId: null });
+  },
+
   openSearch: () => {
-    set({ searching: true });
+    // Search filters the list, and the list is hidden behind an expanded note.
+    set({ searching: true, expandedId: null });
   },
 
   /** Brief 6.6: Esc clears the query and returns the header to the title. */

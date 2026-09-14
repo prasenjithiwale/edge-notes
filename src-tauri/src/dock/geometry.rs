@@ -78,6 +78,12 @@ pub struct Metrics {
     pub panel_height_ratio: f64,
     /// Transparent room for the panel's shadow on the three sides away from the edge.
     pub shadow_margin: f64,
+    /// The large panel a note expands into: at most this wide...
+    pub large_panel_max_width: f64,
+    /// ...or this share of the work-area width, whichever is narrower.
+    pub large_panel_width_ratio: f64,
+    /// The large panel's share of the work-area height, uncapped.
+    pub large_panel_height_ratio: f64,
 }
 
 impl Default for Metrics {
@@ -89,6 +95,9 @@ impl Default for Metrics {
             panel_max_height: 640.0,
             panel_height_ratio: 0.8,
             shadow_margin: 12.0,
+            large_panel_max_width: 760.0,
+            large_panel_width_ratio: 0.6,
+            large_panel_height_ratio: 0.9,
         }
     }
 }
@@ -101,6 +110,10 @@ pub struct DockGeometry {
     side: Side,
     tab_offset: f64,
     metrics: Metrics,
+    /// An expanded note: the panel grows so a long note can be read and edited
+    /// comfortably. Everything else — the docked edge, the tab, hit testing —
+    /// follows from the bigger panel rect.
+    large: bool,
 }
 
 impl DockGeometry {
@@ -112,7 +125,19 @@ impl DockGeometry {
             side,
             tab_offset: tab_offset.clamp(0.0, 1.0),
             metrics,
+            large: false,
         }
+    }
+
+    #[must_use]
+    pub fn is_large(&self) -> bool {
+        self.large
+    }
+
+    /// Same dock, with the panel at its large or its normal size.
+    #[must_use]
+    pub fn with_large(&self, large: bool) -> Self {
+        Self { large, ..*self }
     }
 
     #[must_use]
@@ -145,6 +170,7 @@ impl DockGeometry {
             tab_offset,
             self.metrics,
         )
+        .with_large(self.large)
     }
 
     /// The offset that puts the tab's centre at `centre_y` (physical, desktop
@@ -171,7 +197,7 @@ impl DockGeometry {
     /// stays where the user put it across resolution and scale changes.
     #[must_use]
     pub fn with_monitor(&self, work_area: Rect, scale: f64) -> Self {
-        Self::new(work_area, scale, self.side, self.tab_offset, self.metrics)
+        Self::new(work_area, scale, self.side, self.tab_offset, self.metrics).with_large(self.large)
     }
 
     /// Same monitor, other edge.
@@ -184,6 +210,7 @@ impl DockGeometry {
             self.tab_offset,
             self.metrics,
         )
+        .with_large(self.large)
     }
 
     /// Logical pixels to physical, rounded to the nearest device pixel.
@@ -204,15 +231,38 @@ impl DockGeometry {
     }
 
     fn panel_w(&self) -> i32 {
-        self.px(self.metrics.panel_width)
+        let normal = self.px(self.metrics.panel_width);
+        if !self.large {
+            return normal;
+        }
+        let work_w = self.work_area.width as i32;
+        let by_ratio = (f64::from(work_w) * self.metrics.large_panel_width_ratio).round() as i32;
+        let wanted = by_ratio.min(self.px(self.metrics.large_panel_max_width));
+        // Never narrower than the normal panel, and never so wide that the window
+        // (tab and shadow margin included) would leave the work area.
+        let room = work_w - self.tab_w() - self.margin();
+        wanted.max(normal).min(room).max(1)
+    }
+
+    /// The panel width in logical pixels, which the frontend paints to.
+    #[must_use]
+    pub fn panel_width_logical(&self) -> f64 {
+        f64::from(self.panel_w()) / self.scale
     }
 
     fn margin(&self) -> i32 {
         self.px(self.metrics.shadow_margin)
     }
 
-    /// Panel height: `min(640, 80% of the work-area height)`, per brief 6.4.
+    /// Panel height: `min(640, 80% of the work-area height)`, per brief 6.4, or
+    /// 90% of the work area when a note is expanded.
     fn panel_h(&self) -> i32 {
+        if self.large {
+            let work_h = self.work_area.height as i32;
+            let by_ratio =
+                (f64::from(work_h) * self.metrics.large_panel_height_ratio).round() as i32;
+            return by_ratio.min(work_h - self.margin() * 2).max(1);
+        }
         let ratio_based = f64::from(self.work_area.height as i32) * self.metrics.panel_height_ratio;
         let capped = self.px(self.metrics.panel_max_height);
         (ratio_based.round() as i32).min(capped).max(1)
@@ -611,6 +661,53 @@ mod tests {
         let left = geom(Side::Left, 1.0, 0.5);
         assert!(left.near_edge(20.0, 500.0, 150.0));
         assert!(!left.near_edge(400.0, 500.0, 150.0));
+    }
+
+    #[test]
+    fn a_large_panel_is_capped_in_width_and_fills_most_of_the_height() {
+        // 60% of 1920 is 1152, so the 760 logical cap wins; 90% of 1040 is 936.
+        let g = geom(Side::Right, 1.0, 0.5).with_large(true);
+        assert_eq!(g.panel_rect().width, 760);
+        assert_eq!(g.panel_rect().height, 936);
+        assert!((g.panel_width_logical() - 760.0).abs() < f64::EPSILON);
+
+        // Still flush to the docked edge, with the tab on its inner side.
+        let window = g.expanded_window_rect();
+        assert_eq!(window.right(), work_area().right());
+        assert_eq!(g.open_tab_rect().x, g.panel_rect().x - 28);
+        assert!(window.y >= work_area().y && window.bottom() <= work_area().bottom());
+    }
+
+    #[test]
+    fn a_large_panel_follows_the_scale_factor_and_small_screens() {
+        // At 2x the cap is 1520 physical, but 60% of the width (1152) is narrower.
+        let g = geom(Side::Left, 2.0, 0.5).with_large(true);
+        assert_eq!(g.panel_rect().width, 1152);
+        assert!((g.panel_width_logical() - 576.0).abs() < f64::EPSILON);
+        assert_eq!(g.expanded_window_rect().x, work_area().x);
+
+        // On a screen too narrow for 60% to beat the normal panel, it stays normal
+        // rather than shrinking.
+        let narrow = DockGeometry::new(
+            Rect::new(0, 0, 400, 800),
+            1.0,
+            Side::Right,
+            0.5,
+            Metrics::default(),
+        )
+        .with_large(true);
+        assert_eq!(narrow.panel_rect().width, 320);
+    }
+
+    #[test]
+    fn rebuilding_the_geometry_keeps_the_large_panel() {
+        let g = geom(Side::Right, 1.0, 0.5).with_large(true);
+        assert!(g.with_side(Side::Left).is_large());
+        assert!(g.with_tab_offset(0.2).is_large());
+        assert!(g.with_monitor(work_area(), 1.5).is_large());
+        assert!(!g.with_large(false).is_large());
+        // A fresh geometry never starts large.
+        assert!(!geom(Side::Right, 1.0, 0.5).is_large());
     }
 
     #[test]

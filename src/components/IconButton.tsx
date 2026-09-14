@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { MouseEvent, ReactNode } from "react";
 
 import { cx } from "../lib/cx";
 import styles from "./IconButton.module.css";
@@ -11,6 +11,14 @@ interface IconButtonProps {
   outlined?: boolean;
   pressed?: boolean;
   className?: string | undefined;
+  /** Shown in the tooltip after the label, e.g. "⌘B". */
+  shortcut?: string | undefined;
+  /**
+   * Leave keyboard focus where it is. The formatting buttons act on the text
+   * selection, which would be gone by the time the click landed if pressing the
+   * button moved focus off the textarea.
+   */
+  keepFocus?: boolean;
   /** Marks this button as an arrow-key navigation target (brief 6.11). */
   "data-card"?: string;
   "data-id"?: string;
@@ -25,6 +33,8 @@ export function IconButton({
   outlined = false,
   pressed,
   className,
+  shortcut,
+  keepFocus = false,
   ...markers
 }: IconButtonProps) {
   return (
@@ -37,7 +47,14 @@ export function IconButton({
         className,
       )}
       aria-label={label}
-      title={label}
+      title={shortcut === undefined ? label : `${label} (${shortcut})`}
+      {...(keepFocus
+        ? {
+            onMouseDown: (event: MouseEvent) => {
+              event.preventDefault();
+            },
+          }
+        : {})}
       {...(pressed === undefined ? {} : { "aria-pressed": pressed })}
       {...markers}
       onClick={onClick}

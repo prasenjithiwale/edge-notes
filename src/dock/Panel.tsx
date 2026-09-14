@@ -8,6 +8,7 @@ import { cx } from "../lib/cx";
 import { isExpandedPhase } from "../lib/dock";
 import {
   appQuit,
+  dockSetLarge,
   dockToggle,
   NOTE_COLORS,
   onNewNoteRequested,
@@ -18,7 +19,15 @@ import { facetColors, filterNotes } from "../lib/notes";
 import { moveCardFocus } from "../notes/cardFocus";
 import { ColorFilter } from "../notes/ColorFilter";
 import { EmptyState } from "../notes/EmptyState";
+import {
+  applyFormat,
+  applyListContinuation,
+  formatCommandForKey,
+  noteEditorField,
+} from "../notes/formatting";
+import { NoteEditor } from "../notes/NoteEditor";
 import { NoteList } from "../notes/NoteList";
+import { NoteReader } from "../notes/NoteReader";
 import { SearchField } from "../notes/SearchField";
 import { SettingsView } from "../settings/SettingsView";
 import { useDockStore } from "../store/dock";
@@ -63,10 +72,17 @@ export function Panel({ className }: PanelProps) {
 
   const keepOpen = useDockStore((state) => state.keepOpen);
   const setKeepOpen = useDockStore((state) => state.setKeepOpen);
+  const phase = useDockStore((state) => state.phase);
+  const large = useDockStore((state) => state.large);
+  const setLock = useDockStore((state) => state.setLock);
 
   const notes = useNotesStore((state) => state.notes);
   const loaded = useNotesStore((state) => state.loaded);
   const editingId = useNotesStore((state) => state.editingId);
+  const expandedId = useNotesStore((state) => state.expandedId);
+  const expand = useNotesStore((state) => state.expand);
+  const shrink = useNotesStore((state) => state.shrink);
+  const toggleTask = useNotesStore((state) => state.toggleTask);
   const pendingUndo = useNotesStore((state) => state.pendingUndo);
   const searching = useNotesStore((state) => state.searching);
   const query = useNotesStore((state) => state.query);
@@ -125,6 +141,26 @@ export function Panel({ className }: PanelProps) {
     [],
   );
 
+  // An expanded note needs the large panel, and Rust owns the window size. The
+  // request is derived from state rather than sent from the click handlers, so
+  // every way of ending an expansion — shrink, delete, search, a new note —
+  // returns the panel to normal without each remembering to.
+  const expanded = expandedId !== null;
+  useEffect(() => {
+    void dockSetLarge(expanded);
+    // Reading a long note with the cursor resting elsewhere must not slide the
+    // panel away mid-sentence (brief 6.3's interaction lock, held by the view).
+    setLock("expanded", expanded);
+  }, [expanded, setLock]);
+
+  // Rust ends the large panel when the dock collapses; the frontend follows, so
+  // the next open shows the list rather than a note in a panel that is not large.
+  useEffect(() => {
+    if (phase === "collapsed") {
+      shrink();
+    }
+  }, [phase, shrink]);
+
   // The filter row offers the colours of notes matching the *query*, not of the
   // colour-filtered result: filtering to one colour must not remove the dots
   // needed to switch to another (brief 6.7).
@@ -166,6 +202,35 @@ export function Panel({ className }: PanelProps) {
       const notesStore = useNotesStore.getState();
       const accel = event.metaKey || event.ctrlKey;
 
+      // Formatting belongs to the note editor's textarea, and only to it.
+      const field = noteEditorField(event.target);
+      if (field) {
+        const command = formatCommandForKey(event);
+        if (command !== null) {
+          event.preventDefault();
+          applyFormat(field, command);
+          return;
+        }
+        // Enter continues a list. Not while an input method is composing — that
+        // Enter commits the composition (WebKit reports it as key code 229) — and
+        // not with a modifier, so Shift+Enter still gives a plain line break.
+        if (
+          event.key === "Enter" &&
+          !event.shiftKey &&
+          !event.altKey &&
+          !accel &&
+          !event.isComposing &&
+          // Safari fires the committing keydown after compositionend, with
+          // isComposing already false; 229 is the only thing that marks it.
+          // eslint-disable-next-line @typescript-eslint/no-deprecated
+          event.keyCode !== 229 &&
+          applyListContinuation(field)
+        ) {
+          event.preventDefault();
+          return;
+        }
+      }
+
       if (accel && event.key === "f") {
         event.preventDefault();
         notesStore.openSearch();
@@ -189,13 +254,15 @@ export function Panel({ className }: PanelProps) {
         return;
       }
       if (event.key === "Escape") {
-        // One ordered cascade (brief 6.11): the editor, then search, then the
-        // panel. Deciding it in a single place beats three handlers racing to
-        // swallow the same key.
+        // One ordered cascade (brief 6.11): the editor, then an expanded note,
+        // then search, then the panel. Deciding it in a single place beats
+        // several handlers racing to swallow the same key.
         if (settingsOpenRef.current) {
           setShowSettings(false);
         } else if (notesStore.editingId !== null) {
           void notesStore.stopEditing();
+        } else if (notesStore.expandedId !== null) {
+          notesStore.shrink();
         } else if (notesStore.searching) {
           notesStore.closeSearch();
         } else {
@@ -228,6 +295,19 @@ export function Panel({ className }: PanelProps) {
 
   const isEmpty = loaded && notes.length === 0;
 
+  // Only once Rust has actually grown the window: drawing the large layout into
+  // the normal panel would squeeze a note meant for reading into 320 px.
+  const expandedNote =
+    large && expandedId !== null
+      ? notes.find((candidate) => candidate.id === expandedId)
+      : undefined;
+
+  const openExpanded = (id: string) => {
+    const target = notes.find((candidate) => candidate.id === id);
+    // A pinned note opens to read, as its card does; any other note to edit.
+    void expand(id, { edit: target ? !target.pinned : true });
+  };
+
   return (
     <section
       ref={panelRef}
@@ -246,6 +326,7 @@ export function Panel({ className }: PanelProps) {
           <h1 className={styles.title}>Notes</h1>
         )}
         <div className={styles.actions}>
+          {!expandedNote && (
           <IconButton
             label={showSettings ? "Back to notes" : "Settings"}
             active={showSettings}
@@ -256,7 +337,8 @@ export function Panel({ className }: PanelProps) {
           >
             <SettingsIcon size={16} strokeWidth={1.75} />
           </IconButton>
-          {!searching && (
+          )}
+          {!searching && !expandedNote && (
             <IconButton label="Search notes" onClick={openSearch}>
               <Search size={16} strokeWidth={1.75} />
             </IconButton>
@@ -283,7 +365,15 @@ export function Panel({ className }: PanelProps) {
         </div>
       </header>
 
-      {showSettings ? (
+      {expandedNote ? (
+        <div className={styles.large}>
+          {editingId === expandedNote.id ? (
+            <NoteEditor key={expandedNote.id} note={expandedNote} large />
+          ) : (
+            <NoteReader note={expandedNote} />
+          )}
+        </div>
+      ) : showSettings ? (
         <SettingsView
           onClose={() => {
             setShowSettings(false);
@@ -322,6 +412,8 @@ export function Panel({ className }: PanelProps) {
               onUnpin={(id) => {
                 void setPinned(id, false);
               }}
+              onExpand={openExpanded}
+              onToggleTask={toggleTask}
             />
           )}
         </>

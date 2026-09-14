@@ -97,3 +97,39 @@
 .done:hover {
   background: rgb(0 0 0 / 8%);
 }
+
+/* Formatting on the left, expand on the right. */
+.toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+  margin: -4px -6px 0;
+}
+
+.formatting {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.group {
+  display: flex;
+  align-items: center;
+  gap: 0;
+}
+
+/* The large panel: the editor fills it, the textarea takes the spare height
+   and scrolls, and the text is set one step larger for reading at length. */
+.large {
+  flex: 1;
+  min-height: 0;
+  padding: 12px 16px;
+}
+
+.large .textarea {
+  flex: 1;
+  min-height: 0;
+  font-size: 14px;
+}

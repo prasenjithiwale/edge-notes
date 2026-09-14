@@ -14,13 +14,17 @@ import {
  * boolean: with one flag, closing the editor while the search field still had
  * focus would release a lock that is still needed.
  */
-export type LockOwner = "editor" | "search" | "settings";
+export type LockOwner = "editor" | "search" | "settings" | "expanded";
 
 interface DockStore {
   phase: DockPhase;
   side: DockSide;
   tabTop: number;
   keepOpen: boolean;
+  /** Logical panel width, as Rust sized the window for it. */
+  panelWidth: number;
+  /** Rust has grown the window for an expanded note. */
+  large: boolean;
   locks: ReadonlySet<LockOwner>;
   /** Rust owns the phase; this only mirrors it. */
   applyState: (state: DockState) => void;
@@ -33,6 +37,8 @@ export const useDockStore = create<DockStore>((set, get) => ({
   side: "right",
   tabTop: 0,
   keepOpen: false,
+  panelWidth: 320,
+  large: false,
   locks: new Set<LockOwner>(),
   applyState: (state) => {
     set({
@@ -40,6 +46,8 @@ export const useDockStore = create<DockStore>((set, get) => ({
       side: state.side,
       tabTop: state.tabTop,
       keepOpen: state.keepOpen,
+      panelWidth: state.panelWidth,
+      large: state.large,
     });
   },
   setKeepOpen: (value) => {

@@ -14,6 +14,15 @@ of every milestone. The spec is [build-brief.md](build-brief.md).
 | M4 Polish | Built and verified on macOS. Only the GPU power measurement is outstanding, and it needs `sudo`. |
 | M5 Packaging | macOS done: icons, metadata, .dmg built and installed. Windows and Linux packages cannot be built here. |
 
+Work after M5, owner-requested, newest last:
+
+| Feature | Date | Status |
+|---|---|---|
+| Audit pass and note pinning | 13 Sep 2026 | Built; committed 14 Sep 2026 (`7c7798c`). Checklist not yet run. |
+| Tab appearance and open on click | 13 Sep 2026 | Built; committed 14 Sep 2026 (`7c7798c`). Checklist one item verified. |
+| Lightweight formatting | 14 Sep 2026 | Built, and the click paths verified on the running app. Uncommitted. |
+| Expanded notes | 14 Sep 2026 | Built, and verified on the running app; one bug found and fixed there. Uncommitted. |
+
 Built and verified on macOS 26.6.2 (Tahoe), Apple Silicon, single 1920×1080
 display at 1× scale. Every scaling and multi-monitor case is covered by unit
 tests but has not been seen on real hardware.
@@ -59,6 +68,16 @@ problem (the app works with it removed *and* restored, and Tauri's
 when `devCsp` is unset); the ACL capability is correct; and the frontend
 handshake is correct under StrictMode's double-invoked effects.
 
+## Session of 14 Sep 2026: resumed after a power loss
+
+The machine shut down during the previous session. Nothing was lost or half
+written: the tree held the audit pass, pinning, and the tab appearance and
+open-on-click settings, all complete and uncommitted, and the full gate passed as
+found (lint, `tsc`, 153 frontend tests, `cargo fmt`, clippy, 102 Rust tests). The
+session had stopped after recording both passes and before running either
+checklist. The work was committed as `7c7798c` at the owner's request, and the
+session moved on to the two features below.
+
 ## Open gaps
 
 Standing list of what is known to be wrong or unverified. Read this before
@@ -85,6 +104,13 @@ planning a milestone; nothing here is fixed by the work that follows it.
    then look for the tab and hover it.
 4. **CSS wiring and the slide animation handshake have no test.** A selector that
    matches nothing still looks identical to a passing build.
+5. **Formatting keystrokes are unverified on the running app** (14 Sep 2026).
+   `Cmd+B`, `Cmd+I`, `Cmd+Shift+X/7/8/9`, Enter continuing a list, and `Cmd+Z`
+   undoing a toolbar change were tested in jsdom only. No keys were sent to the
+   real app, because a key that misses the panel lands in the owner's editor —
+   and Esc there interrupts the agent's own session. The toolbar, ticking, links
+   and expansion *were* driven with real clicks. The undo claim rests on WebKit
+   honouring `execCommand("insertText")`, which is the part most worth checking.
 
 Closed: the test data left in the notes database by the checklist runs was purged
 on 13 Sep 2026, settings rows included, so the database is back to a fresh-install
@@ -940,8 +966,9 @@ does nothing.
 
 ### Checklist
 
-- [ ] On a fresh install the collapsed tab is visibly see-through over a busy
-      window, with the chevron and dots still easy to find
+- [x] On a fresh install the collapsed tab is visibly see-through over a busy
+      window, with the chevron and dots still easy to find — seen on 14 Sep 2026
+      over a dark editor
 - [ ] The tab turns solid as the panel slides out, and see-through again as it
       slides away, with no flicker at either end
 - [ ] Settings → Tab → Solid makes the collapsed tab opaque immediately, and
@@ -957,6 +984,209 @@ does nothing.
       click mode, and the tab does not jump when grabbed near its top or bottom
 - [ ] A click without dragging does not nudge the tab
 - [ ] Switching back to On hover restores hover opening immediately
+
+## Lightweight formatting (14 Sep 2026)
+
+Bold, italic, strikethrough, bulleted and numbered lists, checklists and links,
+asked for by the owner. Brief 3 lists formatting as not in v1; brief 14.3 is the
+shape used here — **stored as plain text**. The owner chose Markdown markers from
+three options (markers, hand-built live formatting, an editor library), so no
+dependency was added and the database, export and search are unchanged.
+
+### What it does
+
+- **Editor:** a toolbar above the textarea (bold, italic, strikethrough; bulleted,
+  numbered, checklist) with shortcuts `Cmd+B`, `Cmd+I`, `Cmd+Shift+X`, and
+  `Cmd+Shift+8/7/9` (`Ctrl` elsewhere), shown in each tooltip. The editor shows the
+  markers. Enter in a list item starts the next one (same bullet, next number, an
+  unticked box); Enter on an empty item ends the list; Shift+Enter is always a plain
+  break.
+- **Cards** render the formatting: bold is weight 600, links are underlined in the
+  note's own text colour, list items get their own rows, and **checkboxes can be
+  ticked straight from the card** without opening it.
+- **Links** (bare `http`/`https` URLs) open in the default browser.
+
+### Decisions
+
+**Toggles, not one-way buttons.** Bold on a bold selection unwraps it; a list
+button on lines that are already that list removes the prefix. Wrapping skips
+surrounding whitespace and each line's list prefix, because a marker never spans
+lines and `**- [ ] milk**` would stop being a task.
+
+**Edits go through `execCommand("insertText")` so `Cmd+Z` undoes them.** Setting
+the textarea's `value` wipes the undo stack. The API is deprecated but implemented
+by all three webviews; where it is missing (jsdom) the edit falls back to
+`setRangeText` plus an `input` event. That is one of two deliberate lint
+suppressions; the other is `keyCode === 229`, the only way to tell Safari's
+IME-committing Enter from a real one.
+
+**Formatting keys live in `Panel`'s window listener**, with the Esc cascade,
+because components handle no keys (M2). They act only when the event target is the
+note textarea, marked `data-note-editor`.
+
+**A card is no longer one `<button>`.** A checkbox or link inside a button is
+invalid and unclickable. An unpinned card is now a `div` that opens on click, with a
+transparent covering button that carries the focus ring, `data-card`, and an
+accessible name made from the title with the markers stripped. The card's text
+passes clicks through; its checkboxes and links do not.
+
+**A tick is an edit.** It goes through `setContent`: debounced, flushed on quit,
+bumps `updated_at`, and — like typing — does not re-sort the list under the cursor.
+
+**The parser is a deliberate subset, not CommonMark**, in `src/lib/markdown.ts`:
+`**bold**`, `_italic_` or `*italic*`, `~~strike~~`, bare links, and `-`/`*`/`+`,
+`1.`/`1)` and `- [ ]` items. `snake_case_words` are not italicised, sentence
+punctuation stays outside a link, and a line of unmatched markers parses in linear
+time (tested).
+
+**Links open through a new `open_url` command, not the webview.** Following a link
+would navigate the widget itself away, and the webview has no opener permission
+(brief 9.5). `src-tauri/src/links.rs` accepts only `http`/`https` links with a
+host, no whitespace, quotes or control characters, and at most 2 048 bytes, then
+passes the URL to `open` / `xdg-open` / `rundll32` as a single process argument,
+never through a shell. No dependency: `tauri-plugin-opener` is outside brief 4.
+
+### Deviations from the brief
+
+- Formatting itself is post-v1 (brief 3), built at the owner's request.
+- **A checklist card shows up to five rows plus "N more"**, against brief 6.8's
+  two-line preview. Two rows would rarely be the items worth ticking. Plain
+  paragraphs still flow into the two-line clamp exactly as before; other lists
+  show two rows.
+- `open_url` is a command beyond brief 9.3.
+- `noteTitle` and `notePreview` were replaced by `cardPreview`, not kept beside it.
+
+### Verified on the running app (clicks only, see open gap 5)
+
+- [x] A card renders italic and struck-through title text, checkbox rows with bold
+      text, a ticked item struck through, a numbered item, an underlined link, and
+      a clipped paragraph
+- [x] Ticking a box on the card writes `- [x]` to SQLite, leaves the editor closed,
+      and the card keeps its place
+- [x] The toolbar's bulleted-list button prefixes the caret's line, keeps the caret
+      and keeps focus in the textarea
+- [x] A link opens in the default browser (Arc) and the widget does not navigate
+
+### Checklist
+
+- [ ] Select a word and press `Cmd+B`: it gains `**` and stays selected; again removes them
+- [ ] `Cmd+I` and `Cmd+Shift+X` do the same with `_` and `~~`
+- [ ] `Cmd+Z` right after a toolbar change undoes just that change
+- [ ] `Cmd+Shift+8`, `7` and `9` make bullet, numbered and checklist lines; again removes them
+- [ ] Enter at the end of `- milk` gives `- `; Enter again ends the list
+- [ ] Enter after `3. rice` gives `4. `; after `- [x] done` gives `- [ ] `
+- [ ] Shift+Enter in a list item is a plain line break
+- [ ] Typing Japanese or Chinese with an input method: Enter commits the text and
+      does not start a list item
+- [ ] Text on every note colour, links and ticked items included, is readable in
+      light and dark
+- [ ] `snake_case_names` and `2 * 3 * 4` show literally on the card
+
+## Expanded notes (14 Sep 2026)
+
+An expand icon on every card, and in the editor, grows the panel so a long note can
+be read or edited comfortably. The owner asked for it without further questions,
+so the design choices below are the agent's.
+
+### What it does
+
+- **The panel itself grows.** At most 760 logical px wide or 60% of the work-area
+  width, whichever is narrower (never narrower than the normal panel), and 90% of
+  the work-area height. It stays docked to the same edge with the tab on its inner
+  side, so hover, auto-close and dragging all work unchanged.
+- **An unpinned note opens in a full-height editor** with the toolbar, at 14 px.
+- **A pinned note opens in a formatted reading view** with an Edit button,
+  matching the pinned card's "read, don't edit by accident". Done in the large
+  editor also lands in the reading view. Boxes can be ticked and links followed
+  there too.
+- The header keeps Keep open and New note. Search and Settings are hidden, because
+  both need the list.
+- **Leaving:** the shrink icon; Esc (the editor first, then the large view, then
+  search, then the panel); search (`Cmd+F`); deleting the note; or the panel
+  collapsing, after which the next open is always the normal panel. A new note
+  made while expanded opens expanded.
+
+### Decisions
+
+**Grow the dock panel rather than open a second window.** Brief 3 rules out
+multiple windows for v1, and a second webview would need its own store kept in
+sync with the first. Growing the one window keeps a single store and reuses every
+docking rule, because hit testing already follows `panel_rect`.
+
+**Rust owns the size, as it owns every window size.** `DockGeometry` gained a
+`large` flag and `Input::SetLarge`; `dock:state` now carries `panelWidth` and
+`large`, and `DockShell` paints `--panel-width` from it instead of from the
+`panel.width` setting, because the large width depends on the monitor. The frontend
+draws the large layout only once Rust confirms `large`, so a note meant for reading
+is never squeezed into 320 px. `set_geometry` keeps the flag, so a settings or
+monitor change does not snap an expanded note back, and `finish_close` clears it.
+
+**The request to Rust is derived from state.** `Panel` sends `dock_set_large`
+from an effect keyed on whether `expandedId` is set, rather than from each click
+handler. Every way of ending an expansion then returns the panel to normal without
+remembering to — the lesson of the `SearchField` lock in M2.
+
+**An expanded note holds the panel open** through a counted `"expanded"` lock
+owner, since reading happens with the cursor anywhere. Blur still clears the lock,
+as for every owner.
+
+**Found on the running app: shrinking closed the panel.** The shrink button sits
+in the large panel's top corner, which is outside the normal panel, so from the
+reading view the cursor was "outside" the instant the panel shrank and it closed
+400 ms later. The controller now holds the close for `SHRINK_GRACE` (2 s) after
+shrinking, or until the cursor enters, then applies the normal delay. Verified
+after the fix: from the reading view, Shrink leaves the panel open with the cursor
+still outside.
+
+**The caret survives expanding.** Expanding swaps one editor for another; the
+outgoing editor records its selection, and an editor for the same note mounting
+within a second restores it.
+
+**These changes touch `dock/`**, which the project rules put off-limits by
+default: the panel size is geometry and the close hold is controller logic, and
+neither can live anywhere else without breaking the pure-controller split. The dock
+tests went from 60 to 70 (large-panel sizing at 1× and 2×, a narrow screen,
+rebuilds keeping the flag, growing and shrinking in place, hit testing against the
+large rect, collapsed refusal, reset on close, the shrink hold) and were run with
+the full suite.
+
+### Deviations from the brief
+
+- `dock_set_large` is a command beyond brief 9.3, and `dock:state` carries two
+  fields beyond brief 9.4.
+- Brief 6.4 fixes the panel at 280–420 px; the large panel is outside that range
+  on purpose, and only while a note is expanded.
+- Brief 6.11's Esc cascade gains a step, between the editor and search.
+- The switch between sizes is a snap, not an animation.
+
+### Verified on the running app
+
+- [x] A card's expand icon grows the panel to about 760 × 950 px against the right
+      edge, with the note in a full-height editor and the formatting toolbar
+- [x] The header shows only Keep open and New note while expanded
+- [x] Done in the large editor shows the formatted reading view, with Edit and
+      Shrink, wrapped lines, tickable boxes and a working link
+- [x] Shrink from the editor returns to the normal panel with the editor still open
+- [x] Shrink from the reading view leaves the panel open (after the fix above)
+- [x] After collapsing, the tab returns and the next open is the normal panel
+
+### Checklist
+
+- [ ] Expand a pinned card: the reading view, not the editor; Edit switches to the editor
+- [ ] Esc in the large editor shows the reading view; Esc again shrinks; a third
+      Esc collapses (keyboard — see open gap 5)
+- [ ] Expanded with the cursor far away: the panel stays out; switching to another
+      app with the cursor outside still closes it
+- [ ] `Cmd+F` while expanded returns to the list with the search field open
+- [ ] Delete the note from the large editor: the panel returns to normal and Undo
+      puts the note back
+- [ ] `Cmd+N` while expanded opens the new note expanded
+- [ ] Dock on left: the large panel grows rightwards from the left edge, mirrored
+- [ ] Drag the tab to near the top or bottom, then expand: the panel stays inside
+      the work area and the tab stays attached
+- [ ] Change the panel width in Settings, then expand and shrink: the normal width
+      is the new one
+- [ ] 150% and 200% scaling, and a secondary monitor
 
 ## M0 acceptance checklist
 
