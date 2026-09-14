@@ -33,7 +33,9 @@ step. A test fails if they ever disagree. Every release has an entry in
 
    ```bash
    rustup target add x86_64-apple-darwin      # once
-   npm run tauri build -- --target universal-apple-darwin --bundles dmg
+   # rustup's cargo must come first: a Homebrew Rust earlier on PATH has no
+   # Intel target and fails with "can't find crate for `core`".
+   PATH="$HOME/.cargo/bin:$PATH" npm run tauri build -- --target universal-apple-darwin --bundles dmg
    ```
 
 3. Create the release with the `.dmg`. This also creates the tag:

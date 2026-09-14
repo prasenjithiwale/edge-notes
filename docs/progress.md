@@ -1326,6 +1326,61 @@ can still be selected and copied with `Cmd+C`.
 - [ ] Right-click on a card, the header, the editor and the search field: no menu
 - [ ] Select text on a locked card and press `Cmd+C`: it copies
 
+## Versioning and the first release, v0.0.1 (14 Sep 2026)
+
+The code went to GitHub (`prasenjithiwale/edge-notes`, private) on 14 Sep 2026,
+with `master` as the default branch. The owner then asked for versioning and a
+first release, starting at **v0.0.1**, for macOS, and Linux if it could be built
+from a Mac.
+
+### Versioning
+
+- **`package.json` is the one source of the version.** `tauri.conf.json` reads it
+  (`"version": "../package.json"`, verified in the Tauri 2 config reference).
+  Cargo needs its own copy, so `npm run version:set -- X.Y.Z`
+  (`tools/set_version.mjs`, no dependencies) writes `package.json`,
+  `package-lock.json` and `Cargo.toml`, and refreshes only this crate's entry in
+  `Cargo.lock`.
+- `src/lib/version.test.ts` fails if `Cargo.toml` disagrees, if `tauri.conf.json`
+  stops pointing at `package.json`, or if `CHANGELOG.md` has no entry for the
+  version.
+- Releases are tagged `vX.Y.Z` and published on GitHub Releases; `CHANGELOG.md`
+  lists each one. The README's "Releasing" section has the steps.
+- The version went from the scaffold's placeholder 0.1.0 down to 0.0.1.
+
+### Can Linux be built on a Mac? No — so CI builds it
+
+Tauri bundles only for the platform it runs on, and the Linux build links against
+WebKitGTK and other system libraries that do not exist on macOS. Docker on this
+Apple Silicon Mac could build **arm64** Linux packages, but most Linux PCs are
+x86_64, and building that under emulation is very slow and unreliable for the
+AppImage tooling. So `.github/workflows/release.yml` builds Linux on GitHub's
+`ubuntu-22.04` runner (the packages Tauri's own pipeline guide installs), for
+every `v*` tag or by hand from the Actions tab. It checks that the tag matches
+`package.json`, runs lint and both test suites, builds the `.deb` and `.AppImage`,
+and attaches them to the release, starting a draft if the release does not exist
+yet.
+
+macOS is built locally as a **universal** `.dmg` (Apple Silicon and Intel), which
+needed `rustup target add x86_64-apple-darwin`. **This machine has two Rust
+installs**, Homebrew's (first on `PATH`, Apple Silicon only) and rustup's, both
+1.90.0; the target goes into rustup's, so the universal build must run with
+`~/.cargo/bin` first on `PATH` or the Intel half fails with "can't find crate for
+`core`". Everyday builds are unaffected. It is ad-hoc signed, not notarised;
+the release notes explain how to allow it past Gatekeeper.
+
+GitHub Actions minutes on a private repository are metered; a Linux release run
+is roughly 15 minutes of the monthly allowance. Building macOS in CI too would be
+possible but macOS runners cost ten times as much, so it stays local.
+
+### Not done
+
+- Windows packages (no Windows runner job yet; the same workflow could gain one).
+- arm64 Linux: GitHub's arm runners are free only for public repositories.
+- Signing and notarising, which need an Apple Developer ID.
+- The Linux build has been compiled and bundled in CI but never run on a real
+  Linux desktop.
+
 ## M0 acceptance checklist
 
 From brief section 12. Run `npm run tauri dev`, then work through these with
