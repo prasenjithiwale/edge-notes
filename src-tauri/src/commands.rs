@@ -36,6 +36,13 @@ pub fn app_ready(app: AppHandle, dock: State<'_, Arc<Dock>>) -> AppResult<()> {
     Ok(())
 }
 
+/// The frontend has saved everything pending after `app:quit-requested`, so the
+/// app can exit now rather than waiting out the tray's fallback timeout.
+#[tauri::command]
+pub fn app_quit(app: AppHandle) {
+    app.exit(0);
+}
+
 #[tauri::command]
 pub fn dock_set_keep_open(
     app: AppHandle,
@@ -117,6 +124,13 @@ pub fn notes_update(
     db.with(|connection| notes::update(connection, &id, content.as_deref(), color, now_ms()))
 }
 
+/// Pin or unpin a note. Pinned notes sort to the top and are read-only on the
+/// card until their edit button is used.
+#[tauri::command]
+pub fn notes_set_pinned(db: State<'_, Database>, id: String, pinned: bool) -> AppResult<Note> {
+    db.with(|connection| notes::set_pinned(connection, &id, pinned))
+}
+
 /// Soft delete, so the undo toast can put it straight back.
 #[tauri::command]
 pub fn notes_delete(db: State<'_, Database>, id: String) -> AppResult<()> {
@@ -148,7 +162,13 @@ pub fn dock_end_tab_drag(
     dock: State<'_, Arc<Dock>>,
     db: State<'_, Database>,
 ) -> AppResult<()> {
+    let before = dock.tab_offset();
     dock.input(&app, Input::EndTabDrag);
+    // A press that never moved is a click (and opens the panel in click mode):
+    // nothing to persist, and settings rows are written only when they change.
+    if (dock.tab_offset() - before).abs() < f64::EPSILON {
+        return Ok(());
+    }
 
     let patch = SettingsPatch {
         dock_tab_offset: Some(dock.tab_offset()),
@@ -219,7 +239,10 @@ pub fn settings_update(
             let geometry = poller::geometry_for(&app, &updated.placement());
             dock.set_geometry(&app, geometry);
         }
-        if patch.dock_open_delay_ms.is_some() || patch.dock_close_delay_ms.is_some() {
+        if patch.dock_open_delay_ms.is_some()
+            || patch.dock_close_delay_ms.is_some()
+            || patch.dock_open_on.is_some()
+        {
             dock.set_timings(updated.timings());
         }
     }

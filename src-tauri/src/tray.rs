@@ -16,6 +16,13 @@ use crate::dock::{Dock, Input, Side, poller};
 /// Brief 9.4: the frontend opens a new note in the editor when it sees this.
 pub const NEW_NOTE_EVENT: &str = "ui:new-note";
 
+/// Asks the frontend to save anything pending; it answers with `app_quit`.
+pub const QUIT_REQUESTED_EVENT: &str = "app:quit-requested";
+
+/// How long Quit waits for that answer. A save is one SQLite write per note
+/// with unsaved text, so this is generous; it only matters if the webview hangs.
+const QUIT_FLUSH_TIMEOUT: std::time::Duration = std::time::Duration::from_millis(1_500);
+
 const ID_OPEN: &str = "open";
 const ID_NEW: &str = "new";
 const ID_SIDE_LEFT: &str = "side-left";
@@ -108,6 +115,27 @@ fn set_autostart(app: &AppHandle, enabled: bool) {
     }
 }
 
+/// Quit without losing the last keystrokes (brief 11: flush on quit).
+///
+/// Autosave is debounced in the frontend, so exiting at once dropped whatever
+/// was typed in the last 400 ms. The webview is asked to write everything
+/// pending and calls `app_quit` when done. A webview that is hung, or never
+/// answers, must not make Quit do nothing, so the app exits anyway after
+/// `QUIT_FLUSH_TIMEOUT`.
+fn request_quit(app: &AppHandle) {
+    if let Err(error) = app.emit(QUIT_REQUESTED_EVENT, ()) {
+        log::error!("tray: failed to emit {QUIT_REQUESTED_EVENT}, quitting now: {error}");
+        app.exit(0);
+        return;
+    }
+    let handle = app.clone();
+    std::thread::spawn(move || {
+        std::thread::sleep(QUIT_FLUSH_TIMEOUT);
+        log::warn!("tray: pending notes were not confirmed saved in time; quitting anyway");
+        handle.exit(0);
+    });
+}
+
 fn handle_event(app: &AppHandle, handles: &MenuHandles<tauri::Wry>, event: &MenuEvent) {
     match event.id().as_ref() {
         ID_OPEN => show_panel(app),
@@ -116,7 +144,7 @@ fn handle_event(app: &AppHandle, handles: &MenuHandles<tauri::Wry>, event: &Menu
         ID_SIDE_RIGHT => set_side(app, Side::Right),
         ID_AUTOSTART => set_autostart(app, !autostart_enabled(app)),
         ID_QUIT => {
-            app.exit(0);
+            request_quit(app);
             return;
         }
         _ => return,

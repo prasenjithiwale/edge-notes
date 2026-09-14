@@ -7,7 +7,7 @@ use rusqlite::{Connection, params};
 use serde::{Deserialize, Serialize};
 
 use crate::db::notes::NoteColor;
-use crate::dock::Side;
+use crate::dock::{OpenTrigger, Side};
 use crate::error::AppResult;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -16,6 +16,16 @@ pub enum Theme {
     System,
     Light,
     Dark,
+}
+
+/// How the collapsed tab is painted (`tab.appearance`). Translucent lets what is
+/// underneath show through the tab while it waits at the edge; the tab turns
+/// solid while the panel is out, to match the panel it is attached to.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum TabAppearance {
+    Translucent,
+    Solid,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -30,6 +40,10 @@ pub struct Settings {
     pub dock_open_delay_ms: u64,
     #[serde(rename = "dock.closeDelayMs")]
     pub dock_close_delay_ms: u64,
+    #[serde(rename = "dock.openOn")]
+    pub dock_open_on: OpenTrigger,
+    #[serde(rename = "tab.appearance")]
+    pub tab_appearance: TabAppearance,
     #[serde(rename = "panel.width")]
     pub panel_width: f64,
     #[serde(rename = "theme")]
@@ -51,9 +65,11 @@ impl Settings {
         }
     }
 
-    /// The two hover delays, which apply without a restart (brief 9.3).
+    /// The two hover delays and what opens the panel, which apply without a
+    /// restart (brief 9.3).
     pub fn timings(&self) -> crate::dock::Timings {
         crate::dock::Timings {
+            open_trigger: self.dock_open_on,
             open_delay: std::time::Duration::from_millis(self.dock_open_delay_ms),
             close_delay: std::time::Duration::from_millis(self.dock_close_delay_ms),
             ..crate::dock::Timings::default()
@@ -70,6 +86,10 @@ impl Default for Settings {
             dock_tab_offset: 0.5,
             dock_open_delay_ms: 120,
             dock_close_delay_ms: 400,
+            // Not in brief 9.2; hover is what brief 6.1 specifies.
+            dock_open_on: OpenTrigger::Hover,
+            // Not in brief 9.2; asked for by the owner.
+            tab_appearance: TabAppearance::Translucent,
             panel_width: 320.0,
             theme: Theme::System,
             notes_last_color: NoteColor::Yellow,
@@ -91,6 +111,10 @@ pub struct SettingsPatch {
     pub dock_open_delay_ms: Option<u64>,
     #[serde(rename = "dock.closeDelayMs")]
     pub dock_close_delay_ms: Option<u64>,
+    #[serde(rename = "dock.openOn")]
+    pub dock_open_on: Option<OpenTrigger>,
+    #[serde(rename = "tab.appearance")]
+    pub tab_appearance: Option<TabAppearance>,
     #[serde(rename = "panel.width")]
     pub panel_width: Option<f64>,
     #[serde(rename = "theme")]
@@ -144,6 +168,8 @@ pub fn get(connection: &Connection) -> AppResult<Settings> {
             "dock.closeDelayMs",
             defaults.dock_close_delay_ms,
         )?,
+        dock_open_on: read(connection, "dock.openOn", defaults.dock_open_on)?,
+        tab_appearance: read(connection, "tab.appearance", defaults.tab_appearance)?,
         panel_width: read(connection, "panel.width", defaults.panel_width)?,
         theme: read(connection, "theme", defaults.theme)?,
         notes_last_color: read(connection, "notes.lastColor", defaults.notes_last_color)?,
@@ -167,6 +193,12 @@ pub fn update(connection: &Connection, patch: &SettingsPatch) -> AppResult<Setti
     }
     if let Some(value) = patch.dock_close_delay_ms {
         write(connection, "dock.closeDelayMs", &value)?;
+    }
+    if let Some(value) = patch.dock_open_on {
+        write(connection, "dock.openOn", &value)?;
+    }
+    if let Some(value) = patch.tab_appearance {
+        write(connection, "tab.appearance", &value)?;
     }
     if let Some(value) = patch.panel_width {
         // Brief 6.4: configurable later within 280-420.
@@ -205,6 +237,34 @@ mod tests {
         assert_eq!(settings.panel_width, 320.0);
         assert_eq!(settings.notes_last_color, NoteColor::Yellow);
         assert_eq!(settings.shortcut_new_note, "CmdOrCtrl+Alt+N");
+        assert_eq!(settings.dock_open_on, OpenTrigger::Hover);
+        assert_eq!(settings.tab_appearance, TabAppearance::Translucent);
+    }
+
+    #[test]
+    fn open_trigger_and_tab_appearance_round_trip_and_reach_the_dock() {
+        let connection = db();
+        let settings = update(
+            &connection,
+            &SettingsPatch {
+                dock_open_on: Some(OpenTrigger::Click),
+                tab_appearance: Some(TabAppearance::Solid),
+                ..SettingsPatch::default()
+            },
+        )
+        .expect("update");
+
+        assert_eq!(get(&connection).expect("get"), settings);
+        assert_eq!(settings.timings().open_trigger, OpenTrigger::Click);
+        // Stored as the same lowercase strings the frontend sends.
+        let raw: String = connection
+            .query_row(
+                "SELECT value FROM settings WHERE key = 'dock.openOn'",
+                [],
+                |row| row.get(0),
+            )
+            .expect("row");
+        assert_eq!(raw, "\"click\"");
     }
 
     #[test]

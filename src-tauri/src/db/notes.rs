@@ -54,6 +54,9 @@ pub struct Note {
     pub id: String,
     pub content: String,
     pub color: NoteColor,
+    /// Pinned notes sort above the rest and are read-only until the edit button
+    /// on the card is used.
+    pub pinned: bool,
     /// Unix milliseconds.
     pub created_at: i64,
     pub updated_at: i64,
@@ -62,32 +65,38 @@ pub struct Note {
 /// Notes soft-deleted longer ago than this are purged at startup (brief 9.1).
 pub const PURGE_AFTER_MS: i64 = 30 * 24 * 60 * 60 * 1000;
 
-const SELECT_COLUMNS: &str = "id, content, color, created_at, updated_at";
+const SELECT_COLUMNS: &str = "id, content, color, pinned, created_at, updated_at";
 
-fn row_to_note(row: &rusqlite::Row<'_>) -> rusqlite::Result<(String, String, String, i64, i64)> {
+type Row = (String, String, String, bool, i64, i64);
+
+fn row_to_note(row: &rusqlite::Row<'_>) -> rusqlite::Result<Row> {
     Ok((
         row.get(0)?,
         row.get(1)?,
         row.get(2)?,
         row.get(3)?,
         row.get(4)?,
+        row.get(5)?,
     ))
 }
 
-fn build(raw: (String, String, String, i64, i64)) -> AppResult<Note> {
+fn build(raw: Row) -> AppResult<Note> {
     Ok(Note {
         id: raw.0,
         content: raw.1,
         color: NoteColor::parse(&raw.2)?,
-        created_at: raw.3,
-        updated_at: raw.4,
+        pinned: raw.3,
+        created_at: raw.4,
+        updated_at: raw.5,
     })
 }
 
-/// Active notes, most recently edited first (brief 6.8).
+/// Active notes: pinned first, then most recently edited (brief 6.8, and the
+/// `pinned` column brief 9.1 reserved for exactly this).
 pub fn list(connection: &Connection) -> AppResult<Vec<Note>> {
     let sql = format!(
-        "SELECT {SELECT_COLUMNS} FROM notes WHERE deleted_at IS NULL ORDER BY updated_at DESC, id DESC"
+        "SELECT {SELECT_COLUMNS} FROM notes WHERE deleted_at IS NULL
+         ORDER BY pinned DESC, updated_at DESC, id DESC"
     );
     let mut statement = connection.prepare(&sql)?;
     let rows = statement.query_map([], row_to_note)?;
@@ -114,6 +123,9 @@ pub fn create(connection: &Connection, color: NoteColor, now: i64) -> AppResult<
         id: uuid::Uuid::now_v7().to_string(),
         content: String::new(),
         color,
+        // A new note is never pinned: it is empty, and it belongs at the top of
+        // the unpinned notes where the editor just opened it.
+        pinned: false,
         created_at: now,
         updated_at: now,
     };
@@ -150,6 +162,22 @@ pub fn update(
         params![id, content, color.as_str(), now],
     )?;
 
+    get(connection, id)?.ok_or_else(|| AppError::NoteNotFound(id.to_owned()))
+}
+
+/// Pin or unpin.
+///
+/// `updated_at` is deliberately left alone, for the same reason restore leaves
+/// it: pinning is not an edit, and bumping it would reorder the list underneath
+/// everything else that was pinned.
+pub fn set_pinned(connection: &Connection, id: &str, pinned: bool) -> AppResult<Note> {
+    let changed = connection.execute(
+        "UPDATE notes SET pinned = ?2 WHERE id = ?1 AND deleted_at IS NULL",
+        params![id, pinned],
+    )?;
+    if changed == 0 {
+        return Err(AppError::NoteNotFound(id.to_owned()));
+    }
     get(connection, id)?.ok_or_else(|| AppError::NoteNotFound(id.to_owned()))
 }
 
@@ -198,6 +226,63 @@ mod tests {
         let mut connection = Connection::open_in_memory().expect("in-memory database");
         migrations::run(&mut connection).expect("migrate");
         connection
+    }
+
+    #[test]
+    fn a_new_note_is_not_pinned() {
+        let c = db();
+        let note = create(&c, NoteColor::Yellow, T0).expect("create");
+        assert!(!note.pinned);
+    }
+
+    #[test]
+    fn pinned_notes_sort_above_more_recently_edited_ones() {
+        let c = db();
+        let old = create(&c, NoteColor::Yellow, T0).expect("create");
+        let recent = create(&c, NoteColor::Blue, T0 + 5_000).expect("create");
+        update(&c, &recent.id, Some("newest"), None, T0 + 9_000).expect("update");
+
+        set_pinned(&c, &old.id, true).expect("pin");
+
+        let listed = list(&c).expect("list");
+        assert_eq!(listed[0].id, old.id, "the pinned note should lead");
+        assert_eq!(listed[1].id, recent.id);
+    }
+
+    #[test]
+    fn pinning_does_not_count_as_an_edit() {
+        // Same reasoning as restore: bumping updated_at would reorder the note
+        // against everything else that is pinned.
+        let c = db();
+        let note = create(&c, NoteColor::Yellow, T0).expect("create");
+
+        let pinned = set_pinned(&c, &note.id, true).expect("pin");
+        assert!(pinned.pinned);
+        assert_eq!(pinned.updated_at, note.updated_at);
+
+        let unpinned = set_pinned(&c, &note.id, false).expect("unpin");
+        assert!(!unpinned.pinned);
+        assert_eq!(unpinned.updated_at, note.updated_at);
+    }
+
+    #[test]
+    fn pinning_survives_an_edit() {
+        let c = db();
+        let note = create(&c, NoteColor::Yellow, T0).expect("create");
+        set_pinned(&c, &note.id, true).expect("pin");
+
+        let edited = update(&c, &note.id, Some("changed"), None, T0 + 1_000).expect("update");
+        assert!(edited.pinned, "editing a pinned note must not unpin it");
+    }
+
+    #[test]
+    fn a_missing_or_deleted_note_cannot_be_pinned() {
+        let c = db();
+        assert!(set_pinned(&c, "nope", true).is_err());
+
+        let note = create(&c, NoteColor::Yellow, T0).expect("create");
+        delete(&c, &note.id, T0 + 1_000).expect("delete");
+        assert!(set_pinned(&c, &note.id, true).is_err());
     }
 
     #[test]

@@ -830,6 +830,134 @@ limitations.
   The steps and the environment variables are in the README, unexercised.
 - **No CI.** Nothing runs the checks or builds the other platforms automatically.
 
+## Audit pass and note pinning (13 Sep 2026)
+
+A review of the codebase against the brief, including note pinning, which was
+uncommitted in the tree and not yet recorded here. Checks only: nothing below has
+been run against the real app yet.
+
+### Note pinning (post-v1 feature, built early)
+
+Brief 3 lists pinning as not in v1, while brief 9.1 reserves the `pinned`
+column for it. It uses that column, so no migration was needed. Pinned notes sort
+first, then by edit time, in both `db::notes::list` and `sortNotes`, which must
+agree. A pinned card is not a button: its text is selectable, and the pencil is
+the only way into the editor. The pencil also carries `data-card`, so arrow keys
+and Enter still reach the note. Pinning does not bump `updated_at`, for the same
+reason restore does not.
+
+**Still open, for the owner to decide:** the pinned card's text uses
+`user-select: text` and `cursor: text`. That is the feature's point, but brief 7.5
+and CLAUDE.md allow both only in text fields. Pinning also uses the same pin icon
+as Keep open in the header.
+
+### Fixed
+
+1. **The tab dots showed pinned notes, not the most recently edited ones.**
+   `recentColors` used `sortNotes`, which now puts pinned notes first. Brief 6.5
+   promises the three most recently *edited* notes, so the dots now sort by edit
+   time alone.
+2. **Pinning from the editor re-sorted the list while the editor was open.** That
+   broke the rule that the list stays still until `stopEditing`. `setPinned` now
+   re-sorts immediately only when no editor is open.
+3. **The pin buttons used the accent colour.** Brief 7.1 reserves accent for
+   focus rings and Keep open. Pinned state is now a filled pin in the note's own
+   text colour, which also avoids an unchecked accent-on-note-colour contrast pair.
+4. **`notes_set_pinned` had been inserted under `notes_delete`'s doc comment.**
+5. **Quit dropped unsaved typing (brief 11: flush on quit).** The tray's Quit
+   called `app.exit(0)` at once, and autosave is debounced 400 ms. Quit now emits
+   `app:quit-requested`. The frontend runs `flushAll`, which closes the editor
+   (discarding an empty note) and writes every pending autosave, then calls
+   `app_quit`. Rust exits anyway after 1.5 s, so a hung webview cannot make Quit
+   do nothing. This adds one event and one command beyond brief 9.3 and 9.4.
+6. **The context menu was never disabled (brief 7.5).** It is now suppressed in
+   production builds, except in text fields and over selected text. That second
+   case is a deviation: it is how pinned text gets copied.
+7. **`Panel` left `listen()` rejections unhandled.** Vitest reported two
+   unhandled errors on every run while the tests still passed, which would hide
+   a real one. The rejection is now caught and logged, as `DockShell` already did.
+
+### Checklist for this pass
+
+- [ ] Pin a note from the editor footer: the editor stays put, and the note moves
+      to the top on Done
+- [ ] Unpin from the card: it drops back into edit-time order at once
+- [ ] The pin buttons are the note's text colour, filled when pinned, never blue
+- [ ] With a pinned old note, the tab dots still show the three most recently
+      edited notes
+- [ ] Pinned card text can be selected and copied; the pencil opens the editor
+- [ ] Type into a note and choose Quit from the tray immediately: the text is there
+      after relaunch
+- [ ] Quit with an empty new note open: no blank card after relaunch
+- [ ] Release build: right-click on chrome shows no menu; right-click in the editor,
+      the search field, and over selected pinned text still does
+
+## Tab appearance and open on click (13 Sep 2026)
+
+Two settings the owner asked for, neither in brief 9.2. Checks only so far:
+nothing below has been run against the real app yet.
+
+| Key | Values | Default |
+|---|---|---|
+| `tab.appearance` | `"translucent"`, `"solid"` | `"translucent"` |
+| `dock.openOn` | `"hover"`, `"click"` | `"hover"` |
+
+Both are in the settings view as segmented controls ("Tab" and "Open panel") and
+apply immediately.
+
+### Decisions
+
+**The tab is translucent only while collapsed.** It fades to
+`--tab-translucent-opacity` (0.6) while waiting at the edge, and turns solid as
+the panel slides out. A see-through tab attached to a solid panel looks broken.
+The whole tab fades, border and dots included, because a translucent fill alone
+leaves an opaque outline that reads as a frame. This departs from brief 7.1's
+flat, solid surfaces at the owner's request. It uses `opacity` rather than
+`color-mix()`, which the WebKit in macOS 12 (brief 5) does not support.
+
+**A click is a tab press that never became a drag.** The tab already sends
+`dock_begin_tab_drag` and `dock_end_tab_drag` on pointer down and up, and Rust
+drives the drag from the polled cursor. So the controller decides: a press that
+never travels past `DRAG_THRESHOLD_LOGICAL` (4 px) is a click. There is no
+separate click event from the frontend to race against the drag. This changes
+`dock/controller.rs`, which the project rules put off-limits by default; the
+dock tests were extended from 47 to 60 and run.
+
+**Two drag bugs fixed along the way, since click mode would have hit them on
+every click.** The first cursor sample of a press used to snap the tab's centre
+to the pointer, so grabbing the tab near one end jumped it by up to 44 px. The
+tab now keeps its distance from the cursor, and does not move at all below the
+threshold. `dock_end_tab_drag` also wrote `dock.tabOffset` on every release,
+moved or not; it now writes only when the tab actually moved.
+
+**Click mode changes only how the panel opens.** Clicking the tab toggles it,
+and closing that way is an explicit dismissal, like Esc, so a cursor resting on
+the panel does not reverse it. A click-opened panel auto-closes on leave exactly
+like a hovered one (brief 6.3). It is not treated as a shortcut open, so it adds
+no `Focus` action beyond what the click itself does (brief 8.6). The shortcut and
+the tray are unchanged. The open delay field is disabled in click mode, where it
+does nothing.
+
+### Checklist
+
+- [ ] On a fresh install the collapsed tab is visibly see-through over a busy
+      window, with the chevron and dots still easy to find
+- [ ] The tab turns solid as the panel slides out, and see-through again as it
+      slides away, with no flicker at either end
+- [ ] Settings → Tab → Solid makes the collapsed tab opaque immediately, and
+      survives a relaunch
+- [ ] Settings → Open panel → On click: resting on the tab does nothing, and the
+      open delay field is greyed out
+- [ ] In click mode, one click on the tab opens the panel while another app is
+      focused, and that app keeps focus
+- [ ] Clicking the tab again closes it, with the cursor still on the tab
+- [ ] In click mode, moving the cursor off the panel still closes it after the
+      close delay
+- [ ] Dragging the tab still moves it in both modes, never opens the panel in
+      click mode, and the tab does not jump when grabbed near its top or bottom
+- [ ] A click without dragging does not nudge the tab
+- [ ] Switching back to On hover restores hover opening immediately
+
 ## M0 acceptance checklist
 
 From brief section 12. Run `npm run tauri dev`, then work through these with

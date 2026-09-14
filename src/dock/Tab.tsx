@@ -2,11 +2,12 @@ import { useCallback, useEffect, useRef, type CSSProperties } from "react";
 import { ChevronLeft } from "lucide-react";
 
 import { cx } from "../lib/cx";
-import { isOpenPhase } from "../lib/dock";
+import { isClosedPhase, isOpenPhase } from "../lib/dock";
 import { dockBeginTabDrag, dockEndTabDrag } from "../lib/ipc";
 import { recentColors } from "../lib/notes";
 import { useDockStore } from "../store/dock";
 import { useNotesStore } from "../store/notes";
+import { useSettingsStore } from "../store/settings";
 import styles from "./Tab.module.css";
 
 interface TabProps {
@@ -21,7 +22,11 @@ interface TabProps {
 export function Tab({ className }: TabProps) {
   const phase = useDockStore((state) => state.phase);
   const notes = useNotesStore((state) => state.notes);
+  const appearance = useSettingsStore((state) => state.settings["tab.appearance"]);
   const isOpen = isOpenPhase(phase);
+  // Translucent only while it waits at the edge. Once the panel slides out the
+  // tab is attached to it, and a see-through tab on a solid panel looks broken.
+  const translucent = appearance === "translucent" && isClosedPhase(phase);
   const dots = recentColors(notes);
   const dragging = useRef(false);
 
@@ -49,7 +54,13 @@ export function Tab({ className }: TabProps) {
 
   return (
     <div
-      className={cx(className, styles.tab, isOpen && styles.open)}
+      className={cx(
+        className,
+        styles.tab,
+        isOpen && styles.open,
+        translucent && styles.translucent,
+      )}
+      data-appearance={translucent ? "translucent" : "solid"}
       onPointerDown={() => {
         dragging.current = true;
         void dockBeginTabDrag();

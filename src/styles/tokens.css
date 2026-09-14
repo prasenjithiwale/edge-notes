@@ -33,6 +33,10 @@
      `src/lib/contrast.test.ts` fails if it drops too far. */
   --note-secondary-opacity: 0.82;
 
+  /* `tab.appearance: translucent` — "a little transparent", not faint: the tab
+     is the only way to find the panel and must stay easy to spot. */
+  --tab-translucent-opacity: 0.6;
+
   /* Geometry, mirrored from the Rust side (brief 6.4). */
   --tab-width: 28px;
   --tab-height: 88px;

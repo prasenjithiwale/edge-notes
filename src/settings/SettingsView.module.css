@@ -102,6 +102,10 @@
   text-align: right;
 }
 
+.number:disabled {
+  color: var(--text-tertiary);
+}
+
 .text {
   width: 150px;
 }

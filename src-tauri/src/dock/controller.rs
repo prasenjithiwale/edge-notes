@@ -64,9 +64,26 @@ pub enum Input {
     EndTabDrag,
 }
 
-/// Brief 6.2 defaults, in one place so settings can override them later.
+/// What opens a collapsed panel (`dock.openOn`).
+///
+/// Hover is brief 6.1. Click exists for people who keep the cursor near the edge
+/// — a scrollbar, a sidebar — and found the tab opening when they did not mean
+/// it. Either way the shortcut and the tray still open it, and the close rules of
+/// brief 6.3 are the same.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum OpenTrigger {
+    #[default]
+    Hover,
+    Click,
+}
+
+/// Brief 6.2 defaults, in one place so settings can override them later. The
+/// open trigger lives here too: like the delays, it decides how the dock reacts
+/// to the cursor, and it is applied live through the same path.
 #[derive(Debug, Clone, Copy)]
 pub struct Timings {
+    pub open_trigger: OpenTrigger,
     pub open_delay: Duration,
     pub close_delay: Duration,
     pub ack_timeout: Duration,
@@ -79,6 +96,7 @@ pub struct Timings {
 impl Default for Timings {
     fn default() -> Self {
         Self {
+            open_trigger: OpenTrigger::Hover,
             open_delay: Duration::from_millis(120),
             close_delay: Duration::from_millis(400),
             ack_timeout: Duration::from_millis(300),
@@ -96,6 +114,28 @@ impl Default for Timings {
 /// feels immediate.
 const FOCUS_SETTLE: Duration = Duration::from_millis(1_500);
 
+/// How far the cursor must travel before a press on the tab becomes a drag.
+/// Below it the press is a click, and the tab does not move: a hand is never
+/// perfectly still, and a click that nudged the tab a pixel would be a bug.
+const DRAG_THRESHOLD_LOGICAL: f64 = 4.0;
+
+/// A press on the tab, from pointer-down to pointer-up.
+#[derive(Debug, Clone, Copy, Default)]
+struct TabPress {
+    /// Where the cursor and the tab centre were at the first sample of the press
+    /// (physical px). The tab keeps that distance from the cursor while dragged,
+    /// so grabbing it near one end does not snap its centre to the pointer.
+    grab: Option<Grab>,
+    /// Past the drag threshold at some point: a drag, not a click.
+    moved: bool,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct Grab {
+    cursor_y: f64,
+    tab_centre_y: f64,
+}
+
 pub struct DockController {
     geometry: DockGeometry,
     timings: Timings,
@@ -110,9 +150,9 @@ pub struct DockController {
     /// activates itself, and brief 6.3 closes a shortcut-opened panel on blur —
     /// so without this the panel shut itself the instant it appeared.
     opened_deliberately_at: Option<Instant>,
-    /// The tab is being dragged along the edge: hover and auto-close stand aside
-    /// until it is dropped.
-    dragging: bool,
+    /// The tab is pressed, and possibly being dragged along the edge: hover and
+    /// auto-close stand aside until it is released.
+    press: Option<TabPress>,
     /// Set when the user dismissed the panel outright (Esc, shortcut, tray) while
     /// the cursor was still on it. Brief 6.1 reverses a close when the cursor
     /// *re-enters*, which presumes it left; without this, a cursor that never
@@ -137,7 +177,7 @@ impl DockController {
             interaction_lock: false,
             opened_by_shortcut: false,
             opened_deliberately_at: None,
-            dragging: false,
+            press: None,
             dismissed: false,
             hover_since: None,
             leave_since: None,
@@ -223,11 +263,16 @@ impl DockController {
             Input::PointerLeftWebview => self.on_pointer_left(now),
             Input::MonitorChanged => self.on_monitor_changed(),
             Input::BeginTabDrag => {
-                self.dragging = true;
+                self.press = Some(TabPress::default());
                 Vec::new()
             }
             Input::EndTabDrag => {
-                self.dragging = false;
+                let Some(press) = self.press.take() else {
+                    return Vec::new();
+                };
+                if !press.moved && self.timings.open_trigger == OpenTrigger::Click {
+                    return self.on_tab_click(now);
+                }
                 // The cursor is wherever the drag finished, which is a fresh
                 // hover sample: without this the panel would not open until the
                 // pointer moved again.
@@ -291,9 +336,23 @@ impl DockController {
     fn on_cursor(&mut self, x: f64, y: f64, now: Instant) -> Vec<Action> {
         self.last_cursor = Some((x, y));
 
-        if self.dragging {
-            // The tab follows the cursor; nothing else applies while it does.
-            let offset = self.geometry.tab_offset_for_centre(y);
+        if let Some(press) = self.press.as_mut() {
+            // Nothing but the drag applies while the tab is pressed.
+            let tab = self.geometry.collapsed_tab_rect();
+            let grab = *press.grab.get_or_insert(Grab {
+                cursor_y: y,
+                tab_centre_y: f64::from(tab.y) + f64::from(tab.height) / 2.0,
+            });
+            let delta = y - grab.cursor_y;
+            if !press.moved {
+                if delta.abs() < DRAG_THRESHOLD_LOGICAL * self.geometry.scale() {
+                    return Vec::new();
+                }
+                press.moved = true;
+            }
+            let offset = self
+                .geometry
+                .tab_offset_for_centre(grab.tab_centre_y + delta);
             if (offset - self.geometry.tab_offset()).abs() < f64::EPSILON {
                 return Vec::new();
             }
@@ -314,7 +373,7 @@ impl DockController {
 
         match self.phase {
             Phase::Collapsed => {
-                if inside && !self.dismissed {
+                if inside && !self.dismissed && self.timings.open_trigger == OpenTrigger::Hover {
                     // Hover intent: start the clock, don't restart it every sample.
                     self.hover_since.get_or_insert(now);
                 } else {
@@ -396,6 +455,21 @@ impl DockController {
         }
     }
 
+    /// A press and release on the tab that never became a drag, with
+    /// `dock.openOn` set to click. It toggles, like the header's Keep open does,
+    /// and closing this way is an explicit dismissal. Opening does not take
+    /// focus beyond what the click itself does, and it is not a shortcut open:
+    /// the panel auto-closes on leave exactly as a hovered one does (brief 6.3).
+    fn on_tab_click(&mut self, now: Instant) -> Vec<Action> {
+        match self.phase {
+            Phase::Collapsed | Phase::Closing => self.begin_open(now, false),
+            Phase::Opening | Phase::Open => {
+                self.dismissed = true;
+                self.begin_close(now)
+            }
+        }
+    }
+
     fn on_blur(&mut self, now: Instant) -> Vec<Action> {
         if self.keep_open || !self.phase.is_expanded() {
             return Vec::new();
@@ -438,6 +512,10 @@ impl DockController {
     /// Delays are read on every tick, so a change takes effect on the next one.
     pub fn set_timings(&mut self, timings: Timings) {
         self.timings = timings;
+        if timings.open_trigger == OpenTrigger::Click {
+            // A hover already under way would otherwise still open the panel.
+            self.hover_since = None;
+        }
     }
 
     pub fn set_geometry(&mut self, geometry: DockGeometry) -> Vec<Action> {
@@ -673,6 +751,8 @@ mod tests {
         let before = c.geometry().tab_offset();
 
         c.handle(Input::BeginTabDrag, t0);
+        let (px, py) = tab_point(&c);
+        c.handle(Input::Cursor { x: px, y: py }, ms(t0, 10));
         // A cursor well above centre, which would normally be nowhere near the tab.
         let actions = c.handle(
             Input::Cursor {
@@ -695,6 +775,8 @@ mod tests {
         let t0 = Instant::now();
 
         c.handle(Input::BeginTabDrag, t0);
+        let (px, py) = tab_point(&c);
+        c.handle(Input::Cursor { x: px, y: py }, ms(t0, 10));
         c.handle(
             Input::Cursor {
                 x: 1_900.0,
@@ -733,6 +815,175 @@ mod tests {
 
         c.tick(ms(t0, 400));
         assert_eq!(c.phase(), Phase::Opening);
+    }
+
+    fn click_controller() -> DockController {
+        let geometry = DockGeometry::new(WORK, 1.0, Side::Right, 0.5, Metrics::default());
+        DockController::new(
+            geometry,
+            Timings {
+                open_trigger: OpenTrigger::Click,
+                ..Timings::default()
+            },
+        )
+    }
+
+    /// Pointer-down and pointer-up on the tab with the cursor held still.
+    fn click_tab(c: &mut DockController, at: Instant) -> Vec<Action> {
+        let (x, y) = tab_point(c);
+        c.handle(Input::BeginTabDrag, at);
+        c.handle(Input::Cursor { x, y }, at + Duration::from_millis(5));
+        c.handle(Input::EndTabDrag, at + Duration::from_millis(10))
+    }
+
+    #[test]
+    fn click_mode_ignores_hover_however_long_it_rests() {
+        let mut c = click_controller();
+        let t0 = Instant::now();
+        let (x, y) = tab_point(&c);
+
+        c.handle(Input::Cursor { x, y }, t0);
+        assert!(c.tick(ms(t0, 5_000)).is_empty());
+        assert_eq!(c.phase(), Phase::Collapsed);
+    }
+
+    #[test]
+    fn click_mode_opens_on_a_click_with_the_no_flicker_order() {
+        let mut c = click_controller();
+        let t0 = Instant::now();
+
+        let actions = click_tab(&mut c, t0);
+        assert_eq!(c.phase(), Phase::Opening);
+        // Brief 8.4 still applies: resize first, then emit. No Focus action — the
+        // click itself is the only focus change (brief 8.6).
+        assert_eq!(
+            actions,
+            vec![
+                Action::SetWindowRect(c.geometry().expanded_window_rect()),
+                Action::EmitState(c.state()),
+            ]
+        );
+    }
+
+    #[test]
+    fn click_mode_closes_on_a_second_click_and_stays_closed_under_the_cursor() {
+        let mut c = click_controller();
+        let t0 = Instant::now();
+        click_tab(&mut c, t0);
+        c.handle(Input::AnimationDone(Phase::Opening), ms(t0, 200));
+
+        click_tab(&mut c, ms(t0, 1_000));
+        assert_eq!(c.phase(), Phase::Closing);
+
+        // The cursor has not moved off the panel, and must not reverse the close.
+        let (x, y) = panel_point(&c);
+        c.handle(Input::Cursor { x, y }, ms(t0, 1_050));
+        assert_eq!(c.phase(), Phase::Closing);
+    }
+
+    #[test]
+    fn a_click_opened_panel_still_auto_closes_on_leave() {
+        let mut c = click_controller();
+        let t0 = Instant::now();
+        click_tab(&mut c, t0);
+        c.handle(Input::AnimationDone(Phase::Opening), ms(t0, 200));
+
+        c.handle(
+            Input::Cursor {
+                x: AWAY.0,
+                y: AWAY.1,
+            },
+            ms(t0, 300),
+        );
+        c.tick(ms(t0, 700));
+        assert_eq!(c.phase(), Phase::Closing);
+    }
+
+    #[test]
+    fn click_mode_does_not_open_when_the_press_was_a_drag() {
+        let mut c = click_controller();
+        let t0 = Instant::now();
+        let (x, y) = tab_point(&c);
+
+        c.handle(Input::BeginTabDrag, t0);
+        c.handle(Input::Cursor { x, y }, ms(t0, 5));
+        c.handle(Input::Cursor { x, y: y - 200.0 }, ms(t0, 40));
+        c.handle(Input::EndTabDrag, ms(t0, 80));
+
+        assert_eq!(c.phase(), Phase::Collapsed);
+    }
+
+    #[test]
+    fn hover_mode_does_nothing_extra_on_a_click() {
+        // A click in hover mode is a drag that never moved; hover rules decide.
+        let mut c = controller();
+        let t0 = Instant::now();
+        c.handle(
+            Input::Cursor {
+                x: AWAY.0,
+                y: AWAY.1,
+            },
+            t0,
+        );
+        c.handle(Input::BeginTabDrag, ms(t0, 10));
+        c.handle(Input::EndTabDrag, ms(t0, 20));
+        assert_eq!(c.phase(), Phase::Collapsed);
+    }
+
+    #[test]
+    fn switching_to_click_mode_cancels_a_hover_in_progress() {
+        let mut c = controller();
+        let t0 = Instant::now();
+        let (x, y) = tab_point(&c);
+        c.handle(Input::Cursor { x, y }, t0);
+
+        c.set_timings(Timings {
+            open_trigger: OpenTrigger::Click,
+            ..Timings::default()
+        });
+        c.tick(ms(t0, 500));
+        assert_eq!(c.phase(), Phase::Collapsed);
+    }
+
+    #[test]
+    fn a_press_that_barely_moves_does_not_move_the_tab() {
+        let mut c = controller();
+        let t0 = Instant::now();
+        let before = c.geometry().tab_offset();
+        let (x, y) = tab_point(&c);
+
+        c.handle(Input::BeginTabDrag, t0);
+        c.handle(Input::Cursor { x, y }, ms(t0, 5));
+        c.handle(Input::Cursor { x, y: y + 3.0 }, ms(t0, 40));
+
+        assert!((c.geometry().tab_offset() - before).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn a_dragged_tab_keeps_its_distance_from_the_cursor() {
+        // Grabbing the tab near its top must not snap its centre to the pointer.
+        let mut c = controller();
+        let t0 = Instant::now();
+        let tab = c.geometry().collapsed_tab_rect();
+        let grab_y = f64::from(tab.y + 5);
+
+        c.handle(Input::BeginTabDrag, t0);
+        c.handle(
+            Input::Cursor {
+                x: 1_900.0,
+                y: grab_y,
+            },
+            ms(t0, 5),
+        );
+        c.handle(
+            Input::Cursor {
+                x: 1_900.0,
+                y: grab_y - 100.0,
+            },
+            ms(t0, 40),
+        );
+
+        assert_eq!(c.geometry().collapsed_tab_rect().y, tab.y - 100);
     }
 
     #[test]

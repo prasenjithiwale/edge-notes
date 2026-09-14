@@ -14,6 +14,8 @@ const DEFAULTS: Settings = {
   "dock.tabOffset": 0.5,
   "dock.openDelayMs": 120,
   "dock.closeDelayMs": 400,
+  "dock.openOn": "hover",
+  "tab.appearance": "translucent",
   "panel.width": 320,
   theme: "system",
   "notes.lastColor": "yellow",

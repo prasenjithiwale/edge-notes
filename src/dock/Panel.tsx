@@ -1,14 +1,17 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Pin, Plus, Search, Settings as SettingsIcon } from "lucide-react";
+import type { UnlistenFn } from "@tauri-apps/api/event";
 
 import { IconButton } from "../components/IconButton";
 import { Toast } from "../components/Toast";
 import { cx } from "../lib/cx";
 import { isExpandedPhase } from "../lib/dock";
 import {
+  appQuit,
   dockToggle,
   NOTE_COLORS,
   onNewNoteRequested,
+  onQuitRequested,
   onSettingsChanged,
 } from "../lib/ipc";
 import { facetColors, filterNotes } from "../lib/notes";
@@ -25,6 +28,26 @@ import styles from "./Panel.module.css";
 
 interface PanelProps {
   className: string;
+}
+
+/**
+ * An effect cleanup for a `listen()` that may still be pending, or may have
+ * failed. The rejection is logged here rather than left unhandled: a panel that
+ * misses an event is degraded, but an unhandled rejection is noise that hides
+ * real failures (and fails the test run).
+ */
+function subscription(pending: Promise<UnlistenFn>, event: string): () => void {
+  pending.catch((error: unknown) => {
+    console.error(`panel: failed to listen for ${event}`, error);
+  });
+  return () => {
+    void pending.then(
+      (stop) => {
+        stop();
+      },
+      () => undefined,
+    );
+  };
 }
 
 /** True for a field where arrow keys and Cmd+F belong to the text, not the list. */
@@ -51,6 +74,7 @@ export function Panel({ className }: PanelProps) {
   const load = useNotesStore((state) => state.load);
   const createNote = useNotesStore((state) => state.createNote);
   const startEditing = useNotesStore((state) => state.startEditing);
+  const setPinned = useNotesStore((state) => state.setPinned);
   const undoRemove = useNotesStore((state) => state.undoRemove);
   const openSearch = useNotesStore((state) => state.openSearch);
   const setQuery = useNotesStore((state) => state.setQuery);
@@ -65,27 +89,41 @@ export function Panel({ className }: PanelProps) {
     void loadSettings();
   }, [load, loadSettings]);
 
-  useEffect(() => {
-    const unlisten = onSettingsChanged(applySettings);
-    return () => {
-      void unlisten.then((stop) => {
-        stop();
-      });
-    };
-  }, [applySettings]);
+  useEffect(
+    () => subscription(onSettingsChanged(applySettings), "settings:changed"),
+    [applySettings],
+  );
 
   // The tray and the global shortcut both arrive here (brief 6.11, 9.4). The
   // store is read through getState() so the subscription is set up once.
-  useEffect(() => {
-    const unlisten = onNewNoteRequested(() => {
-      void useNotesStore.getState().createNote();
-    });
-    return () => {
-      void unlisten.then((stop) => {
-        stop();
-      });
-    };
-  }, []);
+  useEffect(
+    () =>
+      subscription(
+        onNewNoteRequested(() => {
+          void useNotesStore.getState().createNote();
+        }),
+        "ui:new-note",
+      ),
+    [],
+  );
+
+  // Brief 11: no data loss, flush on quit. Autosave is debounced, so without
+  // this the last 400 ms of typing died with the process.
+  useEffect(
+    () =>
+      subscription(
+        onQuitRequested(() => {
+          void useNotesStore
+            .getState()
+            .flushAll()
+            .finally(() => {
+              void appQuit();
+            });
+        }),
+        "app:quit-requested",
+      ),
+    [],
+  );
 
   // The filter row offers the colours of notes matching the *query*, not of the
   // colour-filtered result: filtering to one colour must not remove the dots
@@ -281,6 +319,9 @@ export function Panel({ className }: PanelProps) {
               notes={visible}
               editingId={editingId}
               onOpen={startEditing}
+              onUnpin={(id) => {
+                void setPinned(id, false);
+              }}
             />
           )}
         </>

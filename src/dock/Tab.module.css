@@ -11,6 +11,9 @@
   background: var(--surface);
   border: 1px solid var(--border);
   color: var(--text-secondary);
+  /* Solid as the panel slides out, see-through again as it slides away. The
+     slide handshake ignores this: only `data-slide` elements acknowledge. */
+  transition: opacity var(--open-duration) var(--open-easing);
 }
 
 /* Rounded only on the side facing the screen centre (brief 6.5). */
@@ -22,6 +25,14 @@
 [data-side="left"] .tab {
   border-left: none;
   border-radius: 0 var(--radius-control) var(--radius-control) 0;
+}
+
+/* `tab.appearance`: see-through while collapsed, so the tab sits more quietly
+   over whatever is behind it. The whole tab fades, border and dots included — a
+   translucent fill alone left an opaque outline that read as a frame. Deliberate
+   departure from the flat, solid surfaces of brief 7.1, chosen by the owner. */
+.translucent {
+  opacity: var(--tab-translucent-opacity);
 }
 
 .tab:active {
@@ -55,6 +66,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .tab,
   .chevron {
     transition: none;
   }

@@ -13,6 +13,7 @@ function note(overrides: Partial<Note> & { id: string }): Note {
   return {
     content: "",
     color: "yellow",
+    pinned: false,
     createdAt: 1_000,
     updatedAt: 1_000,
     ...overrides,
@@ -128,5 +129,66 @@ describe("creating a second note", () => {
     const deleted = invoke.mock.calls.filter(([command]) => command === "notes_delete");
     expect(deleted.length).toBe(1);
     expect(useNotesStore.getState().notes.filter((n) => n.content === "").length).toBe(1);
+  });
+});
+
+describe("pinning", () => {
+  const OLDER = note({ id: "2", content: "Older", updatedAt: 500 });
+
+  beforeEach(() => {
+    useNotesStore.setState({ notes: [STORED, OLDER], editingId: null });
+  });
+
+  it("re-sorts at once from the list, so the pinned card moves to the top", async () => {
+    await useNotesStore.getState().setPinned("2", true);
+    expect(useNotesStore.getState().notes.map((n) => n.id)).toEqual(["2", "1"]);
+  });
+
+  it("does not re-sort while the editor is open, then does when it closes", async () => {
+    // Pinning from the editor footer must not move the editor under the cursor.
+    useNotesStore.getState().startEditing("2");
+    await useNotesStore.getState().setPinned("2", true);
+    expect(useNotesStore.getState().notes.map((n) => n.id)).toEqual(["1", "2"]);
+    expect(useNotesStore.getState().notes[1]?.pinned).toBe(true);
+
+    await useNotesStore.getState().stopEditing();
+    expect(useNotesStore.getState().notes.map((n) => n.id)).toEqual(["2", "1"]);
+  });
+
+  it("rolls back when the pin could not be stored", async () => {
+    invoke.mockRejectedValueOnce(new Error("database is locked"));
+    await useNotesStore.getState().setPinned("2", true);
+    expect(useNotesStore.getState().notes.map((n) => [n.id, n.pinned])).toEqual([
+      ["1", false],
+      ["2", false],
+    ]);
+  });
+});
+
+describe("flushAll, before quitting (brief 11)", () => {
+  it("writes an edit the autosave debounce is still holding", async () => {
+    useNotesStore.getState().setContent("1", "Groceries\nMilk and eggs");
+    expect(updateCalls()).toEqual([]);
+
+    await useNotesStore.getState().flushAll();
+    expect(updateCalls().length).toBe(1);
+  });
+
+  it("discards an empty note left open in the editor rather than keeping it", async () => {
+    useNotesStore.setState({
+      notes: [note({ id: "blank", content: "" }), STORED],
+      editingId: "blank",
+    });
+
+    await useNotesStore.getState().flushAll();
+
+    const deleted = invoke.mock.calls.filter(([command]) => command === "notes_delete");
+    expect(deleted.length).toBe(1);
+    expect(useNotesStore.getState().editingId).toBeNull();
+  });
+
+  it("writes nothing when nothing is pending", async () => {
+    await useNotesStore.getState().flushAll();
+    expect(updateCalls()).toEqual([]);
   });
 });

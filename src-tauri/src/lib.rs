@@ -47,6 +47,7 @@ pub fn run() {
     builder
         .invoke_handler(tauri::generate_handler![
             commands::app_ready,
+            commands::app_quit,
             commands::dock_set_keep_open,
             commands::dock_set_interaction_lock,
             commands::dock_animation_done,
@@ -57,6 +58,7 @@ pub fn run() {
             commands::notes_list,
             commands::notes_create,
             commands::notes_update,
+            commands::notes_set_pinned,
             commands::notes_delete,
             commands::notes_restore,
             commands::notes_export,

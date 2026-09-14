@@ -5,6 +5,7 @@ import {
   notesDelete,
   notesList,
   notesRestore,
+  notesSetPinned,
   notesUpdate,
   type Note,
   type NoteColor,
@@ -49,7 +50,10 @@ interface NotesStore {
   createNote: () => Promise<void>;
   setContent: (id: string, content: string) => void;
   setColor: (id: string, color: NoteColor) => Promise<void>;
+  setPinned: (id: string, pinned: boolean) => Promise<void>;
   flush: (id: string) => Promise<void>;
+  /** Write everything still pending, before quitting (brief 11: flush on quit). */
+  flushAll: () => Promise<void>;
   startEditing: (id: string) => void;
   stopEditing: () => Promise<void>;
   remove: (id: string) => Promise<void>;
@@ -145,6 +149,30 @@ export const useNotesStore = create<NotesStore>((set, get) => ({
     }
   },
 
+  setPinned: async (id, pinned) => {
+    // Optimistic. From a card the list re-sorts straight away: pinning is a
+    // deliberate act, so seeing the card move is the point. With the editor
+    // open it waits, like every other change, until `stopEditing` — pinning from
+    // the editor footer must not pull the editor out from under the cursor.
+    const withPin = (value: boolean) => {
+      set((state) => {
+        const notes = state.notes.map((note) =>
+          note.id === id ? { ...note, pinned: value } : note,
+        );
+        return { notes: state.editingId === null ? sortNotes(notes) : notes };
+      });
+    };
+
+    withPin(pinned);
+    try {
+      await notesSetPinned(id, pinned);
+    } catch (error: unknown) {
+      console.error("notes: pin failed", error);
+      // Put it back: the list would otherwise claim a pin that was never stored.
+      withPin(!pinned);
+    }
+  },
+
   /** Write pending content now: on blur, on close, and on the debounce firing. */
   flush: async (id) => {
     const timer = saveTimers.get(id);
@@ -173,6 +201,13 @@ export const useNotesStore = create<NotesStore>((set, get) => ({
     } catch (error: unknown) {
       console.error("notes: save failed", error);
     }
+  },
+
+  flushAll: async () => {
+    // Closing the editor rather than just flushing it, so an empty new note is
+    // discarded instead of surviving the restart as a blank card (brief 6.9).
+    await get().stopEditing();
+    await Promise.all([...saveTimers.keys()].map((id) => get().flush(id)));
   },
 
   startEditing: (id) => {

@@ -25,6 +25,7 @@ function note(overrides: Partial<Note> & { id: string }): Note {
   return {
     content: "",
     color: "yellow",
+    pinned: false,
     createdAt: 1_760_000_000_000,
     updatedAt: 1_760_000_000_000,
     ...overrides,
@@ -43,6 +44,8 @@ const SETTINGS: Settings = {
   "dock.tabOffset": 0.5,
   "dock.openDelayMs": 120,
   "dock.closeDelayMs": 400,
+  "dock.openOn": "hover",
+  "tab.appearance": "translucent",
   "panel.width": 320,
   theme: "system",
   "notes.lastColor": "yellow",
@@ -230,5 +233,21 @@ describe("new note", () => {
     });
     expect(useNotesStore.getState().query).toBe("");
     expect(useNotesStore.getState().editingId).toBe("new");
+  });
+});
+
+describe("quitting from the tray (brief 11: flush on quit)", () => {
+  it("saves a pending edit before telling Rust it may exit", async () => {
+    await renderPanel();
+    useNotesStore.getState().setContent("1", "Standup notes\nDeploy the fix today");
+
+    listeners.get("app:quit-requested")?.({ payload: null });
+
+    await waitFor(() => {
+      expect(commandCalls("app_quit").length).toBe(1);
+    });
+    const order = invoke.mock.calls.map(([command]) => command);
+    expect(order.indexOf("notes_update")).toBeGreaterThan(-1);
+    expect(order.indexOf("notes_update")).toBeLessThan(order.indexOf("app_quit"));
   });
 });

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, type CSSProperties } from "react";
-import { Trash2 } from "lucide-react";
+import { Pin, Trash2 } from "lucide-react";
 
 import { IconButton } from "../components/IconButton";
 import { cx } from "../lib/cx";
@@ -37,6 +37,7 @@ export function NoteEditor({ note }: NoteEditorProps) {
   const setColor = useNotesStore((state) => state.setColor);
   const stopEditing = useNotesStore((state) => state.stopEditing);
   const remove = useNotesStore((state) => state.remove);
+  const setPinned = useNotesStore((state) => state.setPinned);
   const setLock = useDockStore((state) => state.setLock);
   const now = useNow();
 
@@ -177,6 +178,22 @@ export function NoteEditor({ note }: NoteEditorProps) {
       </div>
       <footer className={styles.footer}>
         <span className={styles.meta}>{editedLabel(note.updatedAt, now)}</span>
+        <IconButton
+          label={note.pinned ? "Unpin note" : "Pin note"}
+          className={styles.footerButton}
+          // Filled rather than accent-coloured when on: accent is reserved for
+          // focus rings and Keep open (brief 7.1).
+          pressed={note.pinned}
+          onClick={() => {
+            void setPinned(note.id, !note.pinned);
+          }}
+        >
+          <Pin
+            size={16}
+            strokeWidth={1.75}
+            fill={note.pinned ? "currentColor" : "none"}
+          />
+        </IconButton>
         <IconButton
           label="Delete note"
           className={styles.footerButton}

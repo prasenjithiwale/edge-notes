@@ -28,6 +28,7 @@ function note(overrides: Partial<Note> = {}): Note {
     id: "01900000-0000-7000-8000-000000000001",
     content: "",
     color: "yellow",
+    pinned: false,
     createdAt: 1_760_000_000_000,
     updatedAt: 1_760_000_000_000,
     ...overrides,
@@ -229,5 +230,36 @@ describe("colorName", () => {
   it("capitalises a palette id for a label", () => {
     expect(colorName("lavender")).toBe("Lavender");
     expect(colorName("gray")).toBe("Gray");
+  });
+});
+
+describe("sortNotes with pinned notes", () => {
+  it("puts pinned notes above more recently edited ones", () => {
+    const notes = [
+      note({ id: "a", updatedAt: 9_000 }),
+      note({ id: "b", updatedAt: 1_000, pinned: true }),
+      note({ id: "c", updatedAt: 5_000 }),
+    ];
+    expect(sortNotes(notes).map((n) => n.id)).toEqual(["b", "a", "c"]);
+  });
+
+  it("still sorts pinned notes among themselves by edit time", () => {
+    const notes = [
+      note({ id: "a", updatedAt: 1_000, pinned: true }),
+      note({ id: "b", updatedAt: 8_000, pinned: true }),
+    ];
+    expect(sortNotes(notes).map((n) => n.id)).toEqual(["b", "a"]);
+  });
+});
+
+describe("recentColors with pinned notes", () => {
+  it("ignores pinning: the tab shows the most recently edited notes (brief 6.5)", () => {
+    const notes = [
+      note({ id: "a", color: "gray", updatedAt: 1_000, pinned: true }),
+      note({ id: "b", color: "pink", updatedAt: 5_000 }),
+      note({ id: "c", color: "blue", updatedAt: 4_000 }),
+      note({ id: "d", color: "mint", updatedAt: 3_000 }),
+    ];
+    expect(recentColors(notes)).toEqual(["pink", "blue", "mint"]);
   });
 });

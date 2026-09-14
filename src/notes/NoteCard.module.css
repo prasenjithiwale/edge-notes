@@ -37,3 +37,44 @@
 .untitled {
   opacity: var(--note-secondary-opacity);
 }
+
+/* A pinned card is a surface, not a button: its text can be selected and copied
+   in place, and only the pencil opens the editor. */
+.pinned {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  cursor: default;
+}
+
+.text {
+  flex: 1;
+  min-width: 0;
+  /* The whole point of pinning: read and copy without opening anything. A
+     deliberate exception to the `user-select: none` chrome rule in brief 7.5,
+     which is there to stop stray selection, not to prevent copying on purpose. */
+  user-select: text;
+  -webkit-user-select: text;
+  cursor: text;
+}
+
+.tools {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: none;
+}
+
+/* The buttons sit on the note's own colour, so they inherit its text colour and
+   tint on hover rather than filling with a chrome surface. */
+.tool {
+  width: 22px;
+  height: 22px;
+  color: inherit;
+  opacity: var(--note-secondary-opacity);
+}
+
+.tool:hover {
+  opacity: 1;
+  background: rgb(0 0 0 / 8%);
+}

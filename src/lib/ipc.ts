@@ -21,6 +21,8 @@ export interface Note {
   id: string;
   content: string;
   color: NoteColor;
+  /** Pinned notes sort first and are read-only until their edit button is used. */
+  pinned: boolean;
   /** Unix milliseconds. */
   createdAt: number;
   updatedAt: number;
@@ -33,6 +35,10 @@ export interface Settings {
   "dock.tabOffset": number;
   "dock.openDelayMs": number;
   "dock.closeDelayMs": number;
+  /** What opens a collapsed panel: resting the cursor on the tab, or clicking it. */
+  "dock.openOn": "hover" | "click";
+  /** How the collapsed tab is painted; it is always solid while the panel is out. */
+  "tab.appearance": "translucent" | "solid";
   "panel.width": number;
   theme: "system" | "light" | "dark";
   "notes.lastColor": NoteColor;
@@ -61,6 +67,7 @@ export interface IpcError {
 const DOCK_STATE_EVENT = "dock:state";
 const SETTINGS_CHANGED_EVENT = "settings:changed";
 const NEW_NOTE_EVENT = "ui:new-note";
+const QUIT_REQUESTED_EVENT = "app:quit-requested";
 
 function isIpcError(value: unknown): value is IpcError {
   return (
@@ -113,6 +120,11 @@ async function callResult<T>(
 /** The frontend has painted; Rust may now show the window. */
 export function appReady(): Promise<void> {
   return call("app_ready");
+}
+
+/** Pending notes are saved; Rust may exit now (answers `app:quit-requested`). */
+export function appQuit(): Promise<void> {
+  return call("app_quit");
 }
 
 export function dockSetKeepOpen(value: boolean): Promise<void> {
@@ -178,6 +190,10 @@ export function notesUpdate(
   });
 }
 
+export function notesSetPinned(id: string, pinned: boolean): Promise<Note> {
+  return callResult<Note>("notes_set_pinned", { id, pinned });
+}
+
 export async function notesDelete(id: string): Promise<void> {
   await callResult<null>("notes_delete", { id });
 }
@@ -214,6 +230,16 @@ export function onNewNoteRequested(
   handler: () => void,
 ): Promise<UnlistenFn> {
   return listen<null>(NEW_NOTE_EVENT, () => {
+    handler();
+  });
+}
+
+/**
+ * The tray's Quit: save anything the autosave debounce is still holding, then
+ * call `appQuit`. Rust exits on its own after a timeout if that never happens.
+ */
+export function onQuitRequested(handler: () => void): Promise<UnlistenFn> {
+  return listen<null>(QUIT_REQUESTED_EVENT, () => {
     handler();
   });
 }

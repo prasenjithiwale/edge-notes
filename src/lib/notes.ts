@@ -42,16 +42,25 @@ export function isNoteEmpty(content: string): boolean {
 }
 
 /**
- * Most recently edited first (brief 6.8), with the id as a tiebreak so two notes
- * saved in the same millisecond keep a stable order instead of flickering.
+ * Pinned first, then most recently edited (brief 6.8), with the id as a tiebreak
+ * so two notes saved in the same millisecond keep a stable order instead of
+ * flickering. Mirrors the ORDER BY in the notes repository — the list is sorted
+ * in both places, and they must agree or a reload would reshuffle the panel.
  */
 export function sortNotes(notes: Note[]): Note[] {
   return [...notes].sort((a, b) => {
-    if (a.updatedAt !== b.updatedAt) {
-      return b.updatedAt - a.updatedAt;
+    if (a.pinned !== b.pinned) {
+      return a.pinned ? -1 : 1;
     }
-    return b.id.localeCompare(a.id);
+    return byRecentEdit(a, b);
   });
+}
+
+function byRecentEdit(a: Note, b: Note): number {
+  if (a.updatedAt !== b.updatedAt) {
+    return b.updatedAt - a.updatedAt;
+  }
+  return b.id.localeCompare(a.id);
 }
 
 export interface NoteFilter {
@@ -97,10 +106,13 @@ export function facetColors<T extends string>(
 /**
  * Colours of the three most recently edited notes, for the dots on the tab
  * (brief 6.5). Sorted here rather than trusting the caller, because the store
- * deliberately leaves the list unsorted while the editor is open.
+ * deliberately leaves the list unsorted while the editor is open — and by edit
+ * time alone, not `sortNotes`: pinning decides the list order, but the tab
+ * promises the most recently *edited* notes.
  */
 export function recentColors(notes: Note[], limit = 3): string[] {
-  return sortNotes(notes)
+  return [...notes]
+    .sort(byRecentEdit)
     .slice(0, limit)
     .map((note) => note.color);
 }

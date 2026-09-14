@@ -11,6 +11,9 @@ interface IconButtonProps {
   outlined?: boolean;
   pressed?: boolean;
   className?: string | undefined;
+  /** Marks this button as an arrow-key navigation target (brief 6.11). */
+  "data-card"?: string;
+  "data-id"?: string;
 }
 
 /** Every icon button carries a tooltip and an aria-label (brief 6.6). */
@@ -22,6 +25,7 @@ export function IconButton({
   outlined = false,
   pressed,
   className,
+  ...markers
 }: IconButtonProps) {
   return (
     <button
@@ -35,6 +39,7 @@ export function IconButton({
       aria-label={label}
       title={label}
       {...(pressed === undefined ? {} : { "aria-pressed": pressed })}
+      {...markers}
       onClick={onClick}
     >
       {children}

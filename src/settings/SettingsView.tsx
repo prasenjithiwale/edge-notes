@@ -21,6 +21,7 @@ interface NumberSettingProps {
   onCommit: (value: number) => void;
   onFocus: () => void;
   onBlur: () => void;
+  disabled?: boolean;
 }
 
 /**
@@ -39,6 +40,7 @@ function NumberSetting({
   onCommit,
   onFocus,
   onBlur,
+  disabled = false,
 }: NumberSettingProps) {
   const [draft, setDraft] = useState(String(value));
   const [editing, setEditing] = useState(false);
@@ -72,6 +74,7 @@ function NumberSetting({
           min={range.min}
           max={range.max}
           step={step}
+          disabled={disabled}
           onFocus={() => {
             setEditing(true);
             onFocus();
@@ -96,10 +99,61 @@ function NumberSetting({
   );
 }
 
-const THEMES: { value: Settings["theme"]; label: string }[] = [
+interface Choice<T extends string> {
+  value: T;
+  label: string;
+}
+
+interface SegmentedSettingProps<T extends string> {
+  legend: string;
+  choices: Choice<T>[];
+  value: T;
+  onChange: (value: T) => void;
+}
+
+/** A row of mutually exclusive buttons, like a native segmented control. */
+function SegmentedSetting<T extends string>({
+  legend,
+  choices,
+  value,
+  onChange,
+}: SegmentedSettingProps<T>) {
+  return (
+    <fieldset className={styles.group}>
+      <legend className={styles.legend}>{legend}</legend>
+      <div className={styles.segmented}>
+        {choices.map((choice) => (
+          <button
+            key={choice.value}
+            type="button"
+            className={styles.segment}
+            aria-pressed={value === choice.value}
+            onClick={() => {
+              onChange(choice.value);
+            }}
+          >
+            {choice.label}
+          </button>
+        ))}
+      </div>
+    </fieldset>
+  );
+}
+
+const THEMES: Choice<Settings["theme"]>[] = [
   { value: "system", label: "System" },
   { value: "light", label: "Light" },
   { value: "dark", label: "Dark" },
+];
+
+const OPEN_ON: Choice<Settings["dock.openOn"]>[] = [
+  { value: "hover", label: "On hover" },
+  { value: "click", label: "On click" },
+];
+
+const TAB_APPEARANCE: Choice<Settings["tab.appearance"]>[] = [
+  { value: "translucent", label: "Translucent" },
+  { value: "solid", label: "Solid" },
 ];
 
 /** Brief M4: a small settings view inside the panel. */
@@ -147,27 +201,37 @@ export function SettingsView({ onClose }: SettingsViewProps) {
       </div>
 
       <div className={styles.fields}>
-        <fieldset className={styles.group}>
-          <legend className={styles.legend}>Theme</legend>
-          <div className={styles.segmented}>
-            {THEMES.map((theme) => (
-              <button
-                key={theme.value}
-                type="button"
-                className={styles.segment}
-                aria-pressed={settings.theme === theme.value}
-                onClick={() => {
-                  void patch({ theme: theme.value });
-                }}
-              >
-                {theme.label}
-              </button>
-            ))}
-          </div>
-        </fieldset>
+        <SegmentedSetting
+          legend="Theme"
+          choices={THEMES}
+          value={settings.theme}
+          onChange={(theme) => {
+            void patch({ theme });
+          }}
+        />
+
+        <SegmentedSetting
+          legend="Open panel"
+          choices={OPEN_ON}
+          value={settings["dock.openOn"]}
+          onChange={(openOn) => {
+            void patch({ "dock.openOn": openOn });
+          }}
+        />
+
+        <SegmentedSetting
+          legend="Tab"
+          choices={TAB_APPEARANCE}
+          value={settings["tab.appearance"]}
+          onChange={(appearance) => {
+            void patch({ "tab.appearance": appearance });
+          }}
+        />
 
         <NumberSetting
           label="Open delay"
+          // Hover intent only: a click opens the panel straight away.
+          disabled={settings["dock.openOn"] === "click"}
           unit="ms"
           value={settings["dock.openDelayMs"]}
           range={DELAY.open}
