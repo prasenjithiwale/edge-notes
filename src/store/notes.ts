@@ -10,8 +10,7 @@ import {
   type Note,
   type NoteColor,
 } from "../lib/ipc";
-import { toggleTaskLine } from "../lib/markdown";
-import { appendTask, findTodoNote, newTodoNote } from "../lib/tasks";
+import { appendTask, findTodoNote, newTodoNote, setTaskText, tickTask } from "../lib/tasks";
 import { isNoteEmpty, sortNotes } from "../lib/notes";
 import { useSettingsStore } from "./settings";
 
@@ -77,6 +76,8 @@ interface NotesStore {
   setPinned: (id: string, pinned: boolean) => Promise<void>;
   /** Tick or untick the task on line `line` of a note, from a card or the reader. */
   toggleTask: (id: string, line: number) => void;
+  /** Rewrite a task's text, as the To-Do tab's details editor does. */
+  setTaskLine: (id: string, line: number, text: string) => void;
   flush: (id: string) => Promise<void>;
   /** Write everything still pending, before quitting (brief 11: flush on quit). */
   flushAll: () => Promise<void>;
@@ -227,13 +228,21 @@ export const useNotesStore = create<NotesStore>((set, get) => ({
 
   toggleTask: (id, line) => {
     const note = get().notes.find((candidate) => candidate.id === id);
-    const content = note ? toggleTaskLine(note.content, line) : null;
+    const content = note ? tickTask(note.content, line, new Date()) : null;
     if (content === null) {
       return;
     }
     // A tick is an edit like any other: debounced, flushed on quit, and — like
     // typing — it does not re-sort the list under the cursor.
     get().setContent(id, content);
+  },
+
+  setTaskLine: (id, line, text) => {
+    const note = get().notes.find((candidate) => candidate.id === id);
+    const content = note ? setTaskText(note.content, line, text) : null;
+    if (content !== null && content !== note?.content) {
+      get().setContent(id, content);
+    }
   },
 
   /** Write pending content now: on blur, on close, and on the debounce firing. */

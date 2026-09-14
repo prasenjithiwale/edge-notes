@@ -1468,6 +1468,157 @@ lock owner, derived from state like the search field's.
 - [ ] Cmd+F on the To-Do tab switches to Notes with search open
 - [ ] Switching tabs while editing an empty new note leaves no blank card
 
+## Sliding between Notes and To-Do (14 Sep 2026)
+
+Requested by the owner. Switching tabs now slides:
+
+- **The tab highlight** slides to the selected tab. The segments are equal width
+  and both labels stay at weight 600, so nothing resizes mid-slide; the selected
+  label is primary text, the other secondary.
+- **The content slides** in tab order: To-Do comes in from the right, Notes from
+  the left, over 180 ms with the panel's opening curve. Notes and To-Do sit side by
+  side on a track twice the panel's width, translated by one pane.
+
+### Decisions
+
+**Both tabs stay mounted**, because a slide needs both on screen at once. The pane
+off screen gets `inert` and `aria-hidden`, and becomes `visibility: hidden` once
+the slide ends — which also covers WebKit before 15.5 (early macOS 12), where
+`inert` is unsupported. That had knock-on effects, all handled:
+
+- `TodoView` takes an `active` prop and starts a new visit each time it becomes
+  active (group order taken afresh, tasks ticked last time settle into Done),
+  instead of on mount. It blurs its field when hidden so it cannot hold the panel
+  open from off screen.
+- Arrow-key card navigation only runs on the Notes tab, and closing the editor by
+  switching to To-Do does not try to return focus to a card that is off screen.
+- The large expanded note and the settings view replace the track rather than
+  sliding, as before.
+
+**Reduced motion:** no slide (brief 6.2); the incoming tab fades in over 80 ms and
+the highlight moves without animating.
+
+### Checklist
+
+- [ ] Clicking To-Do slides the content left and the highlight right; Notes slides
+      back the other way, smoothly, with no flash or jump
+- [ ] Mid-slide both views are visible side by side, and neither is clipped oddly
+- [ ] After switching, Tab never lands on anything in the hidden view
+- [ ] Reduce motion (System Settings → Accessibility → Display): switching fades
+      quickly instead of sliding
+- [ ] A long notes list keeps its scroll position after visiting To-Do and back
+
+## Task details, reminders and panel translucency (14 Sep 2026)
+
+The owner asked for tasks to have "time, priority, etc." They chose, from options:
+**details stored inline in the task line** (recommended, over a separate task
+store or a side table keyed by line), and **all four features** — due date and
+time, priority, reminders, repeating tasks. Mid-build they also asked for a panel
+translucency setting with a percentage slider.
+
+### The task format
+
+A task is still one checklist line; its details are tokens at the end, written
+back in a fixed order:
+
+    - [ ] Call the bank !high @2026-09-20 14:00 repeat:weekly
+
+- `!high` / `!medium` / `!low`; `@YYYY-MM-DD` with an optional `HH:MM` (24-hour,
+  local); `repeat:daily|weekly|monthly|yearly`.
+- Read **only from the end of the line**, in any order, each kind once, so
+  "email @john about !bugs" mid-sentence is never a token. A malformed date
+  (`@2026-02-30`, `25:00`) stays part of the title.
+- `src/lib/taskMeta.ts` holds the parser, the date maths and the labels, all pure
+  and taking `now`. Months clamp (31 Jan + 1 month = end of Feb).
+
+### What it does
+
+- **To-Do tab:** sections Overdue, Today, Upcoming and No date (a task due earlier
+  today at a set time is overdue once that time passes), then Done. Within a
+  section: higher priority first, then sooner, a whole-day task before the timed
+  ones of the same day, then note order as it was when the tab opened. Each task
+  shows the note it comes from, which opens that note.
+- **Details sheet:** a button on each task opens an inline sheet to rename it and
+  set priority, date (with Today / Tomorrow / Clear), time and repeat. Every change
+  is written straight into the line; the title commits on blur or Enter. **A task
+  keeps its section while its sheet is open**, even if its new date belongs
+  elsewhere — otherwise the sheet was torn down and rebuilt under the cursor and
+  a date field lost focus, which the component test caught.
+- **Cards and the reader** show a task's title and draw its details as chips: a
+  flag (filled for high), the due label ("Today", "Tomorrow, 14:00", "Fri",
+  "2 Oct", "5 Jan 2027", locale-formatted) and a repeat mark. Neutral colours —
+  colour is for notes (brief 7.1) — with an overdue date carried by weight. The
+  note editor keeps showing the raw tokens.
+- **Repeating tasks:** ticking one, anywhere, moves its date to the next occurrence
+  and leaves it open. A task left overdue catches up to today or later rather than
+  stepping into the past; one with no date counts from today.
+
+### Reminders
+
+- **Rust owns the time, the frontend owns the format.** The frontend works out
+  every reminder from the notes (`taskReminders`: at the due time, or 09:00 for a
+  whole-day task, open tasks only) and sends the whole list with the new
+  `reminders_set` command, one second after notes stop changing. A single thread
+  in `src-tauri/src/reminders.rs` sleeps until the next one (waking at least every
+  minute, for clock changes and sleep) and shows it through
+  `tauri-plugin-notification`. The deciding logic (`due`, `next_at`) is pure and
+  unit-tested.
+- A reminder missed by up to 10 minutes (the Mac asleep, the app just launched)
+  still shows; older ones only appear as overdue. What has been shown is
+  remembered by id (note, title, due time), so a re-sent list never repeats one;
+  changing a task's time makes a new reminder.
+- **Setting:** `tasks.reminders`, on by default, applied live. Reminders passing
+  while it is off are marked shown, so turning it on does not bring a burst.
+- **Dependency:** `tauri-plugin-notification` **2.4.0** (the newest 2.x; a
+  `3.0.0-alpha` exists and was avoided). It is outside brief section 4; the owner
+  approved it by choosing reminders. Verified against the plugin docs and its
+  source: sending from Rust needs no webview capability, and on macOS a debug
+  build's notifications are attributed to **Terminal** while a bundled app uses
+  its own identifier.
+- **Verified on the running app:** a task due in the current minute produced the
+  macOS notification permission prompt within seconds of the reload, which proves
+  the path from note to `reminders_set` to the thread to the plugin. The prompt
+  was left for the owner to answer, so the notification itself was not seen.
+
+### Panel translucency
+
+- `panel.translucency`, 0 % (solid, the default) to 60 %, stored in Rust and
+  clamped there too. Past 60 % notes over a busy desktop stop being readable, since
+  there is no blur behind the panel.
+- The panel's background is `rgb(var(--surface-rgb) / var(--panel-alpha))`, with
+  new `--surface-rgb` channel tokens in light and both dark blocks, because
+  `color-mix()` is missing from macOS 12's WebKit. Note cards stay solid.
+- **Settings:** a slider with the percentage beside it. Dragging previews every
+  step directly on the root and stores only the released value, so a drag is one
+  write; the keyboard commits each step.
+
+### Deviations from the brief
+
+- Brief 3 puts reminders post-v1, and brief 4 does not list the notification
+  plugin (approved by the owner).
+- Brief 7.1's solid surfaces: the panel can now be made translucent, off by
+  default.
+- The Done section on To-Do shows tasks as rows with their note, rather than
+  grouped by note.
+
+### Checklist
+
+- [ ] Add "Pay rent !high @" plus tomorrow's date in the To-Do field: it appears
+      under Upcoming with a filled flag and "Tomorrow"
+- [ ] The details sheet sets priority, date, time and repeat; the task stays put
+      until Done, then moves to its section
+- [ ] Rename a task in the sheet: the note's line changes when the field is left
+- [ ] A card shows chips, not tokens; the note editor still shows the tokens
+- [ ] Tick a daily task: it moves to tomorrow and stays unticked
+- [ ] A task due earlier today at a set time shows under Overdue, in bold
+- [ ] Allow notifications, add a task due two minutes from now, and a notification
+      arrives on time; it does not repeat after further edits
+- [ ] Settings → Task reminders → Off: no notification for the next due task
+- [ ] Settings → Panel translucency: dragging shows the percentage and fades the
+      panel live; it persists after a relaunch; cards stay solid and readable
+- [ ] Release build: the notification comes from Edge Notes, not Terminal
+- [ ] Windows and Linux: notifications appear (untested)
+
 ## M0 acceptance checklist
 
 From brief section 12. Run `npm run tauri dev`, then work through these with

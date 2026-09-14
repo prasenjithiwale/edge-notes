@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 
 import type { Settings } from "../lib/ipc";
 
@@ -78,6 +78,49 @@ describe("tab appearance setting", () => {
 
     await waitFor(() => {
       expect(updates()).toEqual([{ patch: { "tab.appearance": "solid" } }]);
+    });
+  });
+});
+
+describe("panel translucency setting", () => {
+  it("shows the percentage, previews while dragging and stores on release", async () => {
+    render(<SettingsView onClose={() => undefined} />);
+    const slider = screen.getByLabelText<HTMLInputElement>(/^Panel translucency/);
+    expect(screen.getByText("0%")).toBeTruthy();
+
+    fireEvent.pointerDown(slider);
+    fireEvent.change(slider, { target: { value: "35" } });
+
+    expect(screen.getByText("35%")).toBeTruthy();
+    expect(document.documentElement.style.getPropertyValue("--panel-alpha")).toBe("0.65");
+    expect(updates()).toEqual([]);
+
+    fireEvent.pointerUp(slider);
+    await waitFor(() => {
+      expect(updates()).toEqual([{ patch: { "panel.translucency": 35 } }]);
+    });
+  });
+
+  it("does not store a release that changed nothing", () => {
+    render(<SettingsView onClose={() => undefined} />);
+    const slider = screen.getByLabelText(/^Panel translucency/);
+    fireEvent.pointerDown(slider);
+    fireEvent.pointerUp(slider);
+    expect(updates()).toEqual([]);
+  });
+});
+
+describe("task reminders setting", () => {
+  it("is on by default and can be turned off", async () => {
+    render(<SettingsView onClose={() => undefined} />);
+    const group = screen.getByRole("group", { name: "Task reminders" });
+    const on = Array.from(group.querySelectorAll("button")).find((b) => b.textContent === "On");
+    const off = Array.from(group.querySelectorAll("button")).find((b) => b.textContent === "Off");
+    expect(on?.getAttribute("aria-pressed")).toBe("true");
+
+    off?.click();
+    await waitFor(() => {
+      expect(updates()).toEqual([{ patch: { "tasks.reminders": false } }]);
     });
   });
 });

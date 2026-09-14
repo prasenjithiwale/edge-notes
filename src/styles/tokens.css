@@ -2,6 +2,9 @@
    Light is the base; dark only redefines values. */
 :root {
   --surface: #ffffff;
+  /* The same colour as channels, so the panel can be made see-through
+     (`panel.translucency`) without `color-mix()`, which macOS 12's WebKit lacks. */
+  --surface-rgb: 255 255 255;
   --surface-sunken: #f4f4f5;
   --border: rgba(0, 0, 0, 0.08);
   --text-primary: #1d1d1f;
@@ -87,6 +90,7 @@
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     --surface: #1c1c1e;
+    --surface-rgb: 28 28 30;
     --surface-sunken: #2a2a2d;
     --border: rgba(255, 255, 255, 0.08);
     --text-primary: #f2f2f3;
@@ -134,6 +138,7 @@
 
 :root[data-theme="dark"] {
   --surface: #1c1c1e;
+  --surface-rgb: 28 28 30;
   --surface-sunken: #2a2a2d;
   --border: rgba(255, 255, 255, 0.08);
   --text-primary: #f2f2f3;

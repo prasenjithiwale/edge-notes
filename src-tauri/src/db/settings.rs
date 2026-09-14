@@ -52,7 +52,18 @@ pub struct Settings {
     pub notes_last_color: NoteColor,
     #[serde(rename = "shortcut.newNote")]
     pub shortcut_new_note: String,
+    /// Not in brief 9.2: a system notification when a task is due.
+    #[serde(rename = "tasks.reminders")]
+    pub tasks_reminders: bool,
+    /// Not in brief 9.2: how see-through the panel's surface is, as a percentage
+    /// from 0 (solid, the brief's default) to `MAX_PANEL_TRANSLUCENCY`.
+    #[serde(rename = "panel.translucency")]
+    pub panel_translucency: u8,
 }
+
+/// Past this the notes on a busy desktop stop being readable: the panel has no
+/// blur behind it, only transparency.
+pub const MAX_PANEL_TRANSLUCENCY: u8 = 60;
 
 impl Settings {
     /// The placement half of the settings, for the dock (brief 9.2).
@@ -94,6 +105,9 @@ impl Default for Settings {
             theme: Theme::System,
             notes_last_color: NoteColor::Yellow,
             shortcut_new_note: "CmdOrCtrl+Alt+N".to_owned(),
+            // Both asked for by the owner.
+            tasks_reminders: true,
+            panel_translucency: 0,
         }
     }
 }
@@ -123,6 +137,10 @@ pub struct SettingsPatch {
     pub notes_last_color: Option<NoteColor>,
     #[serde(rename = "shortcut.newNote")]
     pub shortcut_new_note: Option<String>,
+    #[serde(rename = "tasks.reminders")]
+    pub tasks_reminders: Option<bool>,
+    #[serde(rename = "panel.translucency")]
+    pub panel_translucency: Option<u8>,
 }
 
 fn read<T: for<'de> Deserialize<'de>>(
@@ -174,6 +192,13 @@ pub fn get(connection: &Connection) -> AppResult<Settings> {
         theme: read(connection, "theme", defaults.theme)?,
         notes_last_color: read(connection, "notes.lastColor", defaults.notes_last_color)?,
         shortcut_new_note: read(connection, "shortcut.newNote", defaults.shortcut_new_note)?,
+        tasks_reminders: read(connection, "tasks.reminders", defaults.tasks_reminders)?,
+        panel_translucency: read(
+            connection,
+            "panel.translucency",
+            defaults.panel_translucency,
+        )?
+        .min(MAX_PANEL_TRANSLUCENCY),
     })
 }
 
@@ -213,6 +238,16 @@ pub fn update(connection: &Connection, patch: &SettingsPatch) -> AppResult<Setti
     if let Some(value) = &patch.shortcut_new_note {
         write(connection, "shortcut.newNote", value)?;
     }
+    if let Some(value) = patch.tasks_reminders {
+        write(connection, "tasks.reminders", &value)?;
+    }
+    if let Some(value) = patch.panel_translucency {
+        write(
+            connection,
+            "panel.translucency",
+            &value.min(MAX_PANEL_TRANSLUCENCY),
+        )?;
+    }
     get(connection)
 }
 
@@ -238,6 +273,8 @@ mod tests {
         assert_eq!(settings.notes_last_color, NoteColor::Yellow);
         assert_eq!(settings.shortcut_new_note, "CmdOrCtrl+Alt+N");
         assert_eq!(settings.dock_open_on, OpenTrigger::Hover);
+        assert!(settings.tasks_reminders);
+        assert_eq!(settings.panel_translucency, 0);
         assert_eq!(settings.tab_appearance, TabAppearance::Translucent);
     }
 
@@ -365,5 +402,31 @@ mod tests {
             .expect("insert");
 
         assert_eq!(get(&connection).expect("get").theme, Theme::System);
+    }
+
+    #[test]
+    fn reminders_and_translucency_persist_and_translucency_is_capped() {
+        let connection = db();
+        let settings = update(
+            &connection,
+            &SettingsPatch {
+                tasks_reminders: Some(false),
+                panel_translucency: Some(35),
+                ..SettingsPatch::default()
+            },
+        )
+        .expect("update");
+        assert!(!settings.tasks_reminders);
+        assert_eq!(settings.panel_translucency, 35);
+
+        let settings = update(
+            &connection,
+            &SettingsPatch {
+                panel_translucency: Some(95),
+                ..SettingsPatch::default()
+            },
+        )
+        .expect("update");
+        assert_eq!(settings.panel_translucency, MAX_PANEL_TRANSLUCENCY);
     }
 }

@@ -5,15 +5,19 @@
  * Pure, like the rest of `lib/`.
  */
 import type { Note } from "./ipc";
-import { parseInline, parseLine, plainText } from "./markdown";
+import { parseInline, parseLine, plainText, toggleTaskLine } from "./markdown";
 import { sortNotes } from "./notes";
+import { parseTaskText, reminderAt, repeatOnTick, type TaskMeta } from "./taskMeta";
 
 export interface Task {
   noteId: string;
   /** Line index in the note's content, which is what `toggleTaskLine` takes. */
   line: number;
+  /** The whole task text, tokens included. */
   text: string;
   checked: boolean;
+  /** Title and details read from `text`. */
+  meta: TaskMeta;
 }
 
 export interface TaskGroup {
@@ -43,7 +47,13 @@ export function collectTasks(notes: Note[]): TaskGroup[] {
         title = plainText(parseInline(text));
       }
       if (parsed.kind === "task") {
-        tasks.push({ noteId: note.id, line, text, checked: parsed.checked });
+        tasks.push({
+          noteId: note.id,
+          line,
+          text,
+          checked: parsed.checked,
+          meta: parseTaskText(text),
+        });
       }
     });
     if (tasks.length > 0) {
@@ -51,6 +61,81 @@ export function collectTasks(notes: Note[]): TaskGroup[] {
     }
   }
   return groups;
+}
+
+/**
+ * Tick or untick the task on line `index`. Ticking a repeating task moves it to
+ * its next date and leaves it open instead, wherever it is ticked from — a card,
+ * the reader or the To-Do tab. Null when that line is not a task.
+ */
+export function tickTask(content: string, index: number, now: Date): string | null {
+  const lines = content.split("\n");
+  const raw = lines[index];
+  if (raw === undefined) {
+    return null;
+  }
+  const line = parseLine(raw);
+  if (line.kind !== "task") {
+    return null;
+  }
+  if (!line.checked) {
+    const moved = repeatOnTick(line.text, now);
+    if (moved !== null) {
+      lines[index] = line.prefix + moved;
+      return lines.join("\n");
+    }
+  }
+  return toggleTaskLine(content, index);
+}
+
+/** Replace the text of the task on line `index`, keeping its box and indent. */
+export function setTaskText(content: string, index: number, text: string): string | null {
+  const lines = content.split("\n");
+  const raw = lines[index];
+  if (raw === undefined) {
+    return null;
+  }
+  const line = parseLine(raw);
+  const clean = text.replace(/\s+/g, " ").trim();
+  if (line.kind !== "task" || clean === "") {
+    return null;
+  }
+  lines[index] = line.prefix + clean;
+  return lines.join("\n");
+}
+
+export interface Reminder {
+  /** Stable while the task and its due time are unchanged, so it fires once. */
+  id: string;
+  /** Unix milliseconds. */
+  at: number;
+  title: string;
+  body: string;
+}
+
+/**
+ * A reminder for every open task with a due date: at its time, or 09:00 for a
+ * whole-day task. Rust schedules and shows them (`reminders_set`); the parsing
+ * stays here, in one place.
+ */
+export function taskReminders(notes: Note[]): Reminder[] {
+  return collectTasks(notes).flatMap((group) =>
+    group.tasks.flatMap((task) => {
+      const { due, title } = task.meta;
+      if (task.checked || due === null) {
+        return [];
+      }
+      const name = plainText(parseInline(title)) || "Task";
+      return [
+        {
+          id: `${task.noteId}|${name}|${due.date}|${due.time ?? ""}`,
+          at: reminderAt(due),
+          title: name,
+          body: due.time === null ? `Due today · ${group.title}` : `Due now · ${group.title}`,
+        },
+      ];
+    }),
+  );
 }
 
 /** How many tasks are still open, for the tab's count. */

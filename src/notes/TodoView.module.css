@@ -41,51 +41,85 @@
 .group {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 4px;
 }
 
-/* The note a group comes from; pressing it opens the note. */
-.groupTitle {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  align-self: flex-start;
-  max-width: 100%;
-  padding: 2px 4px;
-  margin-left: -4px;
-  border: none;
-  border-radius: var(--radius-control);
-  background: transparent;
-  color: var(--text-secondary);
+.heading {
+  margin: 0 0 2px;
   font-size: 12px;
   font-weight: 600;
+  color: var(--text-secondary);
 }
 
-.groupTitle:hover {
-  background: var(--surface-sunken);
+/* Overdue earns emphasis, but in weight: colour belongs to notes (brief 7.1). */
+.overdue {
+  color: var(--text-primary);
 }
 
-.dot {
-  flex: none;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--dot-bg);
-  /* Pale palette colours need an edge on the white surface. */
-  box-shadow: inset 0 0 0 1px var(--border);
+.item {
+  display: flex;
+  flex-direction: column;
 }
 
-.groupName {
+.row {
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+}
+
+.row > :first-child {
+  flex: 1;
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .task {
   font-size: 13px;
   line-height: 1.5;
   color: var(--text-primary);
+}
+
+.detailsButton {
+  flex: none;
+  width: 22px;
+  height: 22px;
+}
+
+/* The note a task comes from, under it; pressing it opens the note. */
+.source {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  align-self: flex-start;
+  max-width: calc(100% - 20px);
+  margin-left: 16px;
+  padding: 0 4px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.source:hover {
+  background: var(--surface-sunken);
+}
+
+.dot {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--dot-bg);
+  /* Pale palette colours need an edge on the white surface. */
+  box-shadow: inset 0 0 0 1px var(--border);
+}
+
+.sourceName {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .doneToggle {
@@ -119,28 +153,6 @@
   .chevron {
     transition: none;
   }
-}
-
-.doneRow {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  min-width: 0;
-}
-
-.doneRow > :first-child {
-  flex: 1;
-  min-width: 0;
-}
-
-.doneFrom {
-  flex: none;
-  max-width: 40%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 11px;
-  color: var(--text-secondary);
 }
 
 .empty {

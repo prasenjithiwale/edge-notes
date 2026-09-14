@@ -50,6 +50,8 @@ const SETTINGS: Settings = {
   theme: "system",
   "notes.lastColor": "yellow",
   "shortcut.newNote": "CmdOrCtrl+Alt+N",
+  "tasks.reminders": true,
+  "panel.translucency": 0,
 };
 
 function commandCalls(command: string): unknown[] {
@@ -664,5 +666,178 @@ describe("the To-Do tab", () => {
 
     await screen.findByLabelText("Search notes");
     expect(useNotesStore.getState().view).toBe("notes");
+  });
+});
+
+describe("sliding between Notes and To-Do", () => {
+  /** The Notes pane and the To-Do pane, children of the sliding track. */
+  function panes(): HTMLElement[] {
+    const track = document.querySelector('[class*="track"]');
+    return Array.from(track?.children ?? []) as HTMLElement[];
+  }
+
+  it("moves the track and the tab highlight, and hides the pane that slid away", async () => {
+    await renderPanel();
+    const tablist = screen.getByRole("tablist", { name: "Panel view" });
+    expect(tablist.style.getPropertyValue("--tab-index")).toBe("0");
+
+    let [notesPane, todoPane] = panes();
+    expect(notesPane?.getAttribute("aria-hidden")).toBe("false");
+    expect(todoPane?.hasAttribute("inert")).toBe(true);
+    expect(notesPane?.parentElement?.className).not.toContain("trackTodo");
+
+    screen.getByRole("tab", { name: "To-Do" }).click();
+
+    await waitFor(() => {
+      expect(tablist.style.getPropertyValue("--tab-index")).toBe("1");
+    });
+    [notesPane, todoPane] = panes();
+    expect(notesPane?.parentElement?.className).toContain("trackTodo");
+    expect(notesPane?.getAttribute("aria-hidden")).toBe("true");
+    expect(notesPane?.hasAttribute("inert")).toBe(true);
+    expect(todoPane?.hasAttribute("inert")).toBe(false);
+    // The hidden Notes cards are out of the accessibility tree.
+    expect(screen.queryByRole("button", { name: "Standup notes" })).toBeNull();
+  });
+
+  it("keeps arrow keys away from the cards while To-Do is showing", async () => {
+    await renderPanel();
+    await useNotesStore.getState().setView("todo");
+
+    const arrow = new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true, cancelable: true });
+    window.dispatchEvent(arrow);
+
+    expect(arrow.defaultPrevented).toBe(false);
+    expect(document.activeElement?.hasAttribute("data-card")).toBe(false);
+  });
+});
+
+describe("task details", () => {
+  // Mon 14 Sep 2026, 13:30 local: fake timers would also stall the store's
+  // debounces, so only the clock is pinned.
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(2026, 8, 14, 13, 30));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  async function todoWith(content: string) {
+    await renderPanel();
+    useNotesStore.getState().setContent("2", content);
+    await useNotesStore.getState().setView("todo");
+    return screen.findByRole("tabpanel", { name: "To-Do" });
+  }
+
+  it("sorts tasks into date sections, highest priority first", async () => {
+    const panel = await todoWith(
+      [
+        "Errands",
+        "- [ ] someday",
+        "- [ ] pay rent @2026-09-01",
+        "- [ ] call bank !low @2026-09-14",
+        "- [ ] submit form !high @2026-09-14 18:00",
+        "- [ ] dentist @2026-09-20 09:00",
+      ].join("\n"),
+    );
+
+    const section = (name: string) =>
+      within(within(panel).getByRole("region", { name }))
+        .getAllByRole("checkbox")
+        .map((box) => box.getAttribute("aria-label"));
+
+    expect(section("Overdue")).toEqual(["pay rent"]);
+    expect(section("Today")).toEqual(["submit form", "call bank"]);
+    expect(section("Upcoming")).toEqual(["dentist"]);
+    expect(section("No date")).toEqual(["someday"]);
+    // Tokens are shown as details, not as text.
+    expect(within(panel).queryByText(/@2026/)).toBeNull();
+    expect(within(panel).getAllByLabelText("High priority")).toHaveLength(1);
+  });
+
+  it("sets priority, date and repeat from the details sheet", async () => {
+    const panel = await todoWith("Errands\n- [ ] call the bank");
+
+    within(panel).getByRole("button", { name: "Task details" }).click();
+    const sheet = await within(panel).findByRole("group", { name: "Task details" });
+
+    within(sheet).getByRole("button", { name: "High" }).click();
+    await waitFor(() => {
+      expect(contentOf("2")).toBe("Errands\n- [ ] call the bank !high");
+    });
+
+    fireEvent.change(within(sheet).getByLabelText("Due"), { target: { value: "2026-09-20" } });
+    await waitFor(() => {
+      expect(contentOf("2")).toBe("Errands\n- [ ] call the bank !high @2026-09-20");
+    });
+    // The date belongs in Upcoming now, but the task holds its place while the
+    // sheet is open, so the sheet is the same element and keeps focus.
+    expect(document.body.contains(sheet)).toBe(true);
+
+    fireEvent.change(within(sheet).getByLabelText("Due time"), { target: { value: "14:00" } });
+    fireEvent.change(within(sheet).getByLabelText("Repeat"), { target: { value: "weekly" } });
+    await waitFor(() => {
+      expect(contentOf("2")).toBe(
+        "Errands\n- [ ] call the bank !high @2026-09-20 14:00 repeat:weekly",
+      );
+    });
+
+    within(sheet).getByRole("button", { name: "Clear" }).click();
+    await waitFor(() => {
+      expect(contentOf("2")).toBe("Errands\n- [ ] call the bank !high");
+    });
+  });
+
+  it("renames a task when its title field is left", async () => {
+    const panel = await todoWith("Errands\n- [ ] call the bnak !low");
+    within(panel).getByRole("button", { name: "Task details" }).click();
+    const title = await within(panel).findByLabelText("Task");
+
+    fireEvent.change(title, { target: { value: "call the bank" } });
+    expect(contentOf("2")).toBe("Errands\n- [ ] call the bnak !low");
+    fireEvent.blur(title);
+
+    await waitFor(() => {
+      expect(contentOf("2")).toBe("Errands\n- [ ] call the bank !low");
+    });
+  });
+
+  it("moves a repeating task to its next date when ticked, from a card too", async () => {
+    await renderPanel();
+    useNotesStore.getState().setContent("2", "Plants\n- [ ] water @2026-09-14 repeat:daily");
+
+    (await screen.findByRole("checkbox", { name: "water" })).click();
+
+    await waitFor(() => {
+      expect(contentOf("2")).toBe("Plants\n- [ ] water @2026-09-15 repeat:daily");
+    });
+  });
+
+  it("shows details as chips on a card", async () => {
+    await renderPanel();
+    useNotesStore.getState().setContent("2", "Plants\n- [ ] water !high @2026-09-15 repeat:daily");
+
+    const card = (await screen.findByRole("checkbox", { name: "water" })).closest("div");
+    expect(card?.textContent).toContain("Tomorrow");
+    expect(within(card as HTMLElement).getByLabelText("High priority")).toBeTruthy();
+    expect(within(card as HTMLElement).getByLabelText("Repeats daily")).toBeTruthy();
+    expect(card?.textContent).not.toContain("repeat:");
+  });
+});
+
+describe("reminders", () => {
+  it("sends Rust the reminders for open dated tasks once notes settle", async () => {
+    await renderPanel();
+    useNotesStore.getState().setContent("2", "Home\n- [ ] pay rent @2026-10-01\n- [ ] no date");
+
+    await waitFor(
+      () => {
+        const sent = commandCalls("reminders_set").at(-1) as { list: { title: string }[] } | undefined;
+        expect(sent?.list.map((reminder) => reminder.title)).toEqual(["pay rent"]);
+      },
+      { timeout: 3_000 },
+    );
   });
 });

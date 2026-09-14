@@ -1,3 +1,5 @@
+import type { CSSProperties } from "react";
+
 import { cx } from "../lib/cx";
 import type { PanelView } from "../store/notes";
 import styles from "./ViewTabs.module.css";
@@ -17,7 +19,15 @@ const TABS: readonly { view: PanelView; label: string }[] = [
 /** Notes and To-Do, in place of the panel title. */
 export function ViewTabs({ view, openTasks, onChange }: ViewTabsProps) {
   return (
-    <div className={styles.tabs} role="tablist" aria-label="Panel view">
+    <div
+      className={styles.tabs}
+      role="tablist"
+      aria-label="Panel view"
+      style={
+        { "--tab-index": TABS.findIndex((tab) => tab.view === view) } as CSSProperties
+      }
+    >
+      <span className={styles.indicator} aria-hidden="true" />
       {TABS.map((tab) => {
         const selected = tab.view === view;
         const count = tab.view === "todo" && openTasks > 0 ? openTasks : null;

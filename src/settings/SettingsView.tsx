@@ -4,9 +4,9 @@ import { ArrowLeft } from "lucide-react";
 import { IconButton } from "../components/IconButton";
 import { monitorsList, notesExport, type Settings } from "../lib/ipc";
 import { useDockStore } from "../store/dock";
-import { useSettingsStore } from "../store/settings";
+import { applyPanelTranslucency, useSettingsStore } from "../store/settings";
 import styles from "./SettingsView.module.css";
-import { PANEL_WIDTH, DELAY, clampSetting, type Range } from "./limits";
+import { PANEL_TRANSLUCENCY, PANEL_WIDTH, DELAY, clampSetting, type Range } from "./limits";
 
 interface SettingsViewProps {
   onClose: () => void;
@@ -140,6 +140,81 @@ function SegmentedSetting<T extends string>({
   );
 }
 
+interface SliderSettingProps {
+  label: string;
+  value: number;
+  range: Range;
+  step: number;
+  /** While dragging: show the value without storing it. */
+  onPreview: (value: number) => void;
+  /** Once released: store it. */
+  onCommit: (value: number) => void;
+}
+
+/**
+ * A slider with its value as a percentage beside it. Dragging previews every
+ * step and stores only the value it is released at, so a drag is one write, not
+ * one per step; the keyboard commits each change, which is what a key press is.
+ */
+function SliderSetting({ label, value, range, step, onPreview, onCommit }: SliderSettingProps) {
+  const [draft, setDraft] = useState(value);
+  const [dragging, setDragging] = useState(false);
+  const [lastValue, setLastValue] = useState(value);
+
+  // Follow the stored value when it changes elsewhere, but not mid-drag.
+  if (!dragging && value !== lastValue) {
+    setLastValue(value);
+    setDraft(value);
+  }
+
+  const commit = (next: number) => {
+    setDragging(false);
+    if (next !== value) {
+      onCommit(next);
+    }
+  };
+
+  return (
+    <label className={styles.row}>
+      <span className={styles.label}>{label}</span>
+      <span className={styles.control}>
+        <input
+          type="range"
+          className={styles.slider}
+          min={range.min}
+          max={range.max}
+          step={step}
+          value={draft}
+          aria-valuetext={`${String(draft)}%`}
+          onPointerDown={() => {
+            setDragging(true);
+          }}
+          onChange={(event) => {
+            const next = Number(event.target.value);
+            setDraft(next);
+            onPreview(next);
+          }}
+          onPointerUp={(event) => {
+            commit(Number(event.currentTarget.value));
+          }}
+          onKeyUp={(event) => {
+            commit(Number(event.currentTarget.value));
+          }}
+          onBlur={(event) => {
+            commit(Number(event.currentTarget.value));
+          }}
+        />
+        <output className={styles.percent}>{`${String(draft)}%`}</output>
+      </span>
+    </label>
+  );
+}
+
+const REMINDERS: Choice<"on" | "off">[] = [
+  { value: "on", label: "On" },
+  { value: "off", label: "Off" },
+];
+
 const THEMES: Choice<Settings["theme"]>[] = [
   { value: "system", label: "System" },
   { value: "light", label: "Light" },
@@ -225,6 +300,26 @@ export function SettingsView({ onClose }: SettingsViewProps) {
           value={settings["tab.appearance"]}
           onChange={(appearance) => {
             void patch({ "tab.appearance": appearance });
+          }}
+        />
+
+        <SliderSetting
+          label="Panel translucency"
+          value={settings["panel.translucency"]}
+          range={PANEL_TRANSLUCENCY}
+          step={5}
+          onPreview={applyPanelTranslucency}
+          onCommit={(value) => {
+            void patch({ "panel.translucency": value });
+          }}
+        />
+
+        <SegmentedSetting
+          legend="Task reminders"
+          choices={REMINDERS}
+          value={settings["tasks.reminders"] ? "on" : "off"}
+          onChange={(choice) => {
+            void patch({ "tasks.reminders": choice === "on" });
           }}
         />
 

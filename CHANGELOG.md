@@ -16,7 +16,17 @@ To release, see "Releasing" in the README.
   the number still open on the tab. Tick tasks there and the note updates; a task
   ticked stays in place until you leave the tab, then moves under "Done". "Add a
   task" adds to the note titled To-Do, creating it the first time. Pressing a
-  group's name opens its note.
+  group's name opens its note. Switching between Notes and To-Do slides.
+- **Task details.** Tasks can have a priority, a due date and time, and a repeat
+  (daily, weekly, monthly, yearly), set from a details button on the To-Do tab or
+  typed at the end of a checklist line (`!high @2026-09-20 14:00 repeat:weekly`).
+  The To-Do tab groups tasks into Overdue, Today, Upcoming and No date, highest
+  priority first; cards show the details as small chips. Ticking a repeating task
+  moves it to its next date.
+- **Reminders.** A system notification when a task is due, or at 9:00 for a task
+  with a date but no time. Can be turned off in Settings.
+- **Panel translucency.** A slider in Settings makes the panel see-through, up to
+  60 %.
 
 ## [0.0.1] - 2026-09-14
 

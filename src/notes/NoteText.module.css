@@ -81,3 +81,31 @@
   text-decoration: line-through;
   opacity: var(--note-secondary-opacity);
 }
+
+/* Task details after the text. They never shrink: the title truncates first. */
+.chips {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  opacity: var(--note-secondary-opacity);
+}
+
+/* Priority is the flag's fill and weight, not a colour. */
+.priority-high {
+  opacity: 1;
+}
+
+.overdue {
+  font-weight: 600;
+  opacity: 1;
+}

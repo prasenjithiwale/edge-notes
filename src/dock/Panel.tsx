@@ -9,6 +9,7 @@ import { isExpandedPhase } from "../lib/dock";
 import {
   appQuit,
   dockSetLarge,
+  remindersSet,
   dockToggle,
   NOTE_COLORS,
   onNewNoteRequested,
@@ -16,7 +17,7 @@ import {
   onSettingsChanged,
 } from "../lib/ipc";
 import { facetColors, filterNotes } from "../lib/notes";
-import { openTaskCount } from "../lib/tasks";
+import { openTaskCount, taskReminders } from "../lib/tasks";
 import { moveCardFocus } from "../notes/cardFocus";
 import { ColorFilter } from "../notes/ColorFilter";
 import { EmptyState } from "../notes/EmptyState";
@@ -37,6 +38,9 @@ import { useDockStore } from "../store/dock";
 import { useNotesStore } from "../store/notes";
 import { useSettingsStore } from "../store/settings";
 import styles from "./Panel.module.css";
+
+/** How long notes must be still before the reminder list is re-sent. */
+const REMINDERS_DEBOUNCE_MS = 1_000;
 
 interface PanelProps {
   className: string;
@@ -247,8 +251,9 @@ export function Panel({ className }: PanelProps) {
         return;
       }
       if (event.key === "ArrowDown" || event.key === "ArrowUp") {
-        // Inside a text field the arrows belong to the caret.
-        if (isTextField(event.target)) {
+        // Inside a text field the arrows belong to the caret, and the cards are
+        // only reachable while the Notes tab is showing.
+        if (isTextField(event.target) || notesStore.view !== "notes") {
           return;
         }
         if (
@@ -295,11 +300,30 @@ export function Panel({ className }: PanelProps) {
     if (editingId !== null || previous === null) {
       return;
     }
+    // Switching to To-Do also closes the editor; the card is off screen then.
+    if (useNotesStore.getState().view !== "notes") {
+      return;
+    }
     const card = panelRef.current?.querySelector<HTMLElement>(
       `[data-card][data-id="${previous}"]`,
     );
     card?.focus();
   }, [editingId]);
+
+  // Reminders follow the notes: every change sends Rust the whole list, after a
+  // pause so a burst of typing is one update. Rust keeps what it has already
+  // shown, so a re-sent list never repeats a notification.
+  useEffect(() => {
+    if (!loaded) {
+      return;
+    }
+    const timer = setTimeout(() => {
+      void remindersSet(taskReminders(notes));
+    }, REMINDERS_DEBOUNCE_MS);
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [notes, loaded]);
 
   const isEmpty = loaded && notes.length === 0;
   const openTasks = useMemo(() => openTaskCount(notes), [notes]);
@@ -395,52 +419,70 @@ export function Panel({ className }: PanelProps) {
             setShowSettings(false);
           }}
         />
-      ) : view === "todo" ? (
-        <TodoView
-          onOpenNote={(id) => {
-            void setView("notes").then(() => {
-              startEditing(id);
-            });
-          }}
-        />
       ) : (
-        <>
-          {facets.length > 0 && (
-            <ColorFilter
-              colors={facets}
-              selected={colorFilter}
-              onSelect={setColorFilter}
-            />
-          )}
+        // Notes and To-Do sit side by side on a track that slides between them,
+        // in tab order. Both stay mounted so there is something to slide; the
+        // one off screen is inert and hidden from assistive technology, and
+        // becomes invisible once the slide has finished.
+        <div className={styles.views}>
+          <div className={cx(styles.track, view === "todo" && styles.trackTodo)}>
+            <div
+              className={styles.pane}
+              aria-hidden={view !== "notes"}
+              inert={view !== "notes"}
+            >
+              {facets.length > 0 && (
+                <ColorFilter
+                  colors={facets}
+                  selected={colorFilter}
+                  onSelect={setColorFilter}
+                />
+              )}
 
-          {/* Nothing until the first load resolves, so the panel never flashes an
-          empty state on the way in. */}
-          {!loaded ? null : isEmpty ? (
-            <EmptyState
-              kind="no-notes"
-              onCreate={() => {
-                void createNote();
-              }}
-            />
-          ) : visible.length === 0 ? (
-            query.trim() === "" ? (
-              <EmptyState kind="no-colour" />
-            ) : (
-              <EmptyState kind="no-matches" query={query.trim()} />
-            )
-          ) : (
-            <NoteList
-              notes={visible}
-              editingId={editingId}
-              onOpen={startEditing}
-              onUnpin={(id) => {
-                void setPinned(id, false);
-              }}
-              onExpand={openExpanded}
-              onToggleTask={toggleTask}
-            />
-          )}
-        </>
+              {/* Nothing until the first load resolves, so the panel never flashes
+              an empty state on the way in. */}
+              {!loaded ? null : isEmpty ? (
+                <EmptyState
+                  kind="no-notes"
+                  onCreate={() => {
+                    void createNote();
+                  }}
+                />
+              ) : visible.length === 0 ? (
+                query.trim() === "" ? (
+                  <EmptyState kind="no-colour" />
+                ) : (
+                  <EmptyState kind="no-matches" query={query.trim()} />
+                )
+              ) : (
+                <NoteList
+                  notes={visible}
+                  editingId={editingId}
+                  onOpen={startEditing}
+                  onUnpin={(id) => {
+                    void setPinned(id, false);
+                  }}
+                  onExpand={openExpanded}
+                  onToggleTask={toggleTask}
+                />
+              )}
+            </div>
+            <div
+              className={styles.pane}
+              aria-hidden={view !== "todo"}
+              inert={view !== "todo"}
+            >
+              <TodoView
+                active={view === "todo"}
+                onOpenNote={(id) => {
+                  void setView("notes").then(() => {
+                    startEditing(id);
+                  });
+                }}
+              />
+            </div>
+          </div>
+        </div>
       )}
 
       {pendingUndo && (

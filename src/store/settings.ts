@@ -20,6 +20,8 @@ const DEFAULTS: Settings = {
   theme: "system",
   "notes.lastColor": "yellow",
   "shortcut.newNote": "CmdOrCtrl+Alt+N",
+  "tasks.reminders": true,
+  "panel.translucency": 0,
 };
 
 /**
@@ -33,6 +35,21 @@ function applyTheme(theme: Settings["theme"]): void {
   } else {
     root.setAttribute("data-theme", theme);
   }
+}
+
+/**
+ * `panel.translucency` as the panel's surface opacity. Set on the root so the
+ * settings slider can preview a value while it is dragged, without a write per
+ * step, and the stored value takes over when it is released.
+ */
+export function applyPanelTranslucency(percent: number): void {
+  const clamped = Math.min(Math.max(percent, 0), 100);
+  document.documentElement.style.setProperty("--panel-alpha", String(1 - clamped / 100));
+}
+
+function applyAppearance(settings: Settings): void {
+  applyTheme(settings.theme);
+  applyPanelTranslucency(settings["panel.translucency"]);
 }
 
 interface SettingsStore {
@@ -50,7 +67,7 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
   load: async () => {
     try {
       const settings = await settingsGet();
-      applyTheme(settings.theme);
+      applyAppearance(settings);
       set({ settings, loaded: true });
     } catch (error: unknown) {
       // Defaults are already in place, so the panel still works.
@@ -59,13 +76,13 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
     }
   },
   apply: (settings) => {
-    applyTheme(settings.theme);
+    applyAppearance(settings);
     set({ settings });
   },
   patch: async (patch) => {
     try {
       const settings = await settingsUpdate(patch);
-      applyTheme(settings.theme);
+      applyAppearance(settings);
       set({ settings });
     } catch (error: unknown) {
       console.error("settings: update failed", error);

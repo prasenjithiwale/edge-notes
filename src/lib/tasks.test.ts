@@ -7,7 +7,10 @@ import {
   findTodoNote,
   newTodoNote,
   openTaskCount,
+  setTaskText,
   taskLine,
+  taskReminders,
+  tickTask,
 } from "./tasks";
 
 function note(overrides: Partial<Note> & { id: string }): Note {
@@ -35,10 +38,10 @@ describe("collectTasks", () => {
 
     expect(groups.map((group) => group.note.id)).toEqual(["r", "g"]);
     expect(groups[1]?.title).toBe("Groceries");
-    expect(groups[1]?.tasks).toEqual([
-      { noteId: "g", line: 1, text: "milk", checked: false },
-      { noteId: "g", line: 2, text: "eggs", checked: true },
-      { noteId: "g", line: 4, text: "rice", checked: false },
+    expect(groups[1]?.tasks.map(({ line, text, checked }) => ({ line, text, checked }))).toEqual([
+      { line: 1, text: "milk", checked: false },
+      { line: 2, text: "eggs", checked: true },
+      { line: 4, text: "rice", checked: false },
     ]);
   });
 
@@ -95,5 +98,62 @@ describe("adding a task", () => {
 
   it("starts a To-Do note with its first task", () => {
     expect(newTodoNote("Pay rent")).toBe("To-Do\n- [ ] Pay rent");
+  });
+});
+
+describe("tickTask", () => {
+  const NOW = new Date(2026, 8, 14, 13, 30);
+
+  it("ticks an ordinary task and unticks it again", () => {
+    const content = "List\n- [ ] milk !high";
+    expect(tickTask(content, 1, NOW)).toBe("List\n- [x] milk !high");
+    expect(tickTask("List\n- [x] milk", 1, NOW)).toBe("List\n- [ ] milk");
+  });
+
+  it("moves a repeating task to its next date and keeps it open", () => {
+    expect(tickTask("  - [ ] water plants @2026-09-14 repeat:daily", 0, NOW)).toBe(
+      "  - [ ] water plants @2026-09-15 repeat:daily",
+    );
+  });
+
+  it("refuses a line that is not a task", () => {
+    expect(tickTask("List\n- milk", 1, NOW)).toBeNull();
+  });
+});
+
+describe("setTaskText", () => {
+  it("replaces the text and keeps the box, tick and indent", () => {
+    expect(setTaskText("List\n  - [x] milk", 1, "milk !low")).toBe("List\n  - [x] milk !low");
+  });
+
+  it("refuses an empty text or a line that is not a task", () => {
+    expect(setTaskText("List\n- [ ] milk", 1, "  ")).toBeNull();
+    expect(setTaskText("List", 0, "x")).toBeNull();
+  });
+});
+
+describe("taskReminders", () => {
+  it("reminds for open tasks with a date, at their time or nine in the morning", () => {
+    const reminders = taskReminders([
+      note({
+        id: "n",
+        content:
+          "Errands\n- [ ] **Call** the bank @2026-09-20 14:00\n- [ ] Pay rent @2026-10-01\n- [x] Done @2026-09-20\n- [ ] Someday",
+      }),
+    ]);
+    expect(reminders).toEqual([
+      {
+        id: "n|Call the bank|2026-09-20|14:00",
+        at: new Date(2026, 8, 20, 14, 0).getTime(),
+        title: "Call the bank",
+        body: "Due now · Errands",
+      },
+      {
+        id: "n|Pay rent|2026-10-01|",
+        at: new Date(2026, 9, 1, 9, 0).getTime(),
+        title: "Pay rent",
+        body: "Due today · Errands",
+      },
+    ]);
   });
 });

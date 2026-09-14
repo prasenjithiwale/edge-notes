@@ -3,6 +3,7 @@
  * Components never call `invoke` directly.
  */
 import { invoke } from "@tauri-apps/api/core";
+import type { Reminder } from "./tasks";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 
 /**
@@ -68,6 +69,10 @@ export interface Settings {
   theme: "system" | "light" | "dark";
   "notes.lastColor": NoteColor;
   "shortcut.newNote": string;
+  /** A system notification when a task is due. */
+  "tasks.reminders": boolean;
+  /** How see-through the panel is, 0 (solid) to 60 percent. */
+  "panel.translucency": number;
 }
 
 export type SettingsPatch = Partial<Settings>;
@@ -175,6 +180,11 @@ export function dockToggle(): Promise<void> {
 /** Grow the open panel for an expanded note, or return it to normal. */
 export function dockSetLarge(value: boolean): Promise<void> {
   return call("dock_set_large", { value });
+}
+
+/** The full list of task reminders; Rust schedules and shows them. */
+export function remindersSet(list: Reminder[]): Promise<void> {
+  return call("reminders_set", { list });
 }
 
 /** Open a web link from a note in the default browser. */

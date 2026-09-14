@@ -1,18 +1,36 @@
-/* A segmented control in the chrome's neutral colours: sunken track, the
+/* A segmented control in the chrome's neutral colours: a sunken track with the
    selected segment raised to the surface. No accent — that is for focus rings
    and Keep open (brief 7.1). */
 .tabs {
-  display: flex;
-  align-items: center;
+  position: relative;
+  display: grid;
+  /* Equal segments, so the highlight can slide by exactly one segment. */
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 2px;
   padding: 2px;
   border-radius: var(--radius-control);
   background: var(--surface-sunken);
 }
 
+/* The raised highlight, one segment wide, sliding to the selected tab. `100%` in
+   its transform is its own width, so each step is a segment plus the gap. */
+.indicator {
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  left: 2px;
+  width: calc((100% - 6px) / 2);
+  border-radius: 6px;
+  background: var(--surface);
+  transform: translateX(calc(var(--tab-index, 0) * (100% + 2px)));
+  transition: transform var(--open-duration) var(--open-easing);
+}
+
 .tab {
+  position: relative;
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 4px;
   height: 24px;
   padding: 0 10px;
@@ -21,13 +39,14 @@
   background: transparent;
   color: var(--text-secondary);
   font-size: 13px;
-  font-weight: 400;
+  /* The same weight either way: a label that thickened when selected would
+     widen its segment mid-slide. Colour and the highlight carry the state. */
+  font-weight: 600;
+  transition: color var(--open-duration) var(--open-easing);
 }
 
 .selected {
-  background: var(--surface);
   color: var(--text-primary);
-  font-weight: 600;
 }
 
 .count {
@@ -35,4 +54,11 @@
   font-weight: 400;
   color: var(--text-secondary);
   font-variant-numeric: tabular-nums;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .indicator,
+  .tab {
+    transition: none;
+  }
 }

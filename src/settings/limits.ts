@@ -11,6 +11,13 @@ export interface Range {
 /** Brief 6.4: the panel is 320 px, later configurable between 280 and 420. */
 export const PANEL_WIDTH: Range = { min: 280, max: 420, fallback: 320 };
 
+/**
+ * How see-through the panel can be made. Beyond 60 % notes over a busy desktop
+ * stop being readable, since there is no blur behind the panel. Rust clamps to
+ * the same bound (`MAX_PANEL_TRANSLUCENCY`).
+ */
+export const PANEL_TRANSLUCENCY: Range = { min: 0, max: 60, fallback: 0 };
+
 /** Brief 6.2 defaults, with room to tune either way. */
 export const DELAY: { open: Range; close: Range } = {
   open: { min: 0, max: 1_000, fallback: 120 },

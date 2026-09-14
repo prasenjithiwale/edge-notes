@@ -138,3 +138,17 @@
   /* A long path must wrap rather than widen the panel. */
   overflow-wrap: anywhere;
 }
+
+.slider {
+  width: 120px;
+  accent-color: var(--text-secondary);
+}
+
+/* Fixed width, so the slider does not shift as the number gains a digit. */
+.percent {
+  min-width: 32px;
+  text-align: right;
+  font-size: 12px;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}

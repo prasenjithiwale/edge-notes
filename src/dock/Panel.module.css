@@ -1,7 +1,9 @@
 .panel {
   display: flex;
   flex-direction: column;
-  background: var(--surface);
+  /* `--panel-alpha` comes from the panel translucency setting; solid by default,
+     as brief 7.1 has it. Notes keep their own solid colours on top. */
+  background: rgb(var(--surface-rgb) / var(--panel-alpha, 1));
   border-radius: var(--radius-panel);
   /* The panel carries the only shadow in the app (brief 7.1). */
   box-shadow: var(--shadow-panel);
@@ -32,4 +34,57 @@
   display: flex;
   flex-direction: column;
   padding: 0 12px 12px;
+}
+
+/* The Notes and To-Do tabs: a track twice the panel's width, holding one pane per
+   tab, that slides by a pane when the tab changes. */
+.views {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  overflow: hidden;
+}
+
+.track {
+  flex: none;
+  width: 200%;
+  display: flex;
+  transform: translateX(0);
+  transition: transform var(--open-duration) var(--open-easing);
+}
+
+.trackTodo {
+  transform: translateX(-50%);
+}
+
+.pane {
+  width: 50%;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Off screen once the slide ends: invisible, so nothing in it can be focused or
+   read out even where `inert` is not supported (WebKit before 15.5). Shown at
+   once when it becomes the active pane, so it is visible for the whole slide. */
+.pane[aria-hidden="true"] {
+  visibility: hidden;
+  transition: visibility 0s linear var(--open-duration);
+}
+
+/* Brief 6.2: no slide under reduced motion, a short fade instead. */
+@media (prefers-reduced-motion: reduce) {
+  .track {
+    transition: none;
+  }
+
+  .pane {
+    transition: opacity 80ms linear;
+  }
+
+  .pane[aria-hidden="true"] {
+    opacity: 0;
+    transition: none;
+  }
 }

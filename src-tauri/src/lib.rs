@@ -10,6 +10,7 @@ pub mod error;
 pub mod export;
 pub mod links;
 pub mod platform;
+pub mod reminders;
 pub mod tray;
 
 use std::sync::Arc;
@@ -40,7 +41,8 @@ pub fn run() {
             MacosLauncher::LaunchAgent,
             None,
         ))
-        .plugin(tauri_plugin_global_shortcut::Builder::new().build());
+        .plugin(tauri_plugin_global_shortcut::Builder::new().build())
+        .plugin(tauri_plugin_notification::init());
 
     #[cfg(target_os = "macos")]
     let builder = builder.plugin(tauri_nspanel::init());
@@ -65,6 +67,7 @@ pub fn run() {
             commands::notes_restore,
             commands::notes_export,
             commands::open_url,
+            commands::reminders_set,
             commands::monitors_list,
             commands::settings_get,
             commands::settings_update,
@@ -90,6 +93,11 @@ pub fn run() {
             let timings = stored.timings();
             app.manage(database);
 
+            // Task reminders run on their own thread; the frontend sends the list.
+            let reminders = reminders::Reminders::new(stored.tasks_reminders);
+            reminders.spawn(handle.clone());
+            app.manage(reminders);
+
             let window = handle
                 .get_webview_window(DOCK_WINDOW_LABEL)
                 .ok_or("the dock window is missing from tauri.conf.json")?;
@@ -110,7 +118,14 @@ pub fn run() {
                     WindowEvent::Focused(false) => {
                         dock.input(&event_handle, Input::WindowBlurred);
                     }
-                    WindowEvent::Destroyed => dock.stop(),
+                    WindowEvent::Destroyed => {
+                        dock.stop();
+                        if let Some(reminders) =
+                            event_handle.try_state::<Arc<reminders::Reminders>>()
+                        {
+                            reminders.stop();
+                        }
+                    }
                     _ => {}
                 }
             });

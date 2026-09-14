@@ -94,6 +94,15 @@ pub fn open_url(url: String) -> AppResult<()> {
     crate::links::open(&url)
 }
 
+/// The full list of task reminders, sent by the frontend whenever notes change.
+#[tauri::command]
+pub fn reminders_set(
+    reminders: State<'_, Arc<crate::reminders::Reminders>>,
+    list: Vec<crate::reminders::Reminder>,
+) {
+    reminders.set(list);
+}
+
 /// The pointer left the webview. Brief 8.2 and 8.10: on Linux the polled cursor
 /// can go stale once the pointer is over a native Wayland window, so this backs
 /// it up. The controller ignores it unless the cursor really is outside, which
@@ -253,6 +262,12 @@ pub fn settings_update(
         {
             let geometry = poller::geometry_for(&app, &updated.placement());
             dock.set_geometry(&app, geometry);
+        }
+        if let (Some(enabled), Some(reminders)) = (
+            patch.tasks_reminders,
+            app.try_state::<Arc<crate::reminders::Reminders>>(),
+        ) {
+            reminders.set_enabled(enabled);
         }
         if patch.dock_open_delay_ms.is_some()
             || patch.dock_close_delay_ms.is_some()

@@ -101,6 +101,10 @@ Never edit a migration that has shipped — append a new one. Repository functio
 
 **To-Do is a view of the notes, not a second store.** A task is a `- [ ]` line in a note; `lib/tasks.ts` gathers them and "Add a task" appends to the note titled To-Do (found by title). `TodoView` freezes group order and keeps tasks ticked during a visit in place, because ticking bumps `updated_at` and would otherwise reshuffle the view under the cursor.
 
+**Task details are tokens at the end of the task line** (`!high @2026-09-20 14:00 repeat:weekly`), parsed only from the end so mid-sentence text is never a token. `lib/taskMeta.ts` is the one parser; everything that needs the time takes `now`. Ticking goes through `tickTask`, which moves a repeating task to its next date instead of ticking it — never call `toggleTaskLine` directly for a tick.
+
+**Reminders: the frontend computes, Rust keeps time.** `Panel` sends the full list from `taskReminders` via `reminders_set` after notes settle; `reminders.rs` runs one thread that shows each once through `tauri-plugin-notification`, remembering shown ids so re-sending never repeats one. Keep the task format out of Rust.
+
 **An interaction lock is derived from state, never acquired in one place and released in another.** `SearchField` took it in `onFocus` and released it in an effect cleanup, and React's mount/cleanup/mount cycle dropped it: re-focusing an already-focused input fires no event, so nothing took it back and the panel slid away mid-search. Hold a lock in a `useEffect` keyed on the state that justifies it; `setLock` is idempotent and only talks to Rust when the aggregate flips.
 
 **An explicit dismissal suppresses hover until the cursor leaves.** Brief 6.1 reverses a close when the cursor *re-enters*, which presumes it left. Without `dismissed`, Esc with the mouse resting on the panel reversed instantly and looked dead, and Keep open made the panel impossible to dismiss at all.
