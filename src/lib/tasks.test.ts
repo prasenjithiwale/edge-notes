@@ -78,6 +78,11 @@ describe("findTodoNote", () => {
     expect(findTodoNote(notes)?.id).toBe("t");
   });
 
+  it("finds a note titled Tasks, and still one titled To-Do", () => {
+    expect(findTodoNote([note({ id: "a", content: "tasks\n- [ ] x" })])?.id).toBe("a");
+    expect(findTodoNote([note({ id: "b", content: "To-Do\n- [ ] x" })])?.id).toBe("b");
+  });
+
   it("does not match a title that merely contains the word", () => {
     expect(findTodoNote([note({ id: "a", content: "To-Do later\n- [ ] x" })])).toBeUndefined();
     expect(findTodoNote([note({ id: "b", content: "" })])).toBeUndefined();
@@ -96,8 +101,8 @@ describe("adding a task", () => {
     expect(appendTask("To-Do", " ")).toBeNull();
   });
 
-  it("starts a To-Do note with its first task", () => {
-    expect(newTodoNote("Pay rent")).toBe("To-Do\n- [ ] Pay rent");
+  it("starts a Tasks note with its first task", () => {
+    expect(newTodoNote("Pay rent")).toBe("Tasks\n- [ ] Pay rent");
   });
 });
 

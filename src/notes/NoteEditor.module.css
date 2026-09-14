@@ -1,5 +1,7 @@
 .editor {
   background: var(--note-bg);
+  /* Open for editing, the card is raised a step above its neighbours. */
+  box-shadow: var(--shadow-card-raised);
   color: var(--note-text);
   border-radius: var(--radius-card);
   padding: 10px 12px;

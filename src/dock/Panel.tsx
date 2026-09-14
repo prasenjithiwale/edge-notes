@@ -300,7 +300,7 @@ export function Panel({ className }: PanelProps) {
     if (editingId !== null || previous === null) {
       return;
     }
-    // Switching to To-Do also closes the editor; the card is off screen then.
+    // Switching to Tasks also closes the editor; the card is off screen then.
     if (useNotesStore.getState().view !== "notes") {
       return;
     }
@@ -420,7 +420,7 @@ export function Panel({ className }: PanelProps) {
           }}
         />
       ) : (
-        // Notes and To-Do sit side by side on a track that slides between them,
+        // Notes and Tasks sit side by side on a track that slides between them,
         // in tab order. Both stay mounted so there is something to slide; the
         // one off screen is inert and hidden from assistive technology, and
         // becomes invisible once the slide has finished.

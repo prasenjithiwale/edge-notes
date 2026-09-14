@@ -11,20 +11,22 @@ To release, see "Releasing" in the README.
 
 ### Added
 
-- **To-Do tab.** Tabs at the top of the panel switch between Notes and To-Do. The
-  To-Do tab gathers every checklist item from every note, grouped by note, with
+- **Tasks tab.** Tabs at the top of the panel switch between Notes and Tasks. The
+  Tasks tab gathers every checklist item from every note, grouped by note, with
   the number still open on the tab. Tick tasks there and the note updates; a task
   ticked stays in place until you leave the tab, then moves under "Done". "Add a
-  task" adds to the note titled To-Do, creating it the first time. Pressing a
-  group's name opens its note. Switching between Notes and To-Do slides.
+  task" adds to the note titled Tasks (or To-Do), creating it the first time.
+  Pressing a task's note name opens the note. Switching tabs slides.
 - **Task details.** Tasks can have a priority, a due date and time, and a repeat
-  (daily, weekly, monthly, yearly), set from a details button on the To-Do tab or
+  (daily, weekly, monthly, yearly), set from a details button on the Tasks tab or
   typed at the end of a checklist line (`!high @2026-09-20 14:00 repeat:weekly`).
-  The To-Do tab groups tasks into Overdue, Today, Upcoming and No date, highest
+  The Tasks tab groups tasks into Overdue, Today, Upcoming and No date, highest
   priority first; cards show the details as small chips. Ticking a repeating task
   moves it to its next date.
 - **Reminders.** A system notification when a task is due, or at 9:00 for a task
   with a date but no time. Can be turned off in Settings.
+- **Cards with depth.** Note cards have a soft shadow, and an open note sits a
+  step higher.
 - **Panel translucency.** A slider in Settings makes the panel see-through, up to
   60 %.
 

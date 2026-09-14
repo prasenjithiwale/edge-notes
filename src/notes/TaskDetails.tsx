@@ -1,8 +1,11 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
+import { CalendarDays, Flag, Repeat as RepeatIcon, X } from "lucide-react";
 
 import { cx } from "../lib/cx";
 import {
+  addDays,
   dateKey,
+  dueLabel,
   formatTaskText,
   PRIORITIES,
   priorityLabel,
@@ -13,6 +16,7 @@ import {
   type TaskMeta,
 } from "../lib/taskMeta";
 import type { Task } from "../lib/tasks";
+import { useNow } from "../lib/useNow";
 import { useNotesStore } from "../store/notes";
 import styles from "./TaskDetails.module.css";
 
@@ -21,14 +25,50 @@ interface TaskDetailsProps {
   onClose: () => void;
 }
 
+function Section({
+  icon,
+  label,
+  children,
+}: {
+  icon: ReactNode;
+  label: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className={styles.section} role="group" aria-label={label}>
+      <div className={styles.caption} aria-hidden="true">
+        {icon}
+        {label}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+/** A flag drawn with more weight the higher the priority. */
+function PriorityFlag({ priority }: { priority: Priority }) {
+  return (
+    <Flag
+      size={12}
+      strokeWidth={priority === "low" ? 1.5 : 2}
+      fill={priority === "high" ? "currentColor" : "none"}
+      className={cx(styles.flag, priority === "low" && styles.flagLow)}
+      aria-hidden="true"
+    />
+  );
+}
+
 /**
  * Priority, due date and time, and repeat for one task, set without typing the
- * tokens. Every change is written straight into the note's line. The title is
- * edited here too, committed when the field is left or Enter is pressed, so a
+ * tokens. A raised sheet under the task: the title large at the top, then one
+ * section per detail, each a row of chips a click away, and a one-line summary of
+ * what is set beside Done. Every change is written straight into the note's
+ * line; the title commits when its field is left or Enter is pressed, so a
  * half-typed title never reaches the note.
  */
 export function TaskDetails({ task, onClose }: TaskDetailsProps) {
   const setTaskLine = useNotesStore((state) => state.setTaskLine);
+  const now = useNow();
   const { meta } = task;
   const [title, setTitle] = useState(meta.title);
   // Every save rewrites the line, so the sheet stays mounted (a date field keeps
@@ -49,13 +89,32 @@ export function TaskDetails({ task, onClose }: TaskDetailsProps) {
     }
   };
 
+  const today = dateKey(new Date(now));
+  const quickDates = [
+    { label: "Today", date: today },
+    { label: "Tomorrow", date: addDays(today, 1) },
+    { label: "Next week", date: addDays(today, 7) },
+  ];
+  const setDate = (date: string) => {
+    save({ due: { date, time: meta.due?.time ?? null } });
+  };
+
+  const summary = [
+    meta.priority === null ? null : `${priorityLabel(meta.priority)} priority`,
+    meta.due === null ? null : dueLabel(meta.due, new Date(now)),
+    meta.repeat === null ? null : `Repeats ${repeatLabel(meta.repeat).toLowerCase()}`,
+  ]
+    .filter((part) => part !== null)
+    .join(" · ");
+
   return (
-    <div className={styles.details} role="group" aria-label="Task details">
+    <div className={styles.sheet} role="group" aria-label="Task details">
       <input
         type="text"
         className={styles.title}
         value={title}
         aria-label="Task"
+        placeholder="Task"
         onChange={(event) => {
           setTitle(event.target.value);
         }}
@@ -68,15 +127,8 @@ export function TaskDetails({ task, onClose }: TaskDetailsProps) {
         }}
       />
 
-      <div className={styles.field}>
-        <span className={styles.label} id={`priority-${task.noteId}-${String(task.line)}`}>
-          Priority
-        </span>
-        <div
-          className={styles.segments}
-          role="group"
-          aria-labelledby={`priority-${task.noteId}-${String(task.line)}`}
-        >
+      <Section icon={<Flag size={12} strokeWidth={2} />} label="Priority">
+        <div className={styles.segments}>
           {([null, ...PRIORITIES] as (Priority | null)[]).map((priority) => (
             <button
               key={priority ?? "none"}
@@ -87,30 +139,47 @@ export function TaskDetails({ task, onClose }: TaskDetailsProps) {
                 save({ priority });
               }}
             >
+              {priority !== null && <PriorityFlag priority={priority} />}
               {priority === null ? "None" : priorityLabel(priority)}
             </button>
           ))}
         </div>
-      </div>
+      </Section>
 
-      <div className={styles.field}>
-        <label className={styles.label} htmlFor={`date-${task.noteId}-${String(task.line)}`}>
-          Due
-        </label>
-        <div className={styles.inline}>
+      <Section icon={<CalendarDays size={12} strokeWidth={2} />} label="Due">
+        <div className={styles.chips}>
+          {quickDates.map((quick) => (
+            <button
+              key={quick.label}
+              type="button"
+              className={cx(styles.chip, meta.due?.date === quick.date && styles.selected)}
+              aria-pressed={meta.due?.date === quick.date}
+              onClick={() => {
+                setDate(quick.date);
+              }}
+            >
+              {quick.label}
+            </button>
+          ))}
+        </div>
+        <div className={styles.when}>
           <input
-            id={`date-${task.noteId}-${String(task.line)}`}
             type="date"
-            className={styles.input}
+            className={cx(styles.input, styles.date)}
+            aria-label="Due date"
             value={meta.due?.date ?? ""}
             onChange={(event) => {
               const date = event.target.value;
-              save({ due: date === "" ? null : { date, time: meta.due?.time ?? null } });
+              if (date === "") {
+                save({ due: null });
+              } else {
+                setDate(date);
+              }
             }}
           />
           <input
             type="time"
-            className={styles.input}
+            className={cx(styles.input, styles.time)}
             aria-label="Due time"
             value={meta.due?.time ?? ""}
             disabled={meta.due === null}
@@ -121,66 +190,42 @@ export function TaskDetails({ task, onClose }: TaskDetailsProps) {
               }
             }}
           />
-        </div>
-        <div className={styles.quick}>
-          <button
-            type="button"
-            className={styles.link}
-            onClick={() => {
-              save({ due: { date: dateKey(new Date()), time: meta.due?.time ?? null } });
-            }}
-          >
-            Today
-          </button>
-          <button
-            type="button"
-            className={styles.link}
-            onClick={() => {
-              const tomorrow = new Date();
-              tomorrow.setDate(tomorrow.getDate() + 1);
-              save({ due: { date: dateKey(tomorrow), time: meta.due?.time ?? null } });
-            }}
-          >
-            Tomorrow
-          </button>
           {meta.due !== null && (
             <button
               type="button"
-              className={styles.link}
+              className={styles.clear}
+              aria-label="Clear due date"
+              title="Clear due date"
               onClick={() => {
                 save({ due: null, repeat: null });
               }}
             >
-              Clear
+              <X size={12} strokeWidth={2} />
             </button>
           )}
         </div>
-      </div>
+      </Section>
 
-      <div className={styles.field}>
-        <label className={styles.label} htmlFor={`repeat-${task.noteId}-${String(task.line)}`}>
-          Repeat
-        </label>
-        <select
-          id={`repeat-${task.noteId}-${String(task.line)}`}
-          className={styles.input}
-          aria-label="Repeat"
-          value={meta.repeat ?? ""}
-          onChange={(event) => {
-            const value = event.target.value;
-            save({ repeat: value === "" ? null : (value as Repeat) });
-          }}
-        >
-          <option value="">Never</option>
-          {REPEATS.map((repeat) => (
-            <option key={repeat} value={repeat}>
-              {repeatLabel(repeat)}
-            </option>
+      <Section icon={<RepeatIcon size={12} strokeWidth={2} />} label="Repeat">
+        <div className={styles.chips}>
+          {([null, ...REPEATS] as (Repeat | null)[]).map((repeat) => (
+            <button
+              key={repeat ?? "never"}
+              type="button"
+              className={cx(styles.chip, meta.repeat === repeat && styles.selected)}
+              aria-pressed={meta.repeat === repeat}
+              onClick={() => {
+                save({ repeat });
+              }}
+            >
+              {repeat === null ? "Never" : repeatLabel(repeat)}
+            </button>
           ))}
-        </select>
-      </div>
+        </div>
+      </Section>
 
       <div className={styles.footer}>
+        <span className={styles.summary}>{summary === "" ? "No details yet" : summary}</span>
         <button type="button" className={styles.done} onClick={onClose}>
           Done
         </button>

@@ -1,7 +1,10 @@
 .card {
-  /* The note colour is the only colour on the card: no borders, no shadows,
-     no timestamps (brief 6.8). */
+  /* The note colour is the only colour on the card: no borders or timestamps
+     (brief 6.8). A faint shadow lifts it off the panel so it reads as a card —
+     the owner's request, against brief 6.8's "no shadows". */
   background: var(--note-bg);
+  box-shadow: var(--shadow-card);
+  transition: box-shadow 120ms var(--open-easing);
   color: var(--note-text);
   border: none;
   border-radius: var(--radius-card);
@@ -130,4 +133,16 @@
 .tool:hover {
   opacity: 1;
   background: rgb(0 0 0 / 8%);
+}
+
+/* A little more lift under the pointer: an enhancement only, since an inactive
+   window may never see hover (brief 6.9). */
+.card:hover {
+  box-shadow: var(--shadow-card-hover);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card {
+    transition: none;
+  }
 }

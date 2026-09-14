@@ -1,5 +1,5 @@
 /**
- * The To-Do tab's model: every checklist item in every note, gathered in one
+ * The Tasks tab's model: every checklist item in every note, gathered in one
  * place. There is no separate task store — a task is a `- [ ]` line in a note, so
  * it stays searchable, exportable and colour-coded with the note it belongs to.
  * Pure, like the rest of `lib/`.
@@ -66,7 +66,7 @@ export function collectTasks(notes: Note[]): TaskGroup[] {
 /**
  * Tick or untick the task on line `index`. Ticking a repeating task moves it to
  * its next date and leaves it open instead, wherever it is ticked from — a card,
- * the reader or the To-Do tab. Null when that line is not a task.
+ * the reader or the Tasks tab. Null when that line is not a task.
  */
 export function tickTask(content: string, index: number, now: Date): string | null {
   const lines = content.split("\n");
@@ -146,14 +146,20 @@ export function openTaskCount(notes: Note[]): number {
   );
 }
 
-/** The title that marks the note new tasks are added to. */
-export const TODO_NOTE_TITLE = "To-Do";
+/** The title of the note new tasks are added to, and of the one made for them. */
+export const TASKS_NOTE_TITLE = "Tasks";
 
 /**
- * The note "Add a task" appends to: the first note, in list order, whose title is
- * "To-Do" (any case, formatting ignored). Found by title rather than by a stored
- * id so it is visible and under the user's control — rename the note and the next
- * task starts a fresh one.
+ * Titles that also mark that note: the tab was called To-Do at first, and a note
+ * made then should keep collecting tasks rather than a second one being started.
+ */
+const TASKS_NOTE_TITLES = new Set(["tasks", "to-do"]);
+
+/**
+ * The note "Add a task" appends to: the first note, in list order, titled "Tasks"
+ * (or "To-Do"), in any case, formatting ignored. Found by title rather than by a
+ * stored id so it is visible and under the user's control — rename the note and
+ * the next task starts a fresh one.
  */
 export function findTodoNote(notes: Note[]): Note | undefined {
   return sortNotes(notes).find((note) => {
@@ -162,7 +168,7 @@ export function findTodoNote(notes: Note[]): Note | undefined {
       return false;
     }
     const title = plainText(parseInline(parseLine(first).text.trim()));
-    return title.toLowerCase() === TODO_NOTE_TITLE.toLowerCase();
+    return TASKS_NOTE_TITLES.has(title.toLowerCase());
   });
 }
 
@@ -182,8 +188,8 @@ export function appendTask(content: string, text: string): string | null {
   return kept === "" ? line : `${kept}\n${line}`;
 }
 
-/** The content of a brand-new To-Do note holding its first task. */
+/** The content of a brand-new Tasks note holding its first task. */
 export function newTodoNote(text: string): string | null {
   const line = taskLine(text);
-  return line === null ? null : `${TODO_NOTE_TITLE}\n${line}`;
+  return line === null ? null : `${TASKS_NOTE_TITLE}\n${line}`;
 }

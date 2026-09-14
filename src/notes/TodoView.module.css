@@ -7,7 +7,10 @@
 
 .add {
   flex: none;
-  padding: 0 12px 8px;
+  /* The 4 px on top is room for the focus ring (2 px outline, 2 px offset): the
+     pane clips at its edges for the tab slide, and without it the ring's top edge
+     disappeared under the header. */
+  padding: 4px 12px 8px;
 }
 
 /* The same sunken field as search. */
@@ -32,7 +35,8 @@
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
-  padding: 0 12px 12px;
+  /* Top padding: room for a focus ring on the first row inside the scroller. */
+  padding: 4px 12px 12px;
   display: flex;
   flex-direction: column;
   gap: 12px;

@@ -36,7 +36,7 @@
   padding: 0 12px 12px;
 }
 
-/* The Notes and To-Do tabs: a track twice the panel's width, holding one pane per
+/* The Notes and Tasks tabs: a track twice the panel's width, holding one pane per
    tab, that slides by a pane when the tab changes. */
 .views {
   flex: 1;

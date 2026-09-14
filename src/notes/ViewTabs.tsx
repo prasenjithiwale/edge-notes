@@ -6,17 +6,17 @@ import styles from "./ViewTabs.module.css";
 
 interface ViewTabsProps {
   view: PanelView;
-  /** Open tasks, shown on the To-Do tab; hidden at zero. */
+  /** Open tasks, shown on the Tasks tab; hidden at zero. */
   openTasks: number;
   onChange: (view: PanelView) => void;
 }
 
 const TABS: readonly { view: PanelView; label: string }[] = [
   { view: "notes", label: "Notes" },
-  { view: "todo", label: "To-Do" },
+  { view: "todo", label: "Tasks" },
 ];
 
-/** Notes and To-Do, in place of the panel title. */
+/** Notes and Tasks, in place of the panel title. */
 export function ViewTabs({ view, openTasks, onChange }: ViewTabsProps) {
   return (
     <div

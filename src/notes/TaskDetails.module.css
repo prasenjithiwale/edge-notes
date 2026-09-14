@@ -1,118 +1,230 @@
-/* An inline sheet under the task, on the sunken surface the fields use. */
-.details {
+/* A raised sheet under the task: the surface colour with a hairline and a soft
+   shadow, so it reads as a small card of its own rather than a form pasted into
+   the list. Neutral throughout; colour belongs to notes (brief 7.1). */
+.sheet {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  margin: 4px 0 8px 20px;
-  padding: 8px;
-  border-radius: var(--radius-control);
-  background: var(--surface-sunken);
-  font-size: 12px;
+  gap: 12px;
+  margin: 6px 0 10px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  background: var(--surface);
+  box-shadow: var(--shadow-card-raised);
+  animation: sheet-in 140ms var(--open-easing);
 }
 
-.title,
-.input {
+@keyframes sheet-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sheet {
+    animation: none;
+  }
+}
+
+/* The task's own name, large and borderless until it is being edited. */
+.title {
   box-sizing: border-box;
-  height: 26px;
-  padding: 0 6px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--surface);
+  width: 100%;
+  margin: -4px 0 0;
+  padding: 4px 6px;
+  border: none;
+  border-radius: var(--radius-control);
+  background: transparent;
   color: var(--text-primary);
   font: inherit;
-  font-size: 12px;
+  font-size: 14px;
+  font-weight: 600;
 }
 
-.title {
-  width: 100%;
-  font-size: 13px;
+.title:hover {
+  background: var(--surface-sunken);
 }
 
-.input:disabled {
-  opacity: 0.5;
+.title:focus {
+  background: var(--surface-sunken);
+  outline: none;
 }
 
-.field {
+.title:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 0;
+}
+
+.section {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 4px 8px;
+  flex-direction: column;
+  gap: 6px;
 }
 
-.label {
-  width: 52px;
-  flex: none;
+.caption {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 600;
   color: var(--text-secondary);
 }
 
-.inline {
-  display: flex;
-  gap: 4px;
-  min-width: 0;
-}
-
+/* Priority: one track, four equal segments. */
 .segments {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 2px;
   padding: 2px;
-  border-radius: 6px;
+  border-radius: var(--radius-control);
   background: var(--surface-sunken);
-  box-shadow: inset 0 0 0 1px var(--border);
 }
 
 .segment {
-  height: 20px;
-  padding: 0 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  height: 24px;
+  padding: 0 4px;
   border: none;
-  border-radius: 4px;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.segment:hover {
+  color: var(--text-primary);
+}
+
+.segment.selected {
+  background: var(--surface);
+  color: var(--text-primary);
+  font-weight: 600;
+  box-shadow: var(--shadow-card);
+}
+
+.flag {
+  flex: none;
+}
+
+.flagLow {
+  opacity: 0.7;
+}
+
+/* Quick dates and repeats: rounded chips that wrap. */
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.chip {
+  height: 24px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
   background: transparent;
   color: var(--text-secondary);
   font-size: 12px;
 }
 
-.selected {
-  background: var(--surface);
+.chip:hover {
+  background: var(--surface-sunken);
+  color: var(--text-primary);
+}
+
+/* Selected without the accent: the chip fills and its outline darkens. */
+.chip.selected {
+  border-color: var(--text-secondary);
+  background: var(--surface-sunken);
   color: var(--text-primary);
   font-weight: 600;
 }
 
-/* Quick dates, under the date field. */
-.quick {
+.when {
   display: flex;
-  gap: 8px;
-  width: 100%;
-  padding-left: 60px;
+  align-items: center;
+  gap: 4px;
 }
 
-.link {
+.input {
+  box-sizing: border-box;
+  min-width: 0;
+  height: 28px;
+  padding: 0 8px;
+  border: none;
+  border-radius: var(--radius-control);
+  background: var(--surface-sunken);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.date {
+  flex: 1.4;
+}
+
+.time {
+  flex: 1;
+}
+
+.input:disabled {
+  color: var(--text-tertiary);
+}
+
+.clear {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
   padding: 0;
   border: none;
+  border-radius: 50%;
   background: transparent;
   color: var(--text-secondary);
-  font-size: 12px;
-  text-decoration: underline;
-  text-underline-offset: 2px;
 }
 
-.link:hover {
+.clear:hover {
+  background: var(--surface-sunken);
   color: var(--text-primary);
 }
 
 .footer {
   display: flex;
-  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+
+.summary {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  color: var(--text-secondary);
 }
 
 .done {
-  border: none;
-  background: transparent;
+  flex: none;
+  height: 26px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  background: var(--surface);
   color: var(--text-primary);
   font-size: 12px;
   font-weight: 600;
-  padding: 2px 6px;
-  border-radius: 6px;
 }
 
 .done:hover {
-  background: var(--surface);
+  background: var(--surface-sunken);
 }

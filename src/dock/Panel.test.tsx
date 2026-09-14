@@ -543,7 +543,7 @@ describe("the colour palette", () => {
   });
 });
 
-describe("the To-Do tab", () => {
+describe("the Tasks tab", () => {
   async function withTasks() {
     await renderPanel();
     useNotesStore.getState().setContent("2", "Groceries\n- [ ] milk\n- [x] eggs");
@@ -552,10 +552,10 @@ describe("the To-Do tab", () => {
 
   it("counts open tasks on the tab and lists them by note", async () => {
     await withTasks();
-    const tab = await screen.findByRole("tab", { name: "To-Do, 2 open" });
+    const tab = await screen.findByRole("tab", { name: "Tasks, 2 open" });
     tab.click();
 
-    const panel = await screen.findByRole("tabpanel", { name: "To-Do" });
+    const panel = await screen.findByRole("tabpanel", { name: "Tasks" });
     expect(within(panel).getByRole("button", { name: /Groceries/ })).toBeTruthy();
     expect(within(panel).getByRole("checkbox", { name: "milk" })).toBeTruthy();
     expect(within(panel).getByRole("checkbox", { name: "compare prices" })).toBeTruthy();
@@ -586,7 +586,7 @@ describe("the To-Do tab", () => {
     expect(screen.queryByRole("checkbox", { name: "milk" })).toBeNull();
   });
 
-  it("adds a task to the note titled To-Do", async () => {
+  it("adds a task to the note titled To-Do, as the tab was once called", async () => {
     await renderPanel();
     useNotesStore.getState().setContent("3", "To-Do\n- [ ] call the bank");
     await useNotesStore.getState().setView("todo");
@@ -602,7 +602,7 @@ describe("the To-Do tab", () => {
     expect(commandCalls("notes_create")).toEqual([]);
   });
 
-  it("creates the To-Do note the first time a task is added", async () => {
+  it("creates the Tasks note the first time a task is added", async () => {
     await renderPanel();
     await useNotesStore.getState().setView("todo");
 
@@ -611,11 +611,11 @@ describe("the To-Do tab", () => {
     fireEvent.submit(field);
 
     await waitFor(() => {
-      expect(contentOf("new")).toBe("To-Do\n- [ ] pay rent");
+      expect(contentOf("new")).toBe("Tasks\n- [ ] pay rent");
     });
     expect(commandCalls("notes_create")).toHaveLength(1);
     await screen.findByRole("checkbox", { name: "pay rent" });
-    // It stays on the To-Do tab rather than opening the new note.
+    // It stays on the Tasks tab rather than opening the new note.
     expect(useNotesStore.getState()).toMatchObject({ view: "todo", editingId: null });
   });
 
@@ -629,14 +629,14 @@ describe("the To-Do tab", () => {
     expect(useNotesStore.getState()).toMatchObject({ view: "notes", editingId: "3" });
   });
 
-  it("closes the editor when switching to To-Do", async () => {
+  it("closes the editor when switching to Tasks", async () => {
     await renderPanel();
     useNotesStore.getState().startEditing("1");
     await screen.findByLabelText("Note content");
 
-    screen.getByRole("tab", { name: "To-Do" }).click();
+    screen.getByRole("tab", { name: "Tasks" }).click();
 
-    await screen.findByRole("tabpanel", { name: "To-Do" });
+    await screen.findByRole("tabpanel", { name: "Tasks" });
     expect(useNotesStore.getState().editingId).toBeNull();
     expect(screen.getByText("Nothing to do")).toBeTruthy();
   });
@@ -669,7 +669,7 @@ describe("the To-Do tab", () => {
   });
 });
 
-describe("sliding between Notes and To-Do", () => {
+describe("sliding between Notes and Tasks", () => {
   /** The Notes pane and the To-Do pane, children of the sliding track. */
   function panes(): HTMLElement[] {
     const track = document.querySelector('[class*="track"]');
@@ -686,7 +686,7 @@ describe("sliding between Notes and To-Do", () => {
     expect(todoPane?.hasAttribute("inert")).toBe(true);
     expect(notesPane?.parentElement?.className).not.toContain("trackTodo");
 
-    screen.getByRole("tab", { name: "To-Do" }).click();
+    screen.getByRole("tab", { name: "Tasks" }).click();
 
     await waitFor(() => {
       expect(tablist.style.getPropertyValue("--tab-index")).toBe("1");
@@ -700,7 +700,7 @@ describe("sliding between Notes and To-Do", () => {
     expect(screen.queryByRole("button", { name: "Standup notes" })).toBeNull();
   });
 
-  it("keeps arrow keys away from the cards while To-Do is showing", async () => {
+  it("keeps arrow keys away from the cards while Tasks is showing", async () => {
     await renderPanel();
     await useNotesStore.getState().setView("todo");
 
@@ -728,7 +728,7 @@ describe("task details", () => {
     await renderPanel();
     useNotesStore.getState().setContent("2", content);
     await useNotesStore.getState().setView("todo");
-    return screen.findByRole("tabpanel", { name: "To-Do" });
+    return screen.findByRole("tabpanel", { name: "Tasks" });
   }
 
   it("sorts tasks into date sections, highest priority first", async () => {
@@ -768,7 +768,7 @@ describe("task details", () => {
       expect(contentOf("2")).toBe("Errands\n- [ ] call the bank !high");
     });
 
-    fireEvent.change(within(sheet).getByLabelText("Due"), { target: { value: "2026-09-20" } });
+    fireEvent.change(within(sheet).getByLabelText("Due date"), { target: { value: "2026-09-20" } });
     await waitFor(() => {
       expect(contentOf("2")).toBe("Errands\n- [ ] call the bank !high @2026-09-20");
     });
@@ -777,14 +777,14 @@ describe("task details", () => {
     expect(document.body.contains(sheet)).toBe(true);
 
     fireEvent.change(within(sheet).getByLabelText("Due time"), { target: { value: "14:00" } });
-    fireEvent.change(within(sheet).getByLabelText("Repeat"), { target: { value: "weekly" } });
+    within(sheet).getByRole("button", { name: "Weekly" }).click();
     await waitFor(() => {
       expect(contentOf("2")).toBe(
         "Errands\n- [ ] call the bank !high @2026-09-20 14:00 repeat:weekly",
       );
     });
 
-    within(sheet).getByRole("button", { name: "Clear" }).click();
+    within(sheet).getByRole("button", { name: "Clear due date" }).click();
     await waitFor(() => {
       expect(contentOf("2")).toBe("Errands\n- [ ] call the bank !high");
     });

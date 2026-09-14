@@ -53,7 +53,7 @@ export type PanelView = "notes" | "todo";
 interface NotesStore {
   notes: Note[];
   view: PanelView;
-  /** What is typed in the To-Do tab's "Add a task" field. */
+  /** What is typed in the Tasks tab's "Add a task" field. */
   taskDraft: string;
   loaded: boolean;
   editingId: string | null;
@@ -76,7 +76,7 @@ interface NotesStore {
   setPinned: (id: string, pinned: boolean) => Promise<void>;
   /** Tick or untick the task on line `line` of a note, from a card or the reader. */
   toggleTask: (id: string, line: number) => void;
-  /** Rewrite a task's text, as the To-Do tab's details editor does. */
+  /** Rewrite a task's text, as the Tasks tab's details editor does. */
   setTaskLine: (id: string, line: number, text: string) => void;
   flush: (id: string) => Promise<void>;
   /** Write everything still pending, before quitting (brief 11: flush on quit). */
@@ -100,7 +100,7 @@ interface NotesStore {
   /** Switch tabs. Leaving Notes closes the editor, search and an expanded note. */
   setView: (view: PanelView) => Promise<void>;
   setTaskDraft: (text: string) => void;
-  /** Add the draft as a task to the To-Do note, creating that note if needed. */
+  /** Add the draft as a task to the Tasks note, creating that note if needed. */
   addTask: () => Promise<void>;
 
   openSearch: () => void;
@@ -464,7 +464,7 @@ export const useNotesStore = create<NotesStore>((set, get) => ({
 
   openSearch: () => {
     // Search filters the list, and the list is hidden behind an expanded note
-    // and on the To-Do tab.
+    // and on the Tasks tab.
     set({ searching: true, expandedId: null, view: "notes" });
   },
 

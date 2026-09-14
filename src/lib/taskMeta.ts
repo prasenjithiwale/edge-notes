@@ -178,7 +178,7 @@ export function repeatOnTick(text: string, now: Date): string | null {
 }
 
 // ---------------------------------------------------------------------------
-// Sections, order and labels for the To-Do tab
+// Sections, order and labels for the Tasks tab
 // ---------------------------------------------------------------------------
 
 export type DueSection = "overdue" | "today" | "upcoming" | "none";

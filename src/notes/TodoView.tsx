@@ -56,7 +56,7 @@ function asLine(task: Task): Line {
 /**
  * Every checklist item from every note, in sections by due date — Overdue,
  * Today, Upcoming, No date — highest priority first within each. Ticking here
- * edits the note; "Add a task" appends to the note titled To-Do; the details
+ * edits the note; "Add a task" appends to the note titled Tasks; the details
  * button sets a task's priority, date, time and repeat.
  *
  * The view holds still while it is in use: a task ticked here stays in place,
@@ -146,7 +146,7 @@ export function TodoView({ active, onOpenNote }: TodoViewProps) {
       }
     }
 
-    // Notes that did not exist when the tab opened (the To-Do note, the first
+    // Notes that did not exist when the tab opened (the Tasks note, the first
     // time a task is added) rank first, where the new task can be seen.
     const noteRank = (row: Row) => rank.get(row.task.noteId) ?? -1;
     for (const rows of bySection.values()) {
@@ -232,7 +232,7 @@ export function TodoView({ active, onOpenNote }: TodoViewProps) {
       ref={rootRef}
       className={styles.todo}
       role="tabpanel"
-      aria-label="To-Do"
+      aria-label="Tasks"
       onFocus={() => {
         setFocused(true);
       }}

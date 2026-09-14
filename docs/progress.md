@@ -1619,6 +1619,78 @@ back in a fixed order:
 - [ ] Release build: the notification comes from Edge Notes, not Terminal
 - [ ] Windows and Linux: notifications appear (untested)
 
+## Card elevation, the Tasks tab, and a new details sheet (14 Sep 2026)
+
+Three owner requests, after `669500d` was committed (not pushed).
+
+### Cards have elevation
+
+Note cards get a faint two-layer shadow (`--shadow-card`: a tight contact shadow
+plus a soft spread), a little more under the pointer (`--shadow-card-hover`, an
+enhancement only), and the open editor sits a step higher
+(`--shadow-card-raised`). The reader view has the resting shadow. Dark mode uses
+darker shadows plus a hairline ring, since a black shadow barely shows on a dark
+surface. This departs from brief 6.8 ("no borders, no shadows") and brief 7.1
+(only the panel has a shadow), at the owner's request; the shadows are kept faint
+so the note colour stays the strongest thing on a card.
+
+`color-scheme` is now set in the light and both dark token blocks, so native date
+and time pickers and scrollbars follow the theme.
+
+### To-Do is now Tasks
+
+The tab, its panel and its count are labelled "Tasks". New tasks go to a note
+titled **Tasks**, created the first time — but a note titled **To-Do** still
+counts, so tasks added while the tab had its old name keep collecting in the same
+note instead of a second one starting. Internally the view is still `"todo"`.
+
+### The details sheet, redesigned
+
+The first sheet was a sunken box of labels, native inputs and a select. It is now
+a raised card of its own (surface colour, hairline, `--shadow-card-raised`,
+fading in over 140 ms, none under reduced motion):
+
+- The task's title at the top, large and borderless until hovered or edited.
+- **Priority** as a four-way segmented control (None, Low, Medium, High) with a
+  flag that gains weight with priority: faint for Low, outline for Medium, filled
+  for High.
+- **Due** as quick chips (Today, Tomorrow, Next week), then the date and time
+  fields side by side with a round clear button.
+- **Repeat** as chips (Never, Daily, Weekly, Monthly, Yearly) instead of a select.
+- A footer with a one-line summary of what is set ("High priority · Tomorrow,
+  14:00 · Repeats weekly") beside a Done button.
+- Each section has a small icon and caption. Still neutral: the selected state is
+  a filled chip with a darker outline, not the accent.
+
+**Not yet seen on screen.** The component tests cover the behaviour, but the
+look has not been checked in the running app — that needs the panel opened, which
+means moving the owner's cursor.
+
+### Checklist
+
+- [ ] Note cards show a soft shadow in light and dark mode; hovering lifts one a
+      little; the open editor sits higher than the cards around it
+- [ ] Shadows are not clipped at the list's edges or under the filter row
+- [ ] The tab reads "Tasks" with the open count
+- [ ] With an existing "To-Do" note, "Add a task" still adds to it; with none, a
+      "Tasks" note is created
+- [ ] The details sheet: large title, priority segments with flags, Today /
+      Tomorrow / Next week chips, date and time fields, repeat chips, summary line
+- [ ] "Medium" and the flag fit their segment at the narrowest panel width (280 px)
+- [ ] The date and time pickers are dark in dark mode
+
+### Fixed: focus rings cut off at the top of a pane (14 Sep 2026)
+
+Reported by the owner: clicking "Add a task" hid the top of its focus ring under
+the header. The focus ring draws 4 px outside an element (2 px outline, 2 px
+offset), and the Notes and Tasks panes clip at their edges for the slide, so the
+first element in a pane lost its top edge. The add field and both scrolling lists
+now have 4 px of top padding. That also stops the first note card's focus ring and
+its new shadow being clipped at the top of the Notes list.
+
+- [ ] Click "Add a task": the whole focus ring is visible
+- [ ] Tab to the first note card: its ring and shadow are complete at the top
+
 ## M0 acceptance checklist
 
 From brief section 12. Run `npm run tauri dev`, then work through these with

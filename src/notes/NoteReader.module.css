@@ -8,6 +8,7 @@
   background: var(--note-bg);
   color: var(--note-text);
   border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
 }
 
 .toolbar {

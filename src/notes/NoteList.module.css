@@ -3,7 +3,10 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
-  padding: 0 12px 12px;
+  /* A scroller clips what spills past its edges: 4 px keeps the first card's focus
+     ring (2 px outline, 2 px offset) and its shadow from being cut off at the top.
+     The sides already have 12 px. */
+  padding: 4px 12px 12px;
   overflow-y: auto;
   min-height: 0;
   overscroll-behavior: contain;

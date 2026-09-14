@@ -99,7 +99,7 @@ Never edit a migration that has shipped — append a new one. Repository functio
 
 **The palette has sixteen colours**, defined in three places that must agree: `NOTE_COLORS` in `ipc.ts`, `NoteColor::ALL` in `db/notes.rs`, and the light and both dark blocks of `tokens.css`. `contrast.test.ts` reads `tokens.css` directly and fails if any of them drift or a pair misses AA.
 
-**To-Do is a view of the notes, not a second store.** A task is a `- [ ]` line in a note; `lib/tasks.ts` gathers them and "Add a task" appends to the note titled To-Do (found by title). `TodoView` freezes group order and keeps tasks ticked during a visit in place, because ticking bumps `updated_at` and would otherwise reshuffle the view under the cursor.
+**To-Do is a view of the notes, not a second store.** A task is a `- [ ]` line in a note; `lib/tasks.ts` gathers them and "Add a task" appends to the note titled To-Do (found by title). The tab is labelled "Tasks" (internally still `"todo"`), and the note is found by the title "Tasks" or, for notes made before the rename, "To-Do". `TodoView` freezes group order and keeps tasks ticked during a visit in place, because ticking bumps `updated_at` and would otherwise reshuffle the view under the cursor.
 
 **Task details are tokens at the end of the task line** (`!high @2026-09-20 14:00 repeat:weekly`), parsed only from the end so mid-sentence text is never a token. `lib/taskMeta.ts` is the one parser; everything that needs the time takes `now`. Ticking goes through `tickTask`, which moves a repeating task to its next date instead of ticking it — never call `toggleTaskLine` directly for a tick.
 
