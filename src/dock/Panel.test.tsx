@@ -82,6 +82,8 @@ beforeEach(() => {
   useDockStore.setState({ locks: new Set(), large: false, panelWidth: 320 });
   useNotesStore.setState({
     notes: [],
+    view: "notes",
+    taskDraft: "",
     loaded: false,
     editingId: null,
     expandedId: null,
@@ -109,7 +111,7 @@ describe("search", () => {
 
     const field = await screen.findByLabelText("Search notes");
     // The header shows the field in place of the title (brief 6.6).
-    expect(screen.queryByRole("heading", { name: "Notes" })).toBeNull();
+    expect(screen.queryByRole("tab", { name: "Notes" })).toBeNull();
 
     useNotesStore.getState().setQuery("coffee");
     await waitFor(() => {
@@ -453,7 +455,7 @@ describe("clicking outside the editor", () => {
     useNotesStore.getState().startEditing("1");
     await screen.findByLabelText("Note content");
 
-    clickOn(screen.getByRole("heading", { name: "Notes" }));
+    clickOn(screen.getByRole("button", { name: "Keep open" }));
 
     await waitFor(() => {
       expect(useNotesStore.getState().editingId).toBeNull();
@@ -466,7 +468,7 @@ describe("clicking outside the editor", () => {
     const field = await screen.findByLabelText("Note content");
     fireEvent.change(field, { target: { value: "Standup notes\nDeploy the fix today" } });
 
-    clickOn(screen.getByRole("heading", { name: "Notes" }));
+    clickOn(screen.getByRole("button", { name: "Keep open" }));
 
     await Promise.resolve();
     expect(useNotesStore.getState().editingId).toBe("1");
@@ -536,5 +538,131 @@ describe("the colour palette", () => {
       { name: "Teal" },
     );
     expect(picked.getAttribute("aria-pressed")).toBe("true");
+  });
+});
+
+describe("the To-Do tab", () => {
+  async function withTasks() {
+    await renderPanel();
+    useNotesStore.getState().setContent("2", "Groceries\n- [ ] milk\n- [x] eggs");
+    useNotesStore.getState().setContent("3", "Book flights\n- [ ] compare prices");
+  }
+
+  it("counts open tasks on the tab and lists them by note", async () => {
+    await withTasks();
+    const tab = await screen.findByRole("tab", { name: "To-Do, 2 open" });
+    tab.click();
+
+    const panel = await screen.findByRole("tabpanel", { name: "To-Do" });
+    expect(within(panel).getByRole("button", { name: /Groceries/ })).toBeTruthy();
+    expect(within(panel).getByRole("checkbox", { name: "milk" })).toBeTruthy();
+    expect(within(panel).getByRole("checkbox", { name: "compare prices" })).toBeTruthy();
+    // Ticked tasks wait behind the Done toggle.
+    expect(within(panel).queryByRole("checkbox", { name: "eggs" })).toBeNull();
+    expect(within(panel).getByRole("button", { name: "Done (1)" })).toBeTruthy();
+    // Search and the colour filter belong to the Notes tab.
+    expect(screen.queryByRole("button", { name: "Search notes" })).toBeNull();
+    expect(screen.queryByRole("group", { name: "Filter by colour" })).toBeNull();
+  });
+
+  it("ticks a task into its note, and keeps it in place until the tab is left", async () => {
+    await withTasks();
+    await useNotesStore.getState().setView("todo");
+
+    const milk = await screen.findByRole("checkbox", { name: "milk" });
+    milk.click();
+
+    await waitFor(() => {
+      expect(contentOf("2")).toBe("Groceries\n- [x] milk\n- [x] eggs");
+    });
+    const still = screen.getByRole("checkbox", { name: "milk" });
+    expect(still.getAttribute("aria-checked")).toBe("true");
+
+    await useNotesStore.getState().setView("notes");
+    await useNotesStore.getState().setView("todo");
+    await screen.findByRole("button", { name: "Done (2)" });
+    expect(screen.queryByRole("checkbox", { name: "milk" })).toBeNull();
+  });
+
+  it("adds a task to the note titled To-Do", async () => {
+    await renderPanel();
+    useNotesStore.getState().setContent("3", "To-Do\n- [ ] call the bank");
+    await useNotesStore.getState().setView("todo");
+
+    const field = await screen.findByLabelText("Add a task");
+    fireEvent.change(field, { target: { value: "renew passport" } });
+    fireEvent.submit(field);
+
+    await waitFor(() => {
+      expect(contentOf("3")).toBe("To-Do\n- [ ] call the bank\n- [ ] renew passport");
+    });
+    expect(useNotesStore.getState().taskDraft).toBe("");
+    expect(commandCalls("notes_create")).toEqual([]);
+  });
+
+  it("creates the To-Do note the first time a task is added", async () => {
+    await renderPanel();
+    await useNotesStore.getState().setView("todo");
+
+    const field = await screen.findByLabelText("Add a task");
+    fireEvent.change(field, { target: { value: "pay rent" } });
+    fireEvent.submit(field);
+
+    await waitFor(() => {
+      expect(contentOf("new")).toBe("To-Do\n- [ ] pay rent");
+    });
+    expect(commandCalls("notes_create")).toHaveLength(1);
+    await screen.findByRole("checkbox", { name: "pay rent" });
+    // It stays on the To-Do tab rather than opening the new note.
+    expect(useNotesStore.getState()).toMatchObject({ view: "todo", editingId: null });
+  });
+
+  it("opens a task's note from its group", async () => {
+    await withTasks();
+    await useNotesStore.getState().setView("todo");
+
+    (await screen.findByRole("button", { name: /Book flights/ })).click();
+
+    await screen.findByLabelText("Note content");
+    expect(useNotesStore.getState()).toMatchObject({ view: "notes", editingId: "3" });
+  });
+
+  it("closes the editor when switching to To-Do", async () => {
+    await renderPanel();
+    useNotesStore.getState().startEditing("1");
+    await screen.findByLabelText("Note content");
+
+    screen.getByRole("tab", { name: "To-Do" }).click();
+
+    await screen.findByRole("tabpanel", { name: "To-Do" });
+    expect(useNotesStore.getState().editingId).toBeNull();
+    expect(screen.getByText("Nothing to do")).toBeTruthy();
+  });
+
+  it("clears a half-typed task on Esc before collapsing the panel", async () => {
+    await renderPanel();
+    await useNotesStore.getState().setView("todo");
+    useNotesStore.getState().setTaskDraft("half a th");
+
+    press("Escape");
+    await waitFor(() => {
+      expect(useNotesStore.getState().taskDraft).toBe("");
+    });
+    expect(commandCalls("dock_toggle")).toEqual([]);
+
+    press("Escape");
+    await waitFor(() => {
+      expect(commandCalls("dock_toggle")).toHaveLength(1);
+    });
+  });
+
+  it("goes back to Notes for Cmd+F", async () => {
+    await renderPanel();
+    await useNotesStore.getState().setView("todo");
+
+    press("f", { metaKey: true });
+
+    await screen.findByLabelText("Search notes");
+    expect(useNotesStore.getState().view).toBe("notes");
   });
 });

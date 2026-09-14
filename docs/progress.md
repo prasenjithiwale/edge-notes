@@ -1400,6 +1400,74 @@ to the release.
 - The Linux build has been compiled and bundled in CI but never run on a real
   Linux desktop.
 
+## To-Do tab (14 Sep 2026)
+
+The owner asked for Notes and To-Do tabs at the top of the panel, or a better
+option. Three were offered — a tab gathering checklist items from all notes, a
+separate to-do list stored apart from notes, or a To-Do filter chip with no tabs —
+and the owner chose **the tab of all checklist items**, which was recommended.
+
+### What it does
+
+- **Tabs replace the panel title**: a neutral segmented control, "Notes" and
+  "To-Do", with the count of open tasks on To-Do.
+- **To-Do lists every `- [ ]` item from every note**, grouped under the note's
+  title and colour dot, groups in the list's order (locked first, then recent).
+  There is no task table: a task is a line in a note, so it stays searchable,
+  exportable and colour-coded, and needed no migration or Rust change.
+- **Ticking** edits the note through `toggleTask`, like ticking on a card.
+- **"Add a task"** appends `- [ ] text` to the note titled To-Do (any case,
+  formatting ignored), or creates that note in the last-used colour with the task
+  as its first item. Saved at once, not on the debounce. The note is found by
+  title rather than a stored id so it is visible and under the user's control:
+  rename it and the next task starts a new one.
+- **Pressing a group's name** opens that note in the Notes tab's editor.
+- **Done (n)** is collapsed by default and shows ticked tasks with their note's
+  name; they can be unticked there.
+- Empty states: "Nothing to do" with a hint, or "All done".
+
+### Decisions
+
+**The view holds still while in use.** A task ticked on the To-Do tab stays in
+place, struck through, until the tab is left or the panel collapses, and groups
+keep the order they had when the tab opened. Ticking edits a note and bumps its
+`updated_at`, so without this the task would vanish into Done and its whole group
+would jump to the top under the cursor. Groups that did not exist when the tab
+opened (the To-Do note, the first time) go first, where the new task can be seen.
+
+**Search and the colour filter stay on the Notes tab.** Both are about finding
+notes; on the To-Do tab they are hidden, and `Cmd+F` switches to Notes and opens
+search. `Cmd+N` makes a new note on the Notes tab as before.
+
+**Switching to To-Do closes the editor properly** (`stopEditing`), so an empty
+note is discarded and its lock released rather than left open, unseen, behind the
+tab. It also ends an expanded note and any search.
+
+**The add field holds the panel open while focused**, through a counted `"todo"`
+lock owner, derived from state like the search field's.
+
+**Esc on the To-Do tab clears a half-typed task first**, then collapses the panel.
+
+### Deviations from the brief
+
+- Brief 6.6 puts a "Notes" title on the left of the header; the tabs replace it.
+- Brief 3 lists checklists as post-v1; they were built earlier today and this tab
+  builds on them.
+
+### Checklist
+
+- [ ] The header shows Notes and To-Do, with the open-task count on To-Do
+- [ ] To-Do groups every open checklist item under its note, with the note's colour
+- [ ] Ticking a task there ticks it in the note; it stays struck through until you
+      switch tabs or the panel closes, then appears under Done
+- [ ] "Add a task" then Enter adds to the To-Do note, and creates it the first time
+- [ ] Rename the To-Do note, add a task: a new To-Do note is created
+- [ ] Pressing a group's name opens that note in the editor on the Notes tab
+- [ ] The panel stays open while typing in "Add a task" with the cursor away
+- [ ] Esc clears a half-typed task, then a second Esc closes the panel
+- [ ] Cmd+F on the To-Do tab switches to Notes with search open
+- [ ] Switching tabs while editing an empty new note leaves no blank card
+
 ## M0 acceptance checklist
 
 From brief section 12. Run `npm run tauri dev`, then work through these with

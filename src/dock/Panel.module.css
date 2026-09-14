@@ -19,12 +19,6 @@
   flex: none;
 }
 
-.title {
-  font-size: 14px;
-  font-weight: 600;
-  margin: 0;
-}
-
 .actions {
   display: flex;
   align-items: center;

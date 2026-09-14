@@ -1,0 +1,38 @@
+/* A segmented control in the chrome's neutral colours: sunken track, the
+   selected segment raised to the surface. No accent — that is for focus rings
+   and Keep open (brief 7.1). */
+.tabs {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border-radius: var(--radius-control);
+  background: var(--surface-sunken);
+}
+
+.tab {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 24px;
+  padding: 0 10px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 400;
+}
+
+.selected {
+  background: var(--surface);
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.count {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}

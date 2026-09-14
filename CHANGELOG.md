@@ -7,6 +7,17 @@ may change behaviour. Releases are published on
 
 To release, see "Releasing" in the README.
 
+## [Unreleased]
+
+### Added
+
+- **To-Do tab.** Tabs at the top of the panel switch between Notes and To-Do. The
+  To-Do tab gathers every checklist item from every note, grouped by note, with
+  the number still open on the tab. Tick tasks there and the note updates; a task
+  ticked stays in place until you leave the tab, then moves under "Done". "Add a
+  task" adds to the note titled To-Do, creating it the first time. Pressing a
+  group's name opens its note.
+
 ## [0.0.1] - 2026-09-14
 
 The first release. macOS (universal: Apple Silicon and Intel), Linux (x86_64) and

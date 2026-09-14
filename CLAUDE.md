@@ -99,6 +99,8 @@ Never edit a migration that has shipped — append a new one. Repository functio
 
 **The palette has sixteen colours**, defined in three places that must agree: `NOTE_COLORS` in `ipc.ts`, `NoteColor::ALL` in `db/notes.rs`, and the light and both dark blocks of `tokens.css`. `contrast.test.ts` reads `tokens.css` directly and fails if any of them drift or a pair misses AA.
 
+**To-Do is a view of the notes, not a second store.** A task is a `- [ ]` line in a note; `lib/tasks.ts` gathers them and "Add a task" appends to the note titled To-Do (found by title). `TodoView` freezes group order and keeps tasks ticked during a visit in place, because ticking bumps `updated_at` and would otherwise reshuffle the view under the cursor.
+
 **An interaction lock is derived from state, never acquired in one place and released in another.** `SearchField` took it in `onFocus` and released it in an effect cleanup, and React's mount/cleanup/mount cycle dropped it: re-focusing an already-focused input fires no event, so nothing took it back and the panel slid away mid-search. Hold a lock in a `useEffect` keyed on the state that justifies it; `setLock` is idempotent and only talks to Rust when the aggregate flips.
 
 **An explicit dismissal suppresses hover until the cursor leaves.** Brief 6.1 reverses a close when the cursor *re-enters*, which presumes it left. Without `dismissed`, Esc with the mouse resting on the panel reversed instantly and looked dead, and Keep open made the panel impossible to dismiss at all.

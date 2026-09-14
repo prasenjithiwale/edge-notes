@@ -1,0 +1,43 @@
+import { cx } from "../lib/cx";
+import type { PanelView } from "../store/notes";
+import styles from "./ViewTabs.module.css";
+
+interface ViewTabsProps {
+  view: PanelView;
+  /** Open tasks, shown on the To-Do tab; hidden at zero. */
+  openTasks: number;
+  onChange: (view: PanelView) => void;
+}
+
+const TABS: readonly { view: PanelView; label: string }[] = [
+  { view: "notes", label: "Notes" },
+  { view: "todo", label: "To-Do" },
+];
+
+/** Notes and To-Do, in place of the panel title. */
+export function ViewTabs({ view, openTasks, onChange }: ViewTabsProps) {
+  return (
+    <div className={styles.tabs} role="tablist" aria-label="Panel view">
+      {TABS.map((tab) => {
+        const selected = tab.view === view;
+        const count = tab.view === "todo" && openTasks > 0 ? openTasks : null;
+        return (
+          <button
+            key={tab.view}
+            type="button"
+            role="tab"
+            className={cx(styles.tab, selected && styles.selected)}
+            aria-selected={selected}
+            aria-label={count === null ? tab.label : `${tab.label}, ${String(count)} open`}
+            onClick={() => {
+              onChange(tab.view);
+            }}
+          >
+            {tab.label}
+            {count !== null && <span className={styles.count}>{count}</span>}
+          </button>
+        );
+      })}
+    </div>
+  );
+}

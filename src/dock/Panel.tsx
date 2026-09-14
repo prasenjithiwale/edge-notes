@@ -16,6 +16,7 @@ import {
   onSettingsChanged,
 } from "../lib/ipc";
 import { facetColors, filterNotes } from "../lib/notes";
+import { openTaskCount } from "../lib/tasks";
 import { moveCardFocus } from "../notes/cardFocus";
 import { ColorFilter } from "../notes/ColorFilter";
 import { EmptyState } from "../notes/EmptyState";
@@ -28,6 +29,8 @@ import {
 import { NoteEditor } from "../notes/NoteEditor";
 import { NoteList } from "../notes/NoteList";
 import { NoteReader } from "../notes/NoteReader";
+import { TodoView } from "../notes/TodoView";
+import { ViewTabs } from "../notes/ViewTabs";
 import { SearchField } from "../notes/SearchField";
 import { SettingsView } from "../settings/SettingsView";
 import { useDockStore } from "../store/dock";
@@ -80,6 +83,8 @@ export function Panel({ className }: PanelProps) {
   const loaded = useNotesStore((state) => state.loaded);
   const editingId = useNotesStore((state) => state.editingId);
   const expandedId = useNotesStore((state) => state.expandedId);
+  const view = useNotesStore((state) => state.view);
+  const setView = useNotesStore((state) => state.setView);
   const expand = useNotesStore((state) => state.expand);
   const shrink = useNotesStore((state) => state.shrink);
   const toggleTask = useNotesStore((state) => state.toggleTask);
@@ -265,6 +270,9 @@ export function Panel({ className }: PanelProps) {
           notesStore.shrink();
         } else if (notesStore.searching) {
           notesStore.closeSearch();
+        } else if (notesStore.view === "todo" && notesStore.taskDraft !== "") {
+          // A half-typed task clears before the panel goes.
+          notesStore.setTaskDraft("");
         } else {
           void dockToggle();
         }
@@ -294,6 +302,7 @@ export function Panel({ className }: PanelProps) {
   }, [editingId]);
 
   const isEmpty = loaded && notes.length === 0;
+  const openTasks = useMemo(() => openTaskCount(notes), [notes]);
 
   // Only once Rust has actually grown the window: drawing the large layout into
   // the normal panel would squeeze a note meant for reading into 320 px.
@@ -323,7 +332,14 @@ export function Panel({ className }: PanelProps) {
             onAbandon={closeSearch}
           />
         ) : (
-          <h1 className={styles.title}>Notes</h1>
+          <ViewTabs
+            view={view}
+            openTasks={openTasks}
+            onChange={(next) => {
+              setShowSettings(false);
+              void setView(next);
+            }}
+          />
         )}
         <div className={styles.actions}>
           {!expandedNote && (
@@ -338,7 +354,7 @@ export function Panel({ className }: PanelProps) {
             <SettingsIcon size={16} strokeWidth={1.75} />
           </IconButton>
           )}
-          {!searching && !expandedNote && (
+          {!searching && !expandedNote && view === "notes" && (
             <IconButton label="Search notes" onClick={openSearch}>
               <Search size={16} strokeWidth={1.75} />
             </IconButton>
@@ -377,6 +393,14 @@ export function Panel({ className }: PanelProps) {
         <SettingsView
           onClose={() => {
             setShowSettings(false);
+          }}
+        />
+      ) : view === "todo" ? (
+        <TodoView
+          onOpenNote={(id) => {
+            void setView("notes").then(() => {
+              startEditing(id);
+            });
           }}
         />
       ) : (

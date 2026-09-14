@@ -11,6 +11,7 @@ import {
   type NoteColor,
 } from "../lib/ipc";
 import { toggleTaskLine } from "../lib/markdown";
+import { appendTask, findTodoNote, newTodoNote } from "../lib/tasks";
 import { isNoteEmpty, sortNotes } from "../lib/notes";
 import { useSettingsStore } from "./settings";
 
@@ -47,8 +48,14 @@ interface PendingUndo {
   note: Note;
 }
 
+/** The panel's two tabs. */
+export type PanelView = "notes" | "todo";
+
 interface NotesStore {
   notes: Note[];
+  view: PanelView;
+  /** What is typed in the To-Do tab's "Add a task" field. */
+  taskDraft: string;
   loaded: boolean;
   editingId: string | null;
   /**
@@ -89,6 +96,12 @@ interface NotesStore {
   undoRemove: () => Promise<void>;
   dismissUndo: () => void;
 
+  /** Switch tabs. Leaving Notes closes the editor, search and an expanded note. */
+  setView: (view: PanelView) => Promise<void>;
+  setTaskDraft: (text: string) => void;
+  /** Add the draft as a task to the To-Do note, creating that note if needed. */
+  addTask: () => Promise<void>;
+
   openSearch: () => void;
   closeSearch: () => void;
   setQuery: (query: string) => void;
@@ -97,6 +110,8 @@ interface NotesStore {
 
 export const useNotesStore = create<NotesStore>((set, get) => ({
   notes: [],
+  view: "notes",
+  taskDraft: "",
   loaded: false,
   editingId: null,
   expandedId: null,
@@ -130,7 +145,7 @@ export const useNotesStore = create<NotesStore>((set, get) => ({
     // A new note is empty and carries the last-used colour, so any active search
     // or colour filter would hide the card the editor is supposed to open in.
     // Clearing the filters keeps the new note visible (brief 6.9).
-    set({ searching: false, query: "", colorFilter: null });
+    set({ searching: false, query: "", colorFilter: null, view: "notes" });
 
     const color = useSettingsStore.getState().lastColor();
     try {
@@ -387,9 +402,61 @@ export const useNotesStore = create<NotesStore>((set, get) => ({
     set({ expandedId: null });
   },
 
+  setView: async (view) => {
+    if (view === get().view) {
+      return;
+    }
+    if (view === "todo") {
+      // The editor lives in the Notes list; closing it properly discards an
+      // empty note and releases its lock instead of leaving it open, unseen.
+      await get().stopEditing();
+    }
+    set({ view, expandedId: null, searching: false, query: "" });
+  },
+
+  setTaskDraft: (text) => {
+    set({ taskDraft: text });
+  },
+
+  addTask: async () => {
+    const text = get().taskDraft;
+    const todo = findTodoNote(get().notes);
+
+    if (todo) {
+      const content = appendTask(todo.content, text);
+      if (content === null) {
+        return;
+      }
+      set({ taskDraft: "" });
+      get().setContent(todo.id, content);
+      // Saved at once rather than on the debounce: a task is short, and adding
+      // one then quitting straight away must not lose it.
+      await get().flush(todo.id);
+      return;
+    }
+
+    const content = newTodoNote(text);
+    if (content === null) {
+      return;
+    }
+    set({ taskDraft: "" });
+    try {
+      const note = await notesCreate(useSettingsStore.getState().lastColor());
+      savedContent.set(note.id, note.content);
+      set((state) => ({ notes: [note, ...state.notes] }));
+      get().setContent(note.id, content);
+      await get().flush(note.id);
+    } catch (error: unknown) {
+      console.error("notes: adding a task failed", error);
+      // Give the text back rather than silently dropping what was typed.
+      set({ taskDraft: text });
+    }
+  },
+
   openSearch: () => {
-    // Search filters the list, and the list is hidden behind an expanded note.
-    set({ searching: true, expandedId: null });
+    // Search filters the list, and the list is hidden behind an expanded note
+    // and on the To-Do tab.
+    set({ searching: true, expandedId: null, view: "notes" });
   },
 
   /** Brief 6.6: Esc clears the query and returns the header to the title. */
