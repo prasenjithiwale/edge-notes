@@ -4,3 +4,6 @@ dist/
 *.local
 src-tauri/target/
 src-tauri/gen/
+
+# Local notes on APT publishing and its keys; not for the repository.
+docs/apt-publishing.md
