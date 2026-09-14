@@ -1,32 +1,13 @@
 /**
- * Brief 7.5: no browser context menu in production builds — "Reload" and
- * "Inspect Element" make a widget feel like a web page — except where it is
- * genuinely useful.
- *
- * Kept: text fields, for cut, copy and paste; and any selected text, because a
- * pinned card's text is selectable precisely so it can be copied in place, and
- * the context menu is the discoverable way to do that.
+ * No right-click menu anywhere in the widget, in any build (owner's request,
+ * 14 Sep 2026). Brief 7.5 kept it in text fields and — for copying a locked
+ * note — over selected text, and only suppressed it in production; the owner
+ * asked for right click to be disabled outright. Cut, copy and paste remain on
+ * the keyboard, and dev tools on Cmd+Opt+I in a debug build.
  */
-export function allowsContextMenu(
-  target: EventTarget | null,
-  selection: string,
-): boolean {
-  if (
-    target instanceof HTMLInputElement ||
-    target instanceof HTMLTextAreaElement
-  ) {
-    return true;
-  }
-  return selection.trim() !== "";
-}
-
-/** Install the production context-menu rule on a window. Returns the remover. */
 export function suppressContextMenu(win: Window): () => void {
   const onContextMenu = (event: MouseEvent) => {
-    const selection = win.getSelection()?.toString() ?? "";
-    if (!allowsContextMenu(event.target, selection)) {
-      event.preventDefault();
-    }
+    event.preventDefault();
   };
   win.addEventListener("contextmenu", onContextMenu);
   return () => {

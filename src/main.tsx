@@ -6,10 +6,8 @@ import { suppressContextMenu } from "./lib/contextMenu";
 import "./styles/tokens.css";
 import "./styles/global.css";
 
-// Brief 7.5: production only, so Inspect Element stays reachable in dev.
-if (import.meta.env.PROD) {
-  suppressContextMenu(window);
-}
+// No right-click menu in any build (owner's request; see contextMenu.ts).
+suppressContextMenu(window);
 
 const container = document.getElementById("root");
 if (!container) {

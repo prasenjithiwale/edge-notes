@@ -919,8 +919,9 @@ as Keep open in the header.
 - [ ] Type into a note and choose Quit from the tray immediately: the text is there
       after relaunch
 - [ ] Quit with an empty new note open: no blank card after relaunch
-- [ ] Release build: right-click on chrome shows no menu; right-click in the editor,
-      the search field, and over selected pinned text still does
+- [ ] ~~Release build: right-click on chrome shows no menu; right-click in the editor,
+      the search field, and over selected pinned text still does~~ — superseded
+      on 14 Sep 2026: right click is disabled everywhere
 
 ## Tab appearance and open on click (13 Sep 2026)
 
@@ -1312,6 +1313,18 @@ are in `8ff1fbe`, then the dock tests' 28/88 assertions.
 - [ ] Dragging the pill along the edge still works
 - [ ] Dock on left: the pill mirrors to the left edge
 - [ ] Dark mode: the pill's shadow and border are visible
+
+## Right click disabled (14 Sep 2026)
+
+At the owner's request, the browser context menu is now suppressed **everywhere
+and in every build**: chrome, cards, the editor, the search field and selected
+text alike. Brief 7.5, and the 13 Sep 2026 audit pass, kept it in text fields and
+over selected text and suppressed it only in production. Cut, copy and paste stay
+on the keyboard; dev tools open with `Cmd+Opt+I` in a debug build. Locked note text
+can still be selected and copied with `Cmd+C`.
+
+- [ ] Right-click on a card, the header, the editor and the search field: no menu
+- [ ] Select text on a locked card and press `Cmd+C`: it copies
 
 ## M0 acceptance checklist
 

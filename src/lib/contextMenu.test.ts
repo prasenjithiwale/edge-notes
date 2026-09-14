@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it } from "vitest";
 
-import { allowsContextMenu, suppressContextMenu } from "./contextMenu";
+import { suppressContextMenu } from "./contextMenu";
 
 function rightClick(target: Element): boolean {
   const event = new MouseEvent("contextmenu", { bubbles: true, cancelable: true });
@@ -11,33 +11,20 @@ function rightClick(target: Element): boolean {
 
 afterEach(() => {
   document.body.innerHTML = "";
-  window.getSelection()?.removeAllRanges();
-});
-
-describe("allowsContextMenu (brief 7.5)", () => {
-  it("keeps the menu in text fields", () => {
-    expect(allowsContextMenu(document.createElement("textarea"), "")).toBe(true);
-    expect(allowsContextMenu(document.createElement("input"), "")).toBe(true);
-  });
-
-  it("keeps it over selected text, so a pinned note can be copied", () => {
-    expect(allowsContextMenu(document.createElement("div"), "Deploy the fix")).toBe(true);
-  });
-
-  it("suppresses it on chrome", () => {
-    expect(allowsContextMenu(document.createElement("button"), "")).toBe(false);
-    expect(allowsContextMenu(document.createElement("div"), "   ")).toBe(false);
-  });
 });
 
 describe("suppressContextMenu", () => {
-  it("prevents the menu on chrome and leaves text fields alone", () => {
+  it("prevents the menu everywhere, text fields and selected text included", () => {
     const remove = suppressContextMenu(window);
     const button = document.body.appendChild(document.createElement("button"));
     const field = document.body.appendChild(document.createElement("textarea"));
+    const text = document.body.appendChild(document.createElement("div"));
+    text.textContent = "Deploy the fix";
+    window.getSelection()?.selectAllChildren(text);
 
     expect(rightClick(button)).toBe(true);
-    expect(rightClick(field)).toBe(false);
+    expect(rightClick(field)).toBe(true);
+    expect(rightClick(text)).toBe(true);
 
     remove();
     expect(rightClick(button)).toBe(false);
