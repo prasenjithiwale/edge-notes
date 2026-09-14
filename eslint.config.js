@@ -21,4 +21,13 @@ export default tseslint.config(
     files: ["vite.config.ts", "eslint.config.js"],
     ...tseslint.configs.disableTypeChecked,
   },
+  {
+    // Release tooling: plain Node scripts, outside the TypeScript project.
+    files: ["tools/**/*.mjs"],
+    ...tseslint.configs.disableTypeChecked,
+    languageOptions: {
+      ...tseslint.configs.disableTypeChecked.languageOptions,
+      globals: { process: "readonly", console: "readonly", URL: "readonly" },
+    },
+  },
 );

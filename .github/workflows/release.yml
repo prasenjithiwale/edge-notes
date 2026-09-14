@@ -1,0 +1,90 @@
+# Builds the Linux packages for a release and attaches them to it.
+#
+# Tauri can only bundle for the platform it runs on, so Linux cannot be built on
+# a Mac; this runner does it. The macOS build is made locally and uploaded to the
+# same release (see "Releasing" in the README).
+#
+# Runs when a version tag (v0.0.1, v1.2.3 ...) is pushed, or by hand from the
+# Actions tab for an existing tag.
+
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing tag to build, e.g. v0.0.1"
+        required: true
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.event.inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  linux:
+    name: Linux x86_64
+    # The oldest supported runner, so the packages link against a glibc old
+    # enough for Ubuntu 22.04 and newer (brief 5).
+    runs-on: ubuntu-22.04
+    env:
+      TAG: ${{ github.event.inputs.tag || github.ref_name }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
+
+      - name: Check the tag matches the app version
+        run: |
+          version="$(node -p "require('./package.json').version")"
+          if [ "v$version" != "$TAG" ]; then
+            echo "::error::tag $TAG does not match package.json version $version"
+            exit 1
+          fi
+
+      - name: Install Linux build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev \
+            librsvg2-dev patchelf xdg-utils
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Test
+        run: |
+          npm run lint
+          npm test
+          cd src-tauri && cargo test
+
+      - name: Build .deb and .AppImage
+        run: npm run tauri build -- --bundles deb,appimage
+
+      - name: Attach to the release
+        run: |
+          version="${TAG#v}"
+          bundle=src-tauri/target/release/bundle
+          mkdir -p out
+          cp "$bundle"/deb/*.deb "out/Edge-Notes_${version}_linux_amd64.deb"
+          cp "$bundle"/appimage/*.AppImage "out/Edge-Notes_${version}_linux_x86_64.AppImage"
+          # The release is normally created with the macOS build first; if this
+          # runner gets there before it, start a draft to attach to.
+          gh release view "$TAG" >/dev/null 2>&1 ||
+            gh release create "$TAG" --draft --title "Edge Notes $TAG" --notes "Draft: macOS build to follow."
+          gh release upload "$TAG" out/* --clobber

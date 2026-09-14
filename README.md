@@ -17,6 +17,40 @@ nvm use && npm install
 npm run tauri dev
 ```
 
+## Versions and releases
+
+The version lives in `package.json`; `tauri.conf.json` reads it from there, and
+`npm run version:set` keeps `Cargo.toml`, `Cargo.lock` and `package-lock.json` in
+step. A test fails if they ever disagree. Every release has an entry in
+[CHANGELOG.md](CHANGELOG.md) and a `vX.Y.Z` tag, and its downloads are on
+[GitHub Releases](https://github.com/prasenjithiwale/edge-notes/releases).
+
+### Releasing
+
+1. `npm run version:set -- 0.0.2`, add a `## [0.0.2]` entry to `CHANGELOG.md`,
+   run the checks, commit and push.
+2. Build the macOS package on a Mac (both architectures in one `.dmg`):
+
+   ```bash
+   rustup target add x86_64-apple-darwin      # once
+   npm run tauri build -- --target universal-apple-darwin --bundles dmg
+   ```
+
+3. Create the release with the `.dmg`. This also creates the tag:
+
+   ```bash
+   gh release create v0.0.2 "Edge-Notes_0.0.2_macOS_universal.dmg" \
+     --target master --title "Edge Notes v0.0.2" --notes-file notes.md
+   ```
+
+4. The tag starts the **Release** workflow (`.github/workflows/release.yml`), which
+   tests and builds the Linux `.deb` and `.AppImage` on Ubuntu 22.04 and attaches
+   them to the same release, usually within 15 minutes. It can also be re-run
+   for an existing tag from the Actions tab.
+
+Linux cannot be built on a Mac: Tauri bundles only for the platform it runs on,
+and the Linux build links against WebKitGTK, so it needs a Linux machine or CI.
+
 ## Building
 
 ```bash
