@@ -1373,9 +1373,28 @@ GitHub Actions minutes on a private repository are metered; a Linux release run
 is roughly 15 minutes of the monthly allowance. Building macOS in CI too would be
 possible but macOS runners cost ten times as much, so it stays local.
 
+### Windows added to v0.0.1 (14 Sep 2026)
+
+The owner asked for Windows at the same version. Windows cannot be built on a Mac
+either — Tauri's macOS-to-Windows cross-compile is experimental, needs `llvm`,
+`nsis` and `cargo-xwin` installed here, and makes only the NSIS installer — so the
+Release workflow gained a `windows` job on `windows-latest`. It builds an NSIS
+`setup.exe` and a WiX `.msi` after lint and both test suites, and attaches them
+to the release.
+
+- It was run by hand for the **existing `v0.0.1` tag**, so the Windows installers
+  are built from exactly the commit the macOS and Linux builds came from. The
+  workflow file itself runs from `master`; each job checks out the tag.
+- A small `prepare` job now creates the draft release when there is none, so the
+  Linux and Windows jobs running side by side cannot each start one.
+- `platforms` on a manual run picks linux, windows or both; a tag push builds both.
+- Windows runners check out with CRLF by default, which the tests that read source
+  files as text would trip on, so the job disables `autocrlf` first.
+- Windows minutes on a private repository count double.
+- Unsigned: SmartScreen warns on first run ("More info → Run anyway").
+
 ### Not done
 
-- Windows packages (no Windows runner job yet; the same workflow could gain one).
 - arm64 Linux: GitHub's arm runners are free only for public repositories.
 - Signing and notarising, which need an Apple Developer ID.
 - The Linux build has been compiled and bundled in CI but never run on a real

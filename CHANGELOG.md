@@ -9,7 +9,8 @@ To release, see "Releasing" in the README.
 
 ## [0.0.1] - 2026-09-14
 
-The first release. macOS (universal: Apple Silicon and Intel) and Linux (x86_64).
+The first release. macOS (universal: Apple Silicon and Intel), Linux (x86_64) and
+Windows (x64).
 
 ### The widget
 
@@ -34,9 +35,9 @@ The first release. macOS (universal: Apple Silicon and Intel) and Linux (x86_64)
 
 ### Known limitations
 
-- Not signed or notarised: macOS asks for confirmation the first time (see the
+- Not signed: macOS and Windows both ask for confirmation the first time (see the
   release notes).
 - On macOS, a panel opened with the shortcut needs one click before it takes
   typing.
 - Linux runs under X11 or XWayland; native Wayland is not supported yet.
-- Windows builds are not published yet.
+- The Windows and Linux builds have not yet been tried on real hardware.

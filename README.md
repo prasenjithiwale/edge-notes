@@ -46,12 +46,14 @@ step. A test fails if they ever disagree. Every release has an entry in
    ```
 
 4. The tag starts the **Release** workflow (`.github/workflows/release.yml`), which
-   tests and builds the Linux `.deb` and `.AppImage` on Ubuntu 22.04 and attaches
-   them to the same release, usually within 15 minutes. It can also be re-run
-   for an existing tag from the Actions tab.
+   tests and builds the Linux `.deb` and `.AppImage` on Ubuntu 22.04 and the
+   Windows `setup.exe` and `.msi` on Windows, and attaches them to the same
+   release, usually within 20 minutes. It can also be run from the Actions tab
+   for an existing tag and a chosen platform
+   (`gh workflow run release.yml -f tag=v0.0.2 -f platforms=windows`).
 
-Linux cannot be built on a Mac: Tauri bundles only for the platform it runs on,
-and the Linux build links against WebKitGTK, so it needs a Linux machine or CI.
+Neither Linux nor Windows can be built on a Mac: Tauri bundles only for the
+platform it runs on, so each needs its own machine or a CI runner.
 
 ## Building
 

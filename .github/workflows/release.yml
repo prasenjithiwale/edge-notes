@@ -1,11 +1,13 @@
-# Builds the Linux packages for a release and attaches them to it.
+# Builds the Linux and Windows packages for a release and attaches them to it.
 #
-# Tauri can only bundle for the platform it runs on, so Linux cannot be built on
-# a Mac; this runner does it. The macOS build is made locally and uploaded to the
+# Tauri can only bundle for the platform it runs on, so neither can be built on a
+# Mac; these runners do it. The macOS build is made locally and uploaded to the
 # same release (see "Releasing" in the README).
 #
-# Runs when a version tag (v0.0.1, v1.2.3 ...) is pushed, or by hand from the
-# Actions tab for an existing tag.
+# Runs for both platforms when a version tag (v0.0.1, v1.2.3 ...) is pushed, or
+# by hand from the Actions tab for an existing tag and the platforms chosen there.
+# Either way the code built is the tag's, so every file in a release comes from
+# the same commit.
 
 name: Release
 
@@ -17,6 +19,10 @@ on:
       tag:
         description: "Existing tag to build, e.g. v0.0.1"
         required: true
+      platforms:
+        description: "Platforms to build: linux, windows, or both"
+        required: true
+        default: "linux windows"
 
 permissions:
   contents: write
@@ -25,15 +31,31 @@ concurrency:
   group: release-${{ github.event.inputs.tag || github.ref_name }}
   cancel-in-progress: false
 
+env:
+  TAG: ${{ github.event.inputs.tag || github.ref_name }}
+  GH_TOKEN: ${{ github.token }}
+  GH_REPO: ${{ github.repository }}
+
 jobs:
+  prepare:
+    name: Release exists
+    runs-on: ubuntu-latest
+    steps:
+      # Created once, here, so the platform jobs running side by side cannot each
+      # start their own draft. Normally the macOS build has created it already.
+      - name: Start a draft release if there is none
+        run: |
+          gh release view "$TAG" >/dev/null 2>&1 ||
+            gh release create "$TAG" --draft --verify-tag \
+              --title "Edge Notes $TAG" --notes "Draft: builds in progress."
+
   linux:
     name: Linux x86_64
+    needs: prepare
+    if: github.event_name == 'push' || contains(github.event.inputs.platforms, 'linux')
     # The oldest supported runner, so the packages link against a glibc old
     # enough for Ubuntu 22.04 and newer (brief 5).
     runs-on: ubuntu-22.04
-    env:
-      TAG: ${{ github.event.inputs.tag || github.ref_name }}
-      GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -83,8 +105,66 @@ jobs:
           mkdir -p out
           cp "$bundle"/deb/*.deb "out/Edge-Notes_${version}_linux_amd64.deb"
           cp "$bundle"/appimage/*.AppImage "out/Edge-Notes_${version}_linux_x86_64.AppImage"
-          # The release is normally created with the macOS build first; if this
-          # runner gets there before it, start a draft to attach to.
-          gh release view "$TAG" >/dev/null 2>&1 ||
-            gh release create "$TAG" --draft --title "Edge Notes $TAG" --notes "Draft: macOS build to follow."
+          gh release upload "$TAG" out/* --clobber
+
+  windows:
+    name: Windows x64
+    needs: prepare
+    if: github.event_name == 'push' || contains(github.event.inputs.platforms, 'windows')
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      # Windows runners check files out with CRLF line endings by default, which
+      # the tests that read source files as text (tokens.css, Cargo.toml) do not
+      # expect. Keep them exactly as committed.
+      - name: Keep line endings as committed
+        run: git config --global core.autocrlf false
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
+
+      - name: Check the tag matches the app version
+        run: |
+          version="$(node -p "require('./package.json').version")"
+          if [ "v$version" != "$TAG" ]; then
+            echo "::error::tag $TAG does not match package.json version $version"
+            exit 1
+          fi
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Test
+        run: |
+          npm run lint
+          npm test
+          cd src-tauri && cargo test
+
+      # NSIS for the familiar setup.exe, WiX for an .msi that IT departments can
+      # deploy. Tauri downloads both tools itself. The installer fetches WebView2
+      # if a machine lacks it (Windows 10 before it shipped by default).
+      - name: Build setup.exe and .msi
+        run: npm run tauri build -- --bundles nsis,msi
+
+      - name: Attach to the release
+        run: |
+          version="${TAG#v}"
+          bundle=src-tauri/target/release/bundle
+          mkdir -p out
+          cp "$bundle"/nsis/*-setup.exe "out/Edge-Notes_${version}_windows_x64-setup.exe"
+          cp "$bundle"/msi/*.msi "out/Edge-Notes_${version}_windows_x64.msi"
           gh release upload "$TAG" out/* --clobber
