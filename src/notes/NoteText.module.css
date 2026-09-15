@@ -109,3 +109,9 @@
   font-weight: 600;
   opacity: 1;
 }
+
+/* A blank line between paragraphs, kept as the break it is rather than being
+   swallowed. Sized in em so it scales with whatever text it sits between. */
+.blank {
+  height: 0.75em;
+}

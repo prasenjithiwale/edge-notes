@@ -56,6 +56,28 @@
   opacity: var(--note-secondary-opacity);
 }
 
+/* A locked card is a reading surface, not a preview: it shows the whole note, so
+   its lines wrap instead of ending in an ellipsis and it has no clamp. The sizes
+   match the preview's, so locking a note changes what is shown, not how it
+   looks. */
+.fullTitle {
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.fullLine {
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.4;
+}
+
+/* The same step back the preview's rows take, with checkboxes left at full
+   strength so they still read as pressable. */
+.fullLine > :not(button) {
+  opacity: var(--note-secondary-opacity);
+}
+
 /* A note with no first line yet still shows readable text, not a hint. */
 .untitled {
   opacity: var(--note-secondary-opacity);

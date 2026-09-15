@@ -2,12 +2,11 @@ import { Minimize2, Pencil } from "lucide-react";
 
 import { IconButton } from "../components/IconButton";
 import type { Note } from "../lib/ipc";
-import { parseLine } from "../lib/markdown";
 import { editedLabel } from "../lib/notes";
 import { useNow } from "../lib/useNow";
 import { useNotesStore } from "../store/notes";
 import { noteColorStyle } from "./NoteCard";
-import { LineRow } from "./NoteText";
+import { NoteLines } from "./NoteText";
 import styles from "./NoteReader.module.css";
 
 interface NoteReaderProps {
@@ -24,9 +23,6 @@ export function NoteReader({ note }: NoteReaderProps) {
   const shrink = useNotesStore((state) => state.shrink);
   const toggleTask = useNotesStore((state) => state.toggleTask);
   const now = useNow();
-
-  const lines = note.content.split("\n");
-  const titleIndex = lines.findIndex((line) => parseLine(line).text.trim() !== "");
 
   return (
     <section className={styles.reader} style={noteColorStyle(note.color)}>
@@ -45,24 +41,14 @@ export function NoteReader({ note }: NoteReaderProps) {
         </IconButton>
       </div>
       <div className={styles.body}>
-        {lines.map((raw, index) => {
-          const line = parseLine(raw);
-          if (line.text.trim() === "") {
-            // A blank line is a paragraph break, and an empty list item is nothing.
-            return <div key={index} className={styles.blank} />;
-          }
-          return (
-            <LineRow
-              key={index}
-              line={line}
-              wrap
-              className={index === titleIndex ? styles.title : styles.line}
-              onToggle={() => {
-                toggleTask(note.id, index);
-              }}
-            />
-          );
-        })}
+        <NoteLines
+          content={note.content}
+          titleClassName={styles.title}
+          lineClassName={styles.line}
+          onToggle={(index) => {
+            toggleTask(note.id, index);
+          }}
+        />
       </div>
       <footer className={styles.footer}>{editedLabel(note.updatedAt, now)}</footer>
     </section>

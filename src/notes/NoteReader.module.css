@@ -48,10 +48,6 @@
   font-weight: 400;
 }
 
-.blank {
-  height: 0.75em;
-}
-
 .footer {
   font-size: 11px;
   opacity: var(--note-secondary-opacity);

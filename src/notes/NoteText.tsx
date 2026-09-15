@@ -3,7 +3,7 @@ import { Flag, Repeat, Square, SquareCheck } from "lucide-react";
 
 import { cx } from "../lib/cx";
 import { openUrl } from "../lib/ipc";
-import { parseInline, plainText, type Inline, type Line } from "../lib/markdown";
+import { parseInline, parseLine, plainText, type Inline, type Line } from "../lib/markdown";
 import {
   dueLabel,
   dueSection,
@@ -195,5 +195,68 @@ export function LineRow({ line, className, wrap = false, onToggle }: LineRowProp
       </span>
       {meta !== null && <TaskChips meta={meta} checked={line.checked} />}
     </div>
+  );
+}
+
+interface NoteLinesProps {
+  content: string;
+  /** Class for the first line with text on it, the one that reads as the title. */
+  titleClassName?: string | undefined;
+  lineClassName?: string | undefined;
+  /** Rendered instead when the note has no text at all, so nothing shows blank. */
+  fallback?: ReactNode;
+  /** Omit to render ticks as read-only. Takes the line's index in the content. */
+  onToggle?: ((index: number) => void) | undefined;
+}
+
+/**
+ * A whole note, formatted: every line in the order it was written, wrapped
+ * rather than clipped, and blank lines kept as the paragraph breaks they are.
+ * The reader and a locked card both show a note this way, so what is on screen
+ * is what was typed — nothing dropped, nothing run together.
+ *
+ * This is the opposite of `cardPreview`, which an ordinary card uses to fit a
+ * note into a couple of lines. Keep the two apart: a preview may take liberties
+ * with the text, and this may not.
+ */
+export function NoteLines({
+  content,
+  titleClassName,
+  lineClassName,
+  fallback = null,
+  onToggle,
+}: NoteLinesProps) {
+  const lines = useMemo(() => content.split("\n").map(parseLine), [content]);
+  // Indices are into the content, so a tick still finds its own line.
+  const titleIndex = lines.findIndex((line) => line.text.trim() !== "");
+
+  if (titleIndex === -1) {
+    return <>{fallback}</>;
+  }
+
+  return (
+    <>
+      {lines.map((line, index) => {
+        if (line.text.trim() === "") {
+          // A blank line is a paragraph break, and an empty list item is nothing.
+          return <div key={index} className={styles.blank} />;
+        }
+        return (
+          <LineRow
+            key={index}
+            line={line}
+            wrap
+            className={index === titleIndex ? titleClassName : lineClassName}
+            onToggle={
+              onToggle === undefined
+                ? undefined
+                : () => {
+                    onToggle(index);
+                  }
+            }
+          />
+        );
+      })}
+    </>
   );
 }

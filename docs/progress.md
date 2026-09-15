@@ -1878,6 +1878,69 @@ a `.deb`-only site both work.
 - [ ] `Get-FileHash` on the download matches `windows/SHA256SUMS`
 - [ ] The apt install path still works unchanged
 
+## A locked note shows all of itself (15 Sep 2026)
+
+The owner asked that a locked note show its full content, and that its lines stop
+being run together onto one line.
+
+Both came from the same place: a locked card rendered `cardPreview` exactly as an
+ordinary card does, and a preview is allowed to take liberties. It dropped
+everything past two paragraph lines or five checklist items ("N more"), joined
+consecutive paragraph lines with a space through `FlowText`, threw away blank
+lines, and clipped each row to one line with an ellipsis. On an unlocked card
+that is right — the list is for scanning. On a locked one it is wrong: locking a
+note is how you keep it in front of you.
+
+### What changed
+
+- **`NoteLines` in `NoteText.tsx`** renders a whole note: every line in order,
+  `wrap`ped rather than clipped, blank lines kept as the paragraph breaks they
+  are, and line indices still counted against the content so a tick finds its own
+  line. It is deliberately the opposite of `cardPreview`, and the doc comment says
+  so — the two must not drift back together.
+- **`NoteReader` now uses it** instead of its own copy of that loop, which is
+  where the behaviour already existed and was already right. The `.blank` rule
+  moved to `NoteText.module.css`, next to the component that emits it. The reader
+  renders the same as before.
+- **A locked `NoteCard` renders `FullBody`** (`NoteLines`) instead of `Body`, with
+  `.fullTitle`/`.fullLine` at the preview's own sizes, so locking a note changes
+  *what* is shown, not how it looks. The reduced-emphasis body opacity stays, and
+  checkboxes stay at full strength, as on a preview.
+- An empty locked note still says "New note", through `NoteLines`' `fallback`:
+  the "is there anything to show" rule lives in one place rather than being
+  re-derived from `content.trim()`, which would be wrong for a note holding only
+  an empty list item.
+
+One existing test asserted the title's *direct parent* was the selectable region.
+The title is now a `LineRow`, so its parent is that row; the test was rewritten to
+check the same thing with `closest`, which is what it always meant.
+
+### What was decided against
+
+- **A maximum height with an inner scroller** on a locked card. It would keep the
+  list tidy, but a scroller inside a scroller in a 320 px panel is worse than a
+  tall card, and the ask was that the content be visible. A long note that wants
+  its own space has the expand button.
+- **Full-strength body text** on a locked card. The reader uses it, but a card
+  sits in a list, and dropping the preview's emphasis step would make locked and
+  unlocked cards read as two different components.
+
+Seven new card tests (343 frontend tests in all), covering a 60-line note, a
+7-item checklist against the unlocked card's five, a 400-character line, that
+three blank lines stay three breaks, that paragraph lines are *not* joined where
+an unlocked card joins them, and that a box on a line no preview would have shown
+still ticks the right line.
+
+### Checklist
+
+- [ ] Lock a long note: all of it is on the card, and the list scrolls to it
+- [ ] Type several paragraphs separated by blank lines; locked, they stay
+      separate paragraphs rather than one run of text
+- [ ] A very long word or URL wraps instead of widening the panel
+- [ ] A locked checklist shows every item and ticking any of them works
+- [ ] An unlocked card still previews as before, "N more" and all
+- [ ] Expanding a locked note still shows the reader, unchanged
+
 ## M0 acceptance checklist
 
 From brief section 12. Run `npm run tauri dev`, then work through these with

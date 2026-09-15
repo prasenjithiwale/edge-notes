@@ -197,11 +197,11 @@ describe("a pinned card", () => {
       />,
     );
 
-    // The title's container is the selectable region; a <button> could not be
+    // The title sits inside the selectable region; a <button> could not be
     // selected at all, which is why a pinned card is not one.
-    const text = screen.getByText("Standup notes").parentElement;
-    expect(text?.className).toContain("text");
-    expect(text?.closest("button")).toBeNull();
+    const title = screen.getByText("Standup notes");
+    expect(title.closest("[class*='selectable']")).not.toBeNull();
+    expect(title.closest("button")).toBeNull();
   });
 
   it("can be unlocked from the card", () => {
@@ -222,6 +222,144 @@ describe("a pinned card", () => {
     const unpin = screen.getByRole("button", { name: "Unlock note" });
     expect(unpin.className).not.toContain("active");
     expect(unpin.getAttribute("aria-pressed")).toBe("true");
+  });
+
+  it("shows the whole note, not a preview, however long it is", () => {
+    // The point of locking a note is keeping it in front of you, so nothing may
+    // be cut off — neither the checklist limit nor the paragraph clamp applies.
+    const lines = Array.from({ length: 60 }, (_, i) => `line ${String(i)}`);
+    render(
+      <NoteCard
+        note={note({ pinned: true, content: ["Long note", ...lines].join("\n") })}
+        onOpen={() => undefined}
+        onUnpin={() => undefined}
+        {...noop}
+      />,
+    );
+
+    for (const line of lines) {
+      expect(screen.getByText(line)).toBeTruthy();
+    }
+    expect(screen.queryByText(/\d+ more/)).toBeNull();
+  });
+
+  it("keeps every checklist item, where an unlocked card stops at five", () => {
+    const items = Array.from({ length: 7 }, (_, i) => `- [ ] item ${String(i)}`);
+    const content = ["Packing", ...items].join("\n");
+    const { unmount } = render(
+      <NoteCard
+        note={note({ pinned: true, content })}
+        onOpen={() => undefined}
+        onUnpin={() => undefined}
+        {...noop}
+      />,
+    );
+    expect(screen.getAllByRole("checkbox")).toHaveLength(7);
+    expect(screen.queryByText("2 more")).toBeNull();
+    unmount();
+
+    render(
+      <NoteCard
+        note={note({ content })}
+        onOpen={() => undefined}
+        onUnpin={() => undefined}
+        {...noop}
+      />,
+    );
+    expect(screen.getAllByRole("checkbox")).toHaveLength(5);
+  });
+
+  it("gives each line its own row instead of running them together", () => {
+    // An unlocked card flows paragraph lines into one clamped run of text; a
+    // locked one must not, or a note typed as several lines reads as one.
+    const content = "Shopping\nmilk\neggs";
+    const { container, unmount } = render(
+      <NoteCard
+        note={note({ pinned: true, content })}
+        onOpen={() => undefined}
+        onUnpin={() => undefined}
+        {...noop}
+      />,
+    );
+
+    // Each line is its own element with exactly its own text on it.
+    expect(screen.getByText("milk").textContent).toBe("milk");
+    expect(screen.getByText("eggs").textContent).toBe("eggs");
+    expect(container.textContent).toBe("Shoppingmilkeggs");
+    unmount();
+
+    // The same note unlocked: the two body lines share one run of text.
+    render(
+      <NoteCard
+        note={note({ content })}
+        onOpen={() => undefined}
+        onUnpin={() => undefined}
+        {...noop}
+      />,
+    );
+    expect(screen.getByText("milk eggs")).toBeTruthy();
+  });
+
+  it("keeps blank lines as the paragraph breaks they are", () => {
+    const { container } = render(
+      <NoteCard
+        note={note({ pinned: true, content: "Title\n\nFirst para\n\n\nSecond para" })}
+        onOpen={() => undefined}
+        onUnpin={() => undefined}
+        {...noop}
+      />,
+    );
+
+    // Three blank lines in the content, three breaks on the card.
+    expect(container.querySelectorAll("[class*='blank']")).toHaveLength(3);
+    expect(screen.getByText("First para")).toBeTruthy();
+    expect(screen.getByText("Second para")).toBeTruthy();
+  });
+
+  it("wraps its lines rather than clipping them to one", () => {
+    const long = "a".repeat(400);
+    const { container } = render(
+      <NoteCard
+        note={note({ pinned: true, content: `Wide\n${long}` })}
+        onOpen={() => undefined}
+        onUnpin={() => undefined}
+        {...noop}
+      />,
+    );
+
+    expect(screen.getByText(long)).toBeTruthy();
+    // `wrap` is what turns off the one-line ellipsis in NoteText.module.css.
+    expect(container.querySelectorAll("[class*='wrap']").length).toBeGreaterThan(0);
+  });
+
+  it("ticks a box on a line a preview would never have shown", () => {
+    const onToggleTask = vi.fn();
+    const items = Array.from({ length: 7 }, (_, i) => `- [ ] item ${String(i)}`);
+    render(
+      <NoteCard
+        note={note({ pinned: true, content: ["Packing", ...items].join("\n") })}
+        onOpen={() => undefined}
+        onUnpin={() => undefined}
+        onExpand={() => undefined}
+        onToggleTask={onToggleTask}
+      />,
+    );
+
+    screen.getByRole("checkbox", { name: "item 6" }).click();
+    // Line 7 of the content, counted from the title on line 0.
+    expect(onToggleTask).toHaveBeenCalledWith(7);
+  });
+
+  it("still says New note when there is nothing to show", () => {
+    render(
+      <NoteCard
+        note={note({ pinned: true, content: "" })}
+        onOpen={() => undefined}
+        onUnpin={() => undefined}
+        {...noop}
+      />,
+    );
+    expect(screen.getByText("New note")).toBeTruthy();
   });
 
   it("stays reachable by keyboard through its edit button (brief 6.11)", () => {

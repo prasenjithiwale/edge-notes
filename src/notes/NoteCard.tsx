@@ -5,7 +5,7 @@ import { IconButton } from "../components/IconButton";
 import { cx } from "../lib/cx";
 import type { Note } from "../lib/ipc";
 import { cardPreview, parseInline, plainText } from "../lib/markdown";
-import { FlowText, InlineText, LineRow } from "./NoteText";
+import { FlowText, InlineText, LineRow, NoteLines } from "./NoteText";
 import styles from "./NoteCard.module.css";
 
 interface NoteCardProps {
@@ -75,6 +75,24 @@ function Body({ note, onToggleTask }: Pick<NoteCardProps, "note" | "onToggleTask
   );
 }
 
+/**
+ * A locked note in full: every line of it, wrapped, with the blank lines still
+ * there. Locking a note is how you keep it open in front of you, so it stops
+ * being a preview — nothing is cut off at "2 more", and two paragraphs do not
+ * run together into one line the way `cardPreview`'s flow layout joins them.
+ */
+function FullBody({ note, onToggleTask }: Pick<NoteCardProps, "note" | "onToggleTask">) {
+  return (
+    <NoteLines
+      content={note.content}
+      titleClassName={styles.fullTitle}
+      lineClassName={styles.fullLine}
+      fallback={<div className={cx(styles.title, styles.untitled)}>New note</div>}
+      onToggle={onToggleTask}
+    />
+  );
+}
+
 /** The accessible name of the card's open button: its title, markers removed. */
 function cardLabel(note: Note): string {
   const title = cardPreview(note.content).title;
@@ -88,9 +106,10 @@ function cardLabel(note: Note): string {
  * ring and the keyboard path, and the text above it passes clicks through to the
  * card.
  *
- * A pinned one does not open on click. Its text is selectable so it can be read
- * and copied without touching it, and the only way into the editor is the
- * pencil — the point of pinning a note is that you stop editing it by accident.
+ * A pinned one does not open on click. It shows the whole note rather than a
+ * preview, its text is selectable so it can be read and copied without touching
+ * it, and the only way into the editor is the pencil — the point of pinning a
+ * note is that you keep it in front of you and stop editing it by accident.
  */
 export function NoteCard({ note, onOpen, onUnpin, onExpand, onToggleTask }: NoteCardProps) {
   const expand = (
@@ -128,7 +147,7 @@ export function NoteCard({ note, onOpen, onUnpin, onExpand, onToggleTask }: Note
   return (
     <div className={cx(styles.card, styles.pinned)} style={noteColorStyle(note.color)}>
       <div className={cx(styles.text, styles.selectable)}>
-        <Body note={note} onToggleTask={onToggleTask} />
+        <FullBody note={note} onToggleTask={onToggleTask} />
       </div>
       <div className={styles.tools}>
         {/* Not `active`: accent is reserved for focus rings and Keep open
