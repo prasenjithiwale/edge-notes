@@ -17,12 +17,23 @@ nvm use && npm install
 npm run tauri dev
 ```
 
-## Installing on Debian and Ubuntu with apt
+## Installing
 
-Every release is published to a signed APT repository,
+Downloads live at
 [prasenjithiwale.github.io/edge-notes-apt](https://prasenjithiwale.github.io/edge-notes-apt/),
-so it installs and updates like any other package (x86_64, Ubuntu 22.04+ or
-Debian 12+):
+a public GitHub Pages site, because this repository is private and its Releases
+page is not a public download.
+
+### Windows
+
+The page has the latest `setup.exe` and `.msi` for 64-bit Windows 10 and 11, with
+their SHA-256 sums. The builds are not code-signed, so SmartScreen warns the first
+time: **More info**, then **Run anyway**.
+
+### Debian and Ubuntu, with apt
+
+The same site is a signed APT repository, so on x86_64 Ubuntu 22.04+ or Debian
+12+ Edge Notes installs and updates like any other package:
 
 ```bash
 sudo install -d -m 0755 /etc/apt/keyrings
@@ -65,16 +76,24 @@ step. A test fails if they ever disagree. Every release has an entry in
 4. The tag starts the **Release** workflow (`.github/workflows/release.yml`), which
    tests and builds the Linux `.deb` and `.AppImage` on Ubuntu 22.04 and the
    Windows `setup.exe` and `.msi` on Windows, and attaches them to the same
-   release, usually within 20 minutes. It then adds the `.deb` to the APT
-   repository, re-signs it, and installs it from the live repository on Ubuntu
-   24.04 to prove it works. It can also be run from the Actions tab
-   for an existing tag and a chosen platform
-   (`gh workflow run release.yml -f tag=v0.0.2 -f platforms=windows`, or
-   `platforms=apt` to publish an existing release's `.deb`).
+   release, usually within 20 minutes.
 
-The APT job needs two repository secrets: `APT_SIGNING_KEY` (the armored private
-key that signs the repository) and `APT_DEPLOY_KEY` (an SSH deploy key with write
-access to `edge-notes-apt`).
+   Its **Pages site** job then publishes both to `edge-notes-apt`: the `.deb`
+   into the APT repository, re-signed, and the Windows installers into
+   `windows/` with a `SHA256SUMS` file. It rewrites the landing page from what
+   is in the site, so the versions and sizes it shows are always the published
+   ones. Old versions of both are kept. Finally it checks the live site: it
+   installs the `.deb` from the repository on Ubuntu 24.04 and downloads the
+   Windows installers, comparing them with the published sums. A release is only
+   green if both work.
+
+   It can also be run from the Actions tab for an existing tag and a chosen
+   platform (`gh workflow run release.yml -f tag=v0.0.2 -f platforms=windows`, or
+   `platforms=publish` to publish an existing release's packages).
+
+The Pages job needs two repository secrets: `APT_SIGNING_KEY` (the armored private
+key that signs the APT repository) and `APT_DEPLOY_KEY` (an SSH deploy key with
+write access to `edge-notes-apt`).
 
 Neither Linux nor Windows can be built on a Mac: Tauri bundles only for the
 platform it runs on, so each needs its own machine or a CI runner.

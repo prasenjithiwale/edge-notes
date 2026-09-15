@@ -1,6 +1,8 @@
 # Builds the Linux and Windows packages for a release and attaches them to it,
-# then publishes the .deb to the signed APT repository
-# (github.com/prasenjithiwale/edge-notes-apt, served by GitHub Pages).
+# then publishes both to the public Pages site
+# (github.com/prasenjithiwale/edge-notes-apt): the .deb into the signed APT
+# repository, the Windows installers as direct downloads. This repository is
+# private, so its Releases page is not a public download — the Pages site is.
 #
 # Tauri can only bundle for the platform it runs on, so neither can be built on a
 # Mac; these runners do it. The macOS build is made locally and uploaded to the
@@ -22,9 +24,9 @@ on:
         description: "Existing tag to build, e.g. v0.0.1"
         required: true
       platforms:
-        description: "What to run: any of linux, windows, apt"
+        description: "What to run: any of linux, windows, publish"
         required: true
-        default: "linux windows apt"
+        default: "linux windows publish"
 
 permissions:
   contents: write
@@ -109,88 +111,6 @@ jobs:
           cp "$bundle"/appimage/*.AppImage "out/Edge-Notes_${version}_linux_x86_64.AppImage"
           gh release upload "$TAG" out/* --clobber
 
-  apt:
-    name: APT repository
-    needs: [prepare, linux]
-    # After a Linux build, or on its own from a manual run, taking the .deb that
-    # is already attached to the release.
-    if: >-
-      always() &&
-      needs.prepare.result == 'success' &&
-      (needs.linux.result == 'success' || needs.linux.result == 'skipped') &&
-      (github.event_name == 'push' || contains(github.event.inputs.platforms, 'apt'))
-    runs-on: ubuntu-24.04
-    env:
-      APT_URL: https://prasenjithiwale.github.io/edge-notes-apt
-    steps:
-      # The publishing script comes from the workflow's own commit rather than the
-      # tag, so an older release can be published with the current script.
-      - uses: actions/checkout@v4
-        with:
-          path: source
-
-      - name: Fetch the release's .deb
-        run: gh release download "$TAG" --pattern "*.deb" --dir incoming
-
-      - uses: actions/checkout@v4
-        with:
-          repository: prasenjithiwale/edge-notes-apt
-          ssh-key: ${{ secrets.APT_DEPLOY_KEY }}
-          path: apt
-
-      - name: Import the signing key
-        env:
-          APT_SIGNING_KEY: ${{ secrets.APT_SIGNING_KEY }}
-        run: |
-          if [ -z "$APT_SIGNING_KEY" ]; then
-            echo "::error::the APT_SIGNING_KEY secret is missing"
-            exit 1
-          fi
-          printf '%s\n' "$APT_SIGNING_KEY" | gpg --batch --import
-
-      - name: Add the package and sign the index
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y apt-utils
-          source/tools/publish_apt.sh apt incoming/*.deb
-
-      - name: Publish
-        working-directory: apt
-        run: |
-          git add -A
-          if git diff --cached --quiet; then
-            echo "The repository already has this release."
-            exit 0
-          fi
-          git -c user.name="github-actions[bot]" \
-            -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
-            commit -m "edge-notes ${TAG#v}"
-          git push
-
-      # The real proof: install from the live repository, as a user would, on
-      # the Ubuntu release current Kubuntu is built on.
-      - name: Install from the published repository
-        run: |
-          version="${TAG#v}"
-          for attempt in $(seq 1 40); do
-            if curl -fsS "$APT_URL/dists/stable/main/binary-amd64/Packages" | grep -qx "Version: $version"; then
-              break
-            fi
-            echo "Waiting for GitHub Pages to serve $version ($attempt)"
-            sleep 15
-          done
-          sudo install -d -m 0755 /etc/apt/keyrings
-          curl -fsSL "$APT_URL/key.gpg" | sudo gpg --batch --dearmor -o /etc/apt/keyrings/edge-notes.gpg
-          echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/edge-notes.gpg] $APT_URL stable main" \
-            | sudo tee /etc/apt/sources.list.d/edge-notes.list
-          sudo apt-get update
-          apt-cache policy edge-notes
-          sudo apt-get install -y "edge-notes=$version"
-          installed="$(dpkg-query --show --showformat='${Version}' edge-notes)"
-          echo "installed edge-notes $installed"
-          test "$installed" = "$version"
-          test -x /usr/bin/edge-notes
-
   windows:
     name: Windows x64
     needs: prepare
@@ -252,3 +172,145 @@ jobs:
           cp "$bundle"/nsis/*-setup.exe "out/Edge-Notes_${version}_windows_x64-setup.exe"
           cp "$bundle"/msi/*.msi "out/Edge-Notes_${version}_windows_x64.msi"
           gh release upload "$TAG" out/* --clobber
+  publish:
+    name: Pages site
+    needs: [prepare, linux, windows]
+    # After the platform builds, or on its own from a manual run, taking the
+    # files already attached to the release. One job, so the two kinds of package
+    # cannot race each other pushing to the site repository. It only waits for the
+    # Windows job rather than requiring it: a broken Windows build should not also
+    # keep the .deb out of the APT repository, and the steps below publish
+    # whatever the release actually has.
+    # "apt" is still accepted as the platform name this job used to have.
+    if: >-
+      always() &&
+      needs.prepare.result == 'success' &&
+      (needs.linux.result == 'success' || needs.linux.result == 'skipped') &&
+      (github.event_name == 'push' ||
+      contains(github.event.inputs.platforms, 'publish') ||
+      contains(github.event.inputs.platforms, 'apt'))
+    runs-on: ubuntu-24.04
+    env:
+      SITE_URL: https://prasenjithiwale.github.io/edge-notes-apt
+    steps:
+      # The publishing scripts come from the workflow's own commit rather than the
+      # tag, so an older release can be published with the current scripts.
+      - uses: actions/checkout@v4
+        with:
+          path: source
+
+      - name: Fetch the release's packages
+        run: |
+          gh release download "$TAG" --dir incoming \
+            --pattern "*.deb" \
+            --pattern "*windows_x64-setup.exe" \
+            --pattern "*windows_x64.msi"
+          ls -l incoming
+
+      - uses: actions/checkout@v4
+        with:
+          repository: prasenjithiwale/edge-notes-apt
+          ssh-key: ${{ secrets.APT_DEPLOY_KEY }}
+          path: apt
+
+      - name: Import the signing key
+        env:
+          APT_SIGNING_KEY: ${{ secrets.APT_SIGNING_KEY }}
+        run: |
+          if [ -z "$APT_SIGNING_KEY" ]; then
+            echo "::error::the APT_SIGNING_KEY secret is missing"
+            exit 1
+          fi
+          printf '%s\n' "$APT_SIGNING_KEY" | gpg --batch --import
+
+      - name: Add the .deb and sign the index
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y apt-utils
+          source/tools/publish_apt.sh apt incoming/*.deb
+
+      # Releases made before this job published Windows have no such assets; the
+      # site keeps whatever it already has rather than failing the run.
+      - name: Add the Windows installers
+        run: |
+          shopt -s nullglob
+          installers=(incoming/*windows_x64*)
+          if [ ${#installers[@]} -eq 0 ]; then
+            echo "$TAG has no Windows installers; leaving the site's as they are."
+            exit 0
+          fi
+          source/tools/publish_windows.sh apt "${installers[@]}"
+
+      - name: Write the landing page
+        run: source/tools/render_site.sh apt
+
+      - name: Publish
+        working-directory: apt
+        run: |
+          git add -A
+          if git diff --cached --quiet; then
+            echo "The site already has this release."
+            exit 0
+          fi
+          git -c user.name="github-actions[bot]" \
+            -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+            commit -m "edge-notes ${TAG#v}"
+          git push
+
+      # The real proof: install from the live repository, as a user would, on
+      # the Ubuntu release current Kubuntu is built on.
+      - name: Install from the published repository
+        run: |
+          version="${TAG#v}"
+          for attempt in $(seq 1 40); do
+            if curl -fsS "$SITE_URL/dists/stable/main/binary-amd64/Packages" | grep -qx "Version: $version"; then
+              break
+            fi
+            echo "Waiting for GitHub Pages to serve $version ($attempt)"
+            sleep 15
+          done
+          sudo install -d -m 0755 /etc/apt/keyrings
+          curl -fsSL "$SITE_URL/key.gpg" | sudo gpg --batch --dearmor -o /etc/apt/keyrings/edge-notes.gpg
+          echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/edge-notes.gpg] $SITE_URL stable main" \
+            | sudo tee /etc/apt/sources.list.d/edge-notes.list
+          sudo apt-get update
+          apt-cache policy edge-notes
+          sudo apt-get install -y "edge-notes=$version"
+          installed="$(dpkg-query --show --showformat='${Version}' edge-notes)"
+          echo "installed edge-notes $installed"
+          test "$installed" = "$version"
+          test -x /usr/bin/edge-notes
+
+      # And the same proof for Windows: everything the page offers, plus anything
+      # this release added, is downloaded from the live site and checked against
+      # the published sums. The two lists can differ — re-publishing an older tag
+      # leaves the page rightly linking the newer version.
+      - name: Download the Windows installers from the site
+        working-directory: apt
+        run: |
+          version="${TAG#v}"
+          shopt -s nullglob
+          wanted=$(
+            {
+              grep -oE 'windows/[^"]+\.(exe|msi)' index.html
+              printf '%s\n' windows/*_"$version"_*
+            } | sort -u
+          )
+          if [ -z "$wanted" ]; then
+            echo "No Windows installers to check."
+            exit 0
+          fi
+          curl -fsSL --retry 5 --retry-delay 15 --retry-all-errors \
+            -o ../live-SHA256SUMS "$SITE_URL/windows/SHA256SUMS"
+          diff ../live-SHA256SUMS windows/SHA256SUMS
+          mkdir -p ../check
+          : > ../check/SHA256SUMS
+          for path in $wanted; do
+            name=$(basename "$path")
+            curl -fsSL --retry 5 --retry-delay 15 --retry-all-errors \
+              -o "../check/$name" "$SITE_URL/windows/$name"
+            # Fails the run if the page links something that is not published.
+            grep " $name\$" windows/SHA256SUMS >> ../check/SHA256SUMS
+            echo "fetched $name"
+          done
+          cd ../check && sha256sum -c SHA256SUMS

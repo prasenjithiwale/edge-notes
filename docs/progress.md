@@ -1816,6 +1816,68 @@ was installed on this Mac with Homebrew for the key generation.
 - [ ] The signing key backup has been moved into a password manager and deleted
       from the home folder
 
+## Windows downloads on the same Pages site (15 Sep 2026)
+
+The owner asked for Windows releases to be published where Linux ones are. The
+Windows `setup.exe` and `.msi` were already built and attached to the GitHub
+release, but this repository is **private**, so its Releases page is not a public
+download — which is why the APT repository exists at all. Windows users had
+nowhere to get the app. So `edge-notes-apt` is now the download site for both.
+
+### What changed
+
+- **`tools/publish_windows.sh`** copies the installers into `windows/` under the
+  names the release gave them (which carry the version, so older versions stay
+  downloadable, as the `.deb` pool already does) and rebuilds
+  `windows/SHA256SUMS` from the whole directory.
+- **`tools/render_site.sh`** generates `index.html`. It reads the newest `.deb`
+  in the pool and the newest installers in `windows/` and takes the versions,
+  file names and sizes off those files, so the page cannot advertise something
+  that is not published. A section is omitted entirely when its files are absent,
+  so the page renders before the first Windows release and on an empty site. The
+  page was hand-written before; it is generated now, and an edit made in the site
+  repository is lost at the next release.
+- **The `apt` job became `publish` ("Pages site")**, doing both kinds of package
+  in **one job and one commit**: two jobs pushing to `edge-notes-apt` would race
+  on `git push`. The `platforms` input now says `publish`; `apt` is still
+  accepted, so the documented command keeps working.
+- It **waits for** the Windows job but does not **require** it. A broken Windows
+  build must not also keep the `.deb` out of the APT repository, and each step
+  publishes only what the release actually has.
+- **Verification matches the Linux one**: after Pages serves the new version,
+  everything the page links **and** everything this release added is downloaded
+  from the live site and checked against the published `SHA256SUMS`. A release is
+  only green if the Windows download works as a user's would. The two lists are
+  unioned rather than assumed equal, because re-publishing an older tag leaves
+  the page rightly linking the newer version — checking only the tag's version
+  would have failed such a run.
+
+### What was decided against
+
+- **A stable `latest` URL** (`windows/Edge-Notes-setup.exe` always the newest).
+  It would double the bytes per release, since GitHub Pages does not follow git
+  symlinks. The page links the versioned file instead.
+- **Publishing the `.AppImage`** (80 MB a release) or the macOS `.dmg` there.
+  Only what a user cannot otherwise get is published.
+- **Code signing the Windows builds.** Not free, and out of scope here; the page
+  says plainly that SmartScreen will warn and how to get past it, and gives the
+  checksums.
+
+Checked by dry-running both scripts against a real clone of `edge-notes-apt` with
+the real v0.0.3 assets: the diff is `index.html` plus a new `windows/`, the page
+is well-formed, `sort -V` picks 0.0.10 over 0.0.3, and rendering an empty site and
+a `.deb`-only site both work.
+
+### Checklist
+
+- [ ] The next release's run is green, including "Download the Windows installers
+      from the site"
+- [ ] The landing page shows a Windows section with the new version and working
+      download links
+- [ ] The `setup.exe` installs and runs on Windows 10 or 11
+- [ ] `Get-FileHash` on the download matches `windows/SHA256SUMS`
+- [ ] The apt install path still works unchanged
+
 ## M0 acceptance checklist
 
 From brief section 12. Run `npm run tauri dev`, then work through these with
