@@ -9,6 +9,27 @@ To release, see "Releasing" in the README.
 
 ## [Unreleased]
 
+## [0.0.4] - 2026-09-15
+
+macOS (universal), Linux (x86_64) and Windows (x64).
+
+### Added
+
+- **Windows downloads on the download page.** The Windows installer and `.msi`
+  are now published to
+  [prasenjithiwale.github.io/edge-notes-apt](https://prasenjithiwale.github.io/edge-notes-apt/),
+  the same page that serves the Debian and Ubuntu packages, with a `SHA256SUMS`
+  file to check them against. Every release is built there and checked by
+  downloading it again from the live page.
+
+### Changed
+
+- **A locked note shows all of itself.** Locking a note kept it in front of you
+  but still showed a preview: long notes stopped at "N more", and lines typed
+  separately ran together into one. A locked note now shows its whole content,
+  each line on its own line, with blank lines kept as the paragraph breaks they
+  are. Unlocked cards still preview as before.
+
 ## [0.0.3] - 2026-09-15
 
 A fix for Linux. macOS (universal), Linux (x86_64) and Windows (x64).
