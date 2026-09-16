@@ -2424,6 +2424,96 @@ the note went with it.
 - [ ] Reminders still fire for a dated task, and only once
 - [ ] Quit and reopen: everything is where it was
 
+## A Focus tab, and the panel's own controls move to its foot (16 Sep 2026)
+
+Two requests from the owner, taken together because the first made room for the
+second: move Settings and Keep open to the bottom, and add a Pomodoro tab with
+basic features, to be improved later.
+
+### The toolbar
+
+Settings and Keep open were two of four icon buttons crowded into the header
+beside the tabs, where a design review had already found them easy to mis-hit.
+They also never belonged there: everything else in that row acts on what is in
+front of you — search the notes, add a note — while those two change the panel
+itself. They are now a strip at the foot of the panel, Settings on the left and
+Keep open on the right, the same on every tab, separated from the content by one
+hairline. The header keeps the tabs, search and the new-note button, which is
+what made a third tab fit.
+
+The undo toast used to sit 12 px off the bottom, which is now the toolbar, so it
+is lifted by `--toolbar-height`.
+
+### The Focus tab
+
+- **A pomodoro: 25 minutes of focus, 5 off, 15 after four of them.** Start,
+  pause, reset, skip; a ring, the time, four dots for the run to the long break,
+  and the day's tally. Nothing else — the lengths are not settings yet, and the
+  tally does not survive a restart. Both are worth doing properly and neither is
+  worth guessing at now.
+- **The clock is a moment, not a countdown.** `lib/pomodoro.ts` keeps `endsAt`
+  and reads `endsAt - now`. Nothing decrements a counter on a tick, because this
+  widget spends its life in a collapsed panel behind another app, where a webview
+  is free to throttle timers to once a minute or stop them altogether; a counter
+  would quietly lose minutes. Reading the difference is right however long
+  nothing ran, which the tests say in as many words.
+- **The end is noticed rather than scheduled.** `settle(now)` ends a phase whose
+  time has passed, whenever anything next asks what time it is. The view
+  subscribes to a one-second clock, through `useSyncExternalStore` as `useNow`
+  does, and only while the tab is showing and the timer is running: a second hand
+  is worth an interval, an idle one is not.
+- **A session that ends out of sight still says so.** `pomodoroReminder` adds one
+  reminder to the same list the task reminders go in, so `reminders.rs` shows it
+  through the notification thread that already exists. The end time is in the id,
+  so pausing withdraws it, re-arming is a new one, and re-sending the list never
+  repeats a notification.
+- **Skipping does not count.** Finishing a focus session adds to the streak and
+  the day's tally and earns the long break every fourth time; skipping past one
+  moves to the break without claiming it was done.
+
+### Adding a tab is now adding an entry
+
+`TABS` in `ViewTabs` is the list, and `Panel` sizes the sliding track and each
+pane from its length. The numbers are inline styles rather than CSS: `repeat()`
+cannot read a custom property, and dividing by one is not safe on every WebKit
+this has to run on.
+
+### What was decided against
+
+- **Keeping the timer in Rust.** It is the obvious home for "everything
+  stateful", and a running timer is the exception that proves it: with `endsAt`
+  in the frontend and the notification already scheduled in Rust, nothing is lost
+  by a restart except a count that does not matter yet. When the durations become
+  settings, the state can go with them.
+- **Auto-starting the next phase.** Classic pomodoro does; a widget that starts
+  counting at you without being asked is a nag. The next phase is loaded and
+  waiting with its full time on the clock.
+- **Colour for the ring or the running state.** The note palette is the only
+  colour in the app (brief 7.1), and a timer does not have to be red to be a
+  timer.
+
+Twenty-seven new tests (516 in all): the timer's arithmetic against gaps,
+pauses, phases and formatting, the store's settling and its reminder, and the
+panel's new toolbar and tab. One deliberate departure from brief 7.4's type
+scale, marked in the stylesheet: the countdown is 32 px, because a clock that has
+to be squinted at is not doing its job.
+
+### Checklist
+
+- [ ] Settings and Keep open are at the foot of the panel on all three tabs, and
+      Keep open still holds the panel open
+- [ ] Settings opens from the toolbar and the same button comes back
+- [ ] The tabs slide in both directions and the pane that slid away takes no
+      clicks and no keyboard
+- [ ] Focus: Start counts down by the second and the ring follows
+- [ ] Pause holds the time; Start picks it up where it stopped
+- [ ] Reset returns the phase to its full length, stopped
+- [ ] Skip moves to the break without adding to the tally
+- [ ] Start a session, collapse the panel and leave it: the notification arrives
+      when it ends, and the tab shows the break waiting when it is opened again
+- [ ] Four finished sessions earn the long break, and the dots fill as they go
+- [ ] The undo toast (delete a note) clears the toolbar rather than covering it
+
 ## M0 acceptance checklist
 
 From brief section 12. Run `npm run tauri dev`, then work through these with

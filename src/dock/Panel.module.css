@@ -45,20 +45,16 @@
   overflow: hidden;
 }
 
+/* Width and offset come from the tab list as inline styles: a track sized in
+   the stylesheet would have to be edited every time a tab is added. */
 .track {
   flex: none;
-  width: 200%;
   display: flex;
   transform: translateX(0);
   transition: transform var(--open-duration) var(--open-easing);
 }
 
-.trackTodo {
-  transform: translateX(-50%);
-}
-
 .pane {
-  width: 50%;
   min-width: 0;
   min-height: 0;
   display: flex;
@@ -87,4 +83,18 @@
     opacity: 0;
     transition: none;
   }
+}
+
+/* The panel's own controls, at its foot: Settings on the left, Keep open on the
+   right, the same on every tab. They were in the header, where they sat among
+   the controls that act on the notes themselves and pushed the tabs into a
+   corner — and a third tab left no room at all. */
+.toolbar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: var(--toolbar-height);
+  padding: 0 8px;
+  border-top: 1px solid var(--border);
 }

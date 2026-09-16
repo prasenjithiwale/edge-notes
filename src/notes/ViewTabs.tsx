@@ -11,26 +11,35 @@ interface ViewTabsProps {
   onChange: (view: PanelView) => void;
 }
 
-const TABS: readonly { view: PanelView; label: string }[] = [
+export const TABS: readonly { view: PanelView; label: string }[] = [
   { view: "notes", label: "Notes" },
   { view: "todo", label: "Tasks" },
+  { view: "focus", label: "Focus" },
 ];
 
-/** Notes and Tasks, in place of the panel title. */
+/** The panel's tabs, in place of its title. */
 export function ViewTabs({ view, openTasks, onChange }: ViewTabsProps) {
+  const count = TABS.length;
   return (
     <div
       className={styles.tabs}
       role="tablist"
       aria-label="Panel view"
+      // The count travels in the style rather than the stylesheet: CSS cannot
+      // divide by a custom property everywhere this has to run, and `repeat()`
+      // will not take one at all.
       style={
-        { "--tab-index": TABS.findIndex((tab) => tab.view === view) } as CSSProperties
+        {
+          "--tab-index": TABS.findIndex((tab) => tab.view === view),
+          gridTemplateColumns: `repeat(${String(count)}, minmax(0, 1fr))`,
+          "--tab-width": `calc((100% - ${String((count + 1) * 2)}px) / ${String(count)})`,
+        } as CSSProperties
       }
     >
       <span className={styles.indicator} aria-hidden="true" />
       {TABS.map((tab) => {
         const selected = tab.view === view;
-        const count = tab.view === "todo" && openTasks > 0 ? openTasks : null;
+        const badge = tab.view === "todo" && openTasks > 0 ? openTasks : null;
         return (
           <button
             key={tab.view}
@@ -38,13 +47,13 @@ export function ViewTabs({ view, openTasks, onChange }: ViewTabsProps) {
             role="tab"
             className={cx(styles.tab, selected && styles.selected)}
             aria-selected={selected}
-            aria-label={count === null ? tab.label : `${tab.label}, ${String(count)} open`}
+            aria-label={badge === null ? tab.label : `${tab.label}, ${String(badge)} open`}
             onClick={() => {
               onChange(tab.view);
             }}
           >
             {tab.label}
-            {count !== null && <span className={styles.count}>{count}</span>}
+            {badge !== null && <span className={styles.count}>{badge}</span>}
           </button>
         );
       })}

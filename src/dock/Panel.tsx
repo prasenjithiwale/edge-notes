@@ -19,6 +19,7 @@ import {
 import { facetColors, filterNotes } from "../lib/notes";
 import { openTaskCount, taskReminders } from "../lib/tasks";
 import { useTasksStore } from "../store/tasks";
+import { pomodoroReminder, usePomodoroStore } from "../store/pomodoro";
 import { moveCardFocus } from "../notes/cardFocus";
 import { ColorFilter } from "../notes/ColorFilter";
 import { EmptyState } from "../notes/EmptyState";
@@ -32,7 +33,8 @@ import { NoteEditor } from "../notes/NoteEditor";
 import { NoteList } from "../notes/NoteList";
 import { NoteReader } from "../notes/NoteReader";
 import { TasksView } from "../notes/TasksView";
-import { ViewTabs } from "../notes/ViewTabs";
+import { PomodoroView } from "../focus/PomodoroView";
+import { TABS, ViewTabs } from "../notes/ViewTabs";
 import { SearchField } from "../notes/SearchField";
 import { SettingsView } from "../settings/SettingsView";
 import { useDockStore } from "../store/dock";
@@ -97,6 +99,7 @@ export function Panel({ className }: PanelProps) {
   const tasks = useTasksStore((state) => state.tasks);
   const loadTasks = useTasksStore((state) => state.load);
   const taskUndo = useTasksStore((state) => state.pendingUndo);
+  const pomodoro = usePomodoroStore((store) => store.state);
   const undoTaskRemove = useTasksStore((state) => state.undoRemove);
   const searching = useNotesStore((state) => state.searching);
   const query = useNotesStore((state) => state.query);
@@ -336,12 +339,12 @@ export function Panel({ className }: PanelProps) {
       return;
     }
     const timer = setTimeout(() => {
-      void remindersSet(taskReminders(tasks));
+      void remindersSet([...taskReminders(tasks), ...pomodoroReminder(pomodoro)]);
     }, REMINDERS_DEBOUNCE_MS);
     return () => {
       clearTimeout(timer);
     };
-  }, [tasks, loaded]);
+  }, [tasks, pomodoro, loaded]);
 
   const isEmpty = loaded && notes.length === 0;
   const openTasks = useMemo(() => openTaskCount(tasks), [tasks]);
@@ -352,6 +355,12 @@ export function Panel({ className }: PanelProps) {
     large && expandedId !== null
       ? notes.find((candidate) => candidate.id === expandedId)
       : undefined;
+
+  const tabIndex = Math.max(
+    0,
+    TABS.findIndex((tab) => tab.view === view),
+  );
+  const paneWidth = { width: `${String(100 / TABS.length)}%` };
 
   const openExpanded = (id: string) => {
     const target = notes.find((candidate) => candidate.id === id);
@@ -383,43 +392,26 @@ export function Panel({ className }: PanelProps) {
             }}
           />
         )}
+        {/* What the header keeps is what acts on what is in front of you.
+            Settings and Keep open are about the panel itself and live in the
+            toolbar at the foot of it. */}
         <div className={styles.actions}>
-          {!expandedNote && (
-          <IconButton
-            label={showSettings ? "Back to notes" : "Settings"}
-            active={showSettings}
-            pressed={showSettings}
-            onClick={() => {
-              setShowSettings((open) => !open);
-            }}
-          >
-            <SettingsIcon size={16} strokeWidth={1.75} />
-          </IconButton>
-          )}
           {!searching && !expandedNote && view === "notes" && (
             <IconButton label="Search notes" onClick={openSearch}>
               <Search size={16} strokeWidth={1.75} />
             </IconButton>
           )}
-          <IconButton
-            label="Keep open"
-            active={keepOpen}
-            pressed={keepOpen}
-            onClick={() => {
-              setKeepOpen(!keepOpen);
-            }}
-          >
-            <Pin size={16} strokeWidth={1.75} />
-          </IconButton>
-          <IconButton
-            label="New note"
-            outlined
-            onClick={() => {
-              void createNote();
-            }}
-          >
-            <Plus size={16} strokeWidth={1.75} />
-          </IconButton>
+          {view === "notes" && (
+            <IconButton
+              label="New note"
+              outlined
+              onClick={() => {
+                void createNote();
+              }}
+            >
+              <Plus size={16} strokeWidth={1.75} />
+            </IconButton>
+          )}
         </div>
       </header>
 
@@ -443,9 +435,18 @@ export function Panel({ className }: PanelProps) {
         // one off screen is inert and hidden from assistive technology, and
         // becomes invisible once the slide has finished.
         <div className={styles.views}>
-          <div className={cx(styles.track, view === "todo" && styles.trackTodo)}>
+          {/* The track is as wide as the tabs and shifts by one pane. Both
+              numbers come from `TABS`, so adding a tab is adding a tab. */}
+          <div
+            className={styles.track}
+            style={{
+              width: `${String(TABS.length * 100)}%`,
+              transform: `translateX(-${String((tabIndex * 100) / TABS.length)}%)`,
+            }}
+          >
             <div
               className={styles.pane}
+              style={paneWidth}
               aria-hidden={view !== "notes"}
               inert={view !== "notes"}
             >
@@ -487,14 +488,48 @@ export function Panel({ className }: PanelProps) {
             </div>
             <div
               className={styles.pane}
+              style={paneWidth}
               aria-hidden={view !== "todo"}
               inert={view !== "todo"}
             >
               <TasksView active={view === "todo"} />
             </div>
+            <div
+              className={styles.pane}
+              style={paneWidth}
+              aria-hidden={view !== "focus"}
+              inert={view !== "focus"}
+            >
+              <PomodoroView active={view === "focus"} />
+            </div>
           </div>
         </div>
       )}
+
+      {/* The panel's own controls, at the foot of it and the same on every tab:
+          what they change is the panel, not what is in it. */}
+      <div className={styles.toolbar}>
+        <IconButton
+          label={showSettings ? "Back" : "Settings"}
+          active={showSettings}
+          pressed={showSettings}
+          onClick={() => {
+            setShowSettings((open) => !open);
+          }}
+        >
+          <SettingsIcon size={16} strokeWidth={1.75} />
+        </IconButton>
+        <IconButton
+          label="Keep open"
+          active={keepOpen}
+          pressed={keepOpen}
+          onClick={() => {
+            setKeepOpen(!keepOpen);
+          }}
+        >
+          <Pin size={16} strokeWidth={1.75} />
+        </IconButton>
+      </div>
 
       {/* One toast at a time: a delete in one tab is the only thing being
           undone, and the tabs cannot both be in front. */}

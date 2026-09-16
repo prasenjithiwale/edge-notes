@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 
 import type { Note, Settings, Task } from "../lib/ipc";
+import { idle as pomodoroIdle } from "../lib/pomodoro";
 
 const invoke = vi.fn<(command: string, args?: unknown) => Promise<unknown>>();
 vi.mock("@tauri-apps/api/core", () => ({
@@ -21,6 +22,7 @@ const { Panel } = await import("./Panel");
 const { useDockStore } = await import("../store/dock");
 const { useNotesStore } = await import("../store/notes");
 const { useTasksStore } = await import("../store/tasks");
+const { usePomodoroStore } = await import("../store/pomodoro");
 
 function note(overrides: Partial<Note> & { id: string }): Note {
   return {
@@ -101,6 +103,9 @@ beforeEach(() => {
     if (command === "notes_create") {
       return Promise.resolve(note({ id: "new", color: "yellow", updatedAt: 40 }));
     }
+    if (command === "monitors_list") {
+      return Promise.resolve([]);
+    }
     if (command === "tasks_list") {
       return Promise.resolve(tasksInDb);
     }
@@ -127,6 +132,7 @@ beforeEach(() => {
   });
   useDockStore.setState({ locks: new Set(), large: false, panelWidth: 320 });
   tasksInDb = [];
+  usePomodoroStore.setState({ state: pomodoroIdle(), announced: null });
   useTasksStore.setState({
     tasks: [],
     loaded: false,
@@ -764,35 +770,49 @@ describe("the Tasks tab", () => {
   });
 });
 
-describe("sliding between Notes and Tasks", () => {
-  /** The Notes pane and the To-Do pane, children of the sliding track. */
+describe("sliding between the tabs", () => {
+  /** The three panes, children of the sliding track. */
   function panes(): HTMLElement[] {
     const track = document.querySelector('[class*="track"]');
     return Array.from(track?.children ?? []) as HTMLElement[];
   }
 
-  it("moves the track and the tab highlight, and hides the pane that slid away", async () => {
+  function track(): HTMLElement | null {
+    return document.querySelector('[class*="track"]');
+  }
+
+  it("moves the track and the tab highlight, and hides the panes that slid away", async () => {
     await renderPanel();
     const tablist = screen.getByRole("tablist", { name: "Panel view" });
     expect(tablist.style.getPropertyValue("--tab-index")).toBe("0");
+    // Three tabs, so the track is three panels wide and shifts by a third.
+    expect(track()?.style.width).toBe("300%");
+    expect(track()?.style.transform).toBe("translateX(-0%)");
 
-    let [notesPane, todoPane] = panes();
+    let [notesPane, todoPane, focusPane] = panes();
     expect(notesPane?.getAttribute("aria-hidden")).toBe("false");
     expect(todoPane?.hasAttribute("inert")).toBe(true);
-    expect(notesPane?.parentElement?.className).not.toContain("trackTodo");
+    expect(focusPane?.hasAttribute("inert")).toBe(true);
 
     screen.getByRole("tab", { name: "Tasks" }).click();
 
     await waitFor(() => {
       expect(tablist.style.getPropertyValue("--tab-index")).toBe("1");
     });
-    [notesPane, todoPane] = panes();
-    expect(notesPane?.parentElement?.className).toContain("trackTodo");
+    expect(track()?.style.transform).toBe("translateX(-33.333333333333336%)");
+    [notesPane, todoPane, focusPane] = panes();
     expect(notesPane?.getAttribute("aria-hidden")).toBe("true");
     expect(notesPane?.hasAttribute("inert")).toBe(true);
     expect(todoPane?.hasAttribute("inert")).toBe(false);
+    expect(focusPane?.hasAttribute("inert")).toBe(true);
     // The hidden Notes cards are out of the accessibility tree.
     expect(screen.queryByRole("button", { name: "Standup notes" })).toBeNull();
+
+    screen.getByRole("tab", { name: "Focus" }).click();
+    await waitFor(() => {
+      expect(tablist.style.getPropertyValue("--tab-index")).toBe("2");
+    });
+    expect(panes()[2]?.hasAttribute("inert")).toBe(false);
   });
 
   it("keeps arrow keys away from the cards while Tasks is showing", async () => {
@@ -970,6 +990,112 @@ describe("task details", () => {
     expect(within(row as HTMLElement).getByLabelText("Repeats")).toBeTruthy();
     expect(within(row as HTMLElement).getByLabelText("Has notes")).toBeTruthy();
     expect(row?.textContent).not.toContain("repeat:");
+  });
+});
+
+describe("the panel toolbar", () => {
+  it("keeps Settings and Keep open at the foot of the panel, on every tab", async () => {
+    await renderPanel();
+
+    const toolbar = document.querySelector('[class*="toolbar"]');
+    expect(within(toolbar as HTMLElement).getByRole("button", { name: "Settings" })).toBeTruthy();
+    expect(within(toolbar as HTMLElement).getByRole("button", { name: "Keep open" })).toBeTruthy();
+    // And not in the header any more.
+    const header = document.querySelector("header");
+    expect(within(header as HTMLElement).queryByRole("button", { name: "Settings" })).toBeNull();
+
+    await useNotesStore.getState().setView("focus");
+    expect(within(toolbar as HTMLElement).getByRole("button", { name: "Keep open" })).toBeTruthy();
+  });
+
+  it("opens settings from the toolbar and comes back", async () => {
+    await renderPanel();
+    const toolbar = document.querySelector('[class*="toolbar"]') as HTMLElement;
+
+    within(toolbar).getByRole("button", { name: "Settings" }).click();
+    await screen.findByRole("heading", { name: "Settings" });
+
+    within(toolbar).getByRole("button", { name: "Back" }).click();
+    await waitFor(() => {
+      expect(screen.queryByRole("heading", { name: "Settings" })).toBeNull();
+    });
+  });
+});
+
+describe("the Focus tab", () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(2026, 8, 16, 10, 0));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("starts at a full focus session and counts down from the moment it starts", async () => {
+    await renderPanel();
+    await useNotesStore.getState().setView("focus");
+
+    const panel = await screen.findByRole("tabpanel", { name: "Focus" });
+    expect(within(panel).getByRole("timer").textContent).toBe("25:00");
+
+    within(panel).getByRole("button", { name: "Start" }).click();
+    await screen.findByRole("button", { name: "Pause" });
+
+    vi.setSystemTime(new Date(2026, 8, 16, 10, 1));
+    await waitFor(() => {
+      expect(usePomodoroStore.getState().state.endsAt).not.toBeNull();
+    });
+    // The end is a moment, so a minute of wall clock is a minute off the clock
+    // whether or not anything was running to notice.
+    const endsAt = usePomodoroStore.getState().state.endsAt ?? 0;
+    expect(endsAt - new Date(2026, 8, 16, 10, 1).getTime()).toBe(24 * 60_000);
+  });
+
+  it("tells Rust when the session ends, so a closed panel still says so", async () => {
+    await renderPanel();
+    await useNotesStore.getState().setView("focus");
+    (await screen.findByRole("button", { name: "Start" })).click();
+
+    await waitFor(
+      () => {
+        const sent = commandCalls("reminders_set").at(-1) as
+          | { list: { id: string; title: string }[] }
+          | undefined;
+        expect(sent?.list.some((reminder) => reminder.title === "Focus finished")).toBe(true);
+      },
+      { timeout: 3_000 },
+    );
+  });
+
+  it("withdraws that reminder when the timer is paused", async () => {
+    await renderPanel();
+    await useNotesStore.getState().setView("focus");
+    (await screen.findByRole("button", { name: "Start" })).click();
+    (await screen.findByRole("button", { name: "Pause" })).click();
+
+    await waitFor(
+      () => {
+        const sent = commandCalls("reminders_set").at(-1) as
+          | { list: { id: string }[] }
+          | undefined;
+        expect(sent?.list.some((reminder) => reminder.id.startsWith("pomodoro"))).toBe(false);
+      },
+      { timeout: 3_000 },
+    );
+  });
+
+  it("skips to a break without counting the session that was skipped", async () => {
+    await renderPanel();
+    await useNotesStore.getState().setView("focus");
+
+    (await screen.findByRole("button", { name: "Skip to a break" })).click();
+
+    await waitFor(() => {
+      expect(usePomodoroStore.getState().state.phase).toBe("short");
+    });
+    expect(usePomodoroStore.getState().state.today).toBe(0);
+    expect(screen.getByRole("timer").textContent).toBe("5:00");
   });
 });
 

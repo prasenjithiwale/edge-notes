@@ -27,6 +27,12 @@ To release, see "Releasing" in the README.
   picker beside the field naming the note the task will go to, with that note's
   colour as a dot. Every note is offered; the note titled Tasks is still the
   default, so typing and pressing Enter works exactly as it did.
+- **A Focus tab, with a pomodoro timer.** Twenty-five minutes of focus, five
+  off, fifteen after every fourth one, with start, pause, reset and skip, the run
+  of four shown under the clock and a count of what you finished today. A session
+  that ends while the panel is closed sends a notification, and the clock is kept
+  as the time it ends rather than a number counted down, so it is still right
+  after the widget has sat behind another app for twenty minutes.
 - **The dock side and Launch at login are in Settings**, not only in the tray
   menu. Screen edge sits under Dock; Launch at login is read from the system, so
   it matches the login item even when that is changed outside the app. The tray's
@@ -54,6 +60,10 @@ To release, see "Releasing" in the README.
 - **Typing the old shorthand still works** where it is most useful: put
   `!high @2026-09-20 14:00 repeat:weekly` after a task in the add field and the
   details are filled in for you.
+- **Settings and Keep open moved to the foot of the panel.** They change the
+  panel itself, while everything else in the header acts on what is in it — and
+  four icons beside the tabs were easy to mis-hit. They are the same on every tab
+  now.
 - **The new note shortcut is recorded by pressing it.** The setting used to be a
   text field holding Tauri's accelerator syntax (`CmdOrCtrl+Alt+N`); it is now a
   button you press the keys into, and it shows them the way the platform does —

@@ -1,0 +1,124 @@
+.focus {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 12px 12px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.phase {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.clock {
+  position: relative;
+  flex: none;
+  width: 128px;
+  height: 128px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ring {
+  position: absolute;
+  inset: 0;
+  /* Twelve o'clock, going clockwise. */
+  transform: rotate(-90deg);
+}
+
+.track,
+.progress {
+  fill: none;
+  stroke-width: 6;
+  stroke-linecap: round;
+}
+
+.track {
+  stroke: var(--surface-sunken);
+}
+
+/* Neutral, like the rest of the chrome: the note palette is the only colour
+   (brief 7.1), and a timer does not need to be red to be a timer. */
+.progress {
+  stroke: var(--text-primary);
+  transition: stroke-dashoffset 1s linear;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .progress {
+    transition: none;
+  }
+}
+
+/* The one place the type scale is broken, on purpose: a countdown that has to be
+   squinted at from across the desk is not doing its job. Tabular figures so the
+   digits do not shuffle as they change. */
+.time {
+  position: relative;
+  font-size: 32px;
+  font-weight: 400;
+  line-height: 1;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.dots {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--text-tertiary);
+}
+
+.dotFilled {
+  background: var(--text-secondary);
+  box-shadow: none;
+}
+
+.controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* The only filled button in the app, because this tab has exactly one thing to
+   do and it should be obvious which control does it. */
+.primary {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 96px;
+  height: 32px;
+  padding: 0 16px;
+  border: none;
+  border-radius: var(--radius-control);
+  background: var(--text-primary);
+  color: var(--surface);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.primary:hover {
+  opacity: 0.9;
+}
+
+.tally {
+  margin: 0;
+  font-size: 11px;
+  color: var(--text-tertiary);
+}

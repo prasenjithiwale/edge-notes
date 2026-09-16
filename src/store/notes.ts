@@ -47,8 +47,8 @@ interface PendingUndo {
   note: Note;
 }
 
-/** The panel's two tabs. */
-export type PanelView = "notes" | "todo";
+/** The panel's tabs. `"todo"` is the Tasks tab, named before it was renamed. */
+export type PanelView = "notes" | "todo" | "focus";
 
 interface NotesStore {
   notes: Note[];

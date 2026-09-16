@@ -110,6 +110,10 @@
      70 characters at 14 px, which is where a line stops being comfortable. */
   --reading-measure: 34rem;
 
+  /* The strip of panel controls at the foot of it. The undo toast sits above
+     it rather than over it. */
+  --toolbar-height: 36px;
+
   /* Radii follow hierarchy: panel 14, cards 10, controls 8. */
   --radius-panel: 14px;
   --radius-card: 10px;
