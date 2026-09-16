@@ -7,13 +7,13 @@
 export function moveCardFocus(
   container: HTMLElement | null,
   direction: 1 | -1,
+  /** What counts as a row here: note cards, or the Tasks tab's task rows. */
+  selector = "[data-card]",
 ): boolean {
   if (!container) {
     return false;
   }
-  const cards = Array.from(
-    container.querySelectorAll<HTMLElement>("[data-card]"),
-  );
+  const cards = Array.from(container.querySelectorAll<HTMLElement>(selector));
   if (cards.length === 0) {
     return false;
   }

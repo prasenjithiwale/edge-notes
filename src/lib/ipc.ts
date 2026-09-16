@@ -54,6 +54,48 @@ export interface Note {
   updatedAt: number;
 }
 
+export const PRIORITIES = ["high", "medium", "low"] as const;
+export type Priority = (typeof PRIORITIES)[number];
+
+export const REPEATS = ["daily", "weekly", "monthly", "yearly"] as const;
+export type Repeat = (typeof REPEATS)[number];
+
+/**
+ * A task, which since v2 of the schema is a row of its own rather than a
+ * `- [ ]` line inside a note. Dates are local calendar values, not instants:
+ * "the 20th at 2 pm" means that wherever you are.
+ */
+export interface Task {
+  id: string;
+  title: string;
+  /** Free text under the title: what one line has no room for. */
+  notes: string;
+  /** When it was completed, in Unix milliseconds, or null while it is open. */
+  doneAt: number | null;
+  /** `YYYY-MM-DD`, local, or null for a task with no date. */
+  dueDate: string | null;
+  /** `HH:MM`, 24-hour, local, or null for a whole-day task. */
+  dueTime: string | null;
+  priority: Priority | null;
+  repeat: Repeat | null;
+  createdAt: number;
+  updatedAt: number;
+}
+
+/**
+ * A change to a task. A key that is absent is left alone; a key sent as null is
+ * cleared — which is why this is spelled out rather than `Partial<Task>`, and
+ * why Rust reads it with a deserializer that can tell the two apart.
+ */
+export interface TaskPatch {
+  title?: string;
+  notes?: string;
+  dueDate?: string | null;
+  dueTime?: string | null;
+  priority?: Priority | null;
+  repeat?: Repeat | null;
+}
+
 /** Keys mirror the dotted names used in the settings table (brief 9.2). */
 export interface Settings {
   "dock.side": DockSide;
@@ -110,6 +152,15 @@ function isIpcError(value: unknown): value is IpcError {
     "code" in value &&
     "message" in value
   );
+}
+
+/**
+ * Whether a rejection from `callResult` carries a particular `AppError` code.
+ * The code is the contract (brief 9.3); the message is for people, and is not
+ * something to match on.
+ */
+export function isIpcErrorOf(error: unknown, code: string): boolean {
+  return error instanceof Error && isIpcError(error.cause) && error.cause.code === code;
 }
 
 /**
@@ -251,6 +302,37 @@ export function notesRestore(id: string): Promise<Note> {
   return callResult<Note>("notes_restore", { id });
 }
 
+// -- Tasks ------------------------------------------------------------------
+
+export function tasksList(): Promise<Task[]> {
+  return callResult<Task[]>("tasks_list");
+}
+
+export function tasksCreate(patch: TaskPatch): Promise<Task> {
+  return callResult<Task>("tasks_create", { patch });
+}
+
+export function tasksUpdate(id: string, patch: TaskPatch): Promise<Task> {
+  return callResult<Task>("tasks_update", { id, patch });
+}
+
+/**
+ * Complete a task, or reopen it. A repeating task never comes through here: the
+ * store moves it to its next date with `tasksUpdate` instead, because the
+ * calendar arithmetic is the frontend's.
+ */
+export function tasksSetDone(id: string, done: boolean): Promise<Task> {
+  return callResult<Task>("tasks_set_done", { id, done });
+}
+
+export async function tasksDelete(id: string): Promise<void> {
+  await callResult<null>("tasks_delete", { id });
+}
+
+export function tasksRestore(id: string): Promise<Task> {
+  return callResult<Task>("tasks_restore", { id });
+}
+
 // -- Settings ---------------------------------------------------------------
 
 /** Writes every note out and returns the folder they went to (brief M4). */
@@ -269,6 +351,25 @@ export function settingsGet(): Promise<Settings> {
 
 export function settingsUpdate(patch: SettingsPatch): Promise<Settings> {
   return callResult<Settings>("settings_update", { patch });
+}
+
+/**
+ * The global shortcut, which is not set through `settingsUpdate`: Rust registers
+ * it with the OS *before* storing it, and rejects an accelerator another app
+ * already owns, so the settings field can say so instead of failing silently.
+ */
+export function shortcutSet(accelerator: string): Promise<Settings> {
+  return callResult<Settings>("shortcut_set", { accelerator });
+}
+
+/** Launch at login, read from the OS rather than from the settings table. */
+export function autostartGet(): Promise<boolean> {
+  return callResult<boolean>("autostart_get");
+}
+
+/** Returns the state the OS reports afterwards, not the one that was asked for. */
+export function autostartSet(enabled: boolean): Promise<boolean> {
+  return callResult<boolean>("autostart_set", { enabled });
 }
 
 /**

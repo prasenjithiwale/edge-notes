@@ -20,7 +20,15 @@
   border: 1px solid var(--border);
 }
 
-/* Accent is used only here and on focus rings (brief 7.1). */
+/* Accent is used only here and on focus rings (brief 7.1).
+   A tinted chip as well as the colour: Keep open is a mode, not an action, and
+   a tint on a 16 px glyph was the only thing saying the panel had stopped
+   closing itself. The chip is what makes it read as on at a glance. */
 .active {
   color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.active:hover {
+  background: var(--accent-soft);
 }

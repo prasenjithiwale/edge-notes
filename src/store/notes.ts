@@ -10,7 +10,7 @@ import {
   type Note,
   type NoteColor,
 } from "../lib/ipc";
-import { appendTask, findTodoNote, newTodoNote, setTaskText, tickTask } from "../lib/tasks";
+import { toggleTaskLine } from "../lib/markdown";
 import { isNoteEmpty, sortNotes } from "../lib/notes";
 import { useSettingsStore } from "./settings";
 
@@ -53,8 +53,6 @@ export type PanelView = "notes" | "todo";
 interface NotesStore {
   notes: Note[];
   view: PanelView;
-  /** What is typed in the Tasks tab's "Add a task" field. */
-  taskDraft: string;
   loaded: boolean;
   editingId: string | null;
   /**
@@ -74,10 +72,12 @@ interface NotesStore {
   setContent: (id: string, content: string) => void;
   setColor: (id: string, color: NoteColor) => Promise<void>;
   setPinned: (id: string, pinned: boolean) => Promise<void>;
-  /** Tick or untick the task on line `line` of a note, from a card or the reader. */
+  /**
+   * Tick or untick a checkbox on line `line` of a note. Notes keep markdown
+   * checkboxes for ad-hoc lists; they are formatting, and the Tasks tab knows
+   * nothing about them.
+   */
   toggleTask: (id: string, line: number) => void;
-  /** Rewrite a task's text, as the Tasks tab's details editor does. */
-  setTaskLine: (id: string, line: number, text: string) => void;
   flush: (id: string) => Promise<void>;
   /** Write everything still pending, before quitting (brief 11: flush on quit). */
   flushAll: () => Promise<void>;
@@ -99,9 +99,6 @@ interface NotesStore {
 
   /** Switch tabs. Leaving Notes closes the editor, search and an expanded note. */
   setView: (view: PanelView) => Promise<void>;
-  setTaskDraft: (text: string) => void;
-  /** Add the draft as a task to the Tasks note, creating that note if needed. */
-  addTask: () => Promise<void>;
 
   openSearch: () => void;
   closeSearch: () => void;
@@ -112,7 +109,6 @@ interface NotesStore {
 export const useNotesStore = create<NotesStore>((set, get) => ({
   notes: [],
   view: "notes",
-  taskDraft: "",
   loaded: false,
   editingId: null,
   expandedId: null,
@@ -228,21 +224,13 @@ export const useNotesStore = create<NotesStore>((set, get) => ({
 
   toggleTask: (id, line) => {
     const note = get().notes.find((candidate) => candidate.id === id);
-    const content = note ? tickTask(note.content, line, new Date()) : null;
-    if (content === null) {
+    const content = note ? toggleTaskLine(note.content, line) : null;
+    if (content === null || content === note?.content) {
       return;
     }
     // A tick is an edit like any other: debounced, flushed on quit, and — like
     // typing — it does not re-sort the list under the cursor.
     get().setContent(id, content);
-  },
-
-  setTaskLine: (id, line, text) => {
-    const note = get().notes.find((candidate) => candidate.id === id);
-    const content = note ? setTaskText(note.content, line, text) : null;
-    if (content !== null && content !== note?.content) {
-      get().setContent(id, content);
-    }
   },
 
   /** Write pending content now: on blur, on close, and on the debounce firing. */
@@ -421,45 +409,6 @@ export const useNotesStore = create<NotesStore>((set, get) => ({
       await get().stopEditing();
     }
     set({ view, expandedId: null, searching: false, query: "" });
-  },
-
-  setTaskDraft: (text) => {
-    set({ taskDraft: text });
-  },
-
-  addTask: async () => {
-    const text = get().taskDraft;
-    const todo = findTodoNote(get().notes);
-
-    if (todo) {
-      const content = appendTask(todo.content, text);
-      if (content === null) {
-        return;
-      }
-      set({ taskDraft: "" });
-      get().setContent(todo.id, content);
-      // Saved at once rather than on the debounce: a task is short, and adding
-      // one then quitting straight away must not lose it.
-      await get().flush(todo.id);
-      return;
-    }
-
-    const content = newTodoNote(text);
-    if (content === null) {
-      return;
-    }
-    set({ taskDraft: "" });
-    try {
-      const note = await notesCreate(useSettingsStore.getState().lastColor());
-      savedContent.set(note.id, note.content);
-      set((state) => ({ notes: [note, ...state.notes] }));
-      get().setContent(note.id, content);
-      await get().flush(note.id);
-    } catch (error: unknown) {
-      console.error("notes: adding a task failed", error);
-      // Give the text back rather than silently dropping what was typed.
-      set({ taskDraft: text });
-    }
   },
 
   openSearch: () => {

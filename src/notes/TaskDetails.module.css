@@ -111,8 +111,19 @@
   flex: none;
 }
 
-.flagLow {
-  opacity: 0.7;
+/* The same tokens the task chips use, so the picker and the note agree. Low is
+   no longer dimmed: it is a colour now, and opacity would cost the contrast the
+   token was picked for. */
+.priority-high {
+  color: var(--priority-high);
+}
+
+.priority-medium {
+  color: var(--priority-medium);
+}
+
+.priority-low {
+  color: var(--priority-low);
 }
 
 /* Quick dates and repeats: rounded chips that wrap. */
@@ -227,4 +238,44 @@
 
 .done:hover {
   background: var(--surface-sunken);
+}
+
+/* A free-text field under the details: what one line of title has no room for. */
+.notes {
+  box-sizing: border-box;
+  width: 100%;
+  resize: none;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  background: var(--surface-sunken);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.notes::placeholder {
+  color: var(--text-tertiary);
+}
+
+/* Delete sits in the footer, away from the controls that only change a field,
+   with the undo toast as the safety net rather than a confirmation (brief 6.9). */
+.delete {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--text-secondary);
+}
+
+.delete:hover {
+  background: var(--surface-sunken);
+  color: var(--text-primary);
 }

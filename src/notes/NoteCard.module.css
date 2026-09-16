@@ -83,7 +83,7 @@
   opacity: var(--note-secondary-opacity);
 }
 
-/* Text on the left, tools stacked on the right. */
+/* Text on the left, tools in a row at the top right. */
 .pinned,
 .openable {
   display: flex;
@@ -136,9 +136,12 @@
   cursor: text;
 }
 
+/* A row, not a column. Stacked, three 22 px buttons made a locked card 80 px
+   tall for two lines of text: the controls were setting the height instead of
+   fitting inside it. */
 .tools {
   display: flex;
-  flex-direction: column;
+  align-items: flex-start;
   gap: 2px;
   flex: none;
 }

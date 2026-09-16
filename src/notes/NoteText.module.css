@@ -100,9 +100,25 @@
   opacity: var(--note-secondary-opacity);
 }
 
-/* Priority is the flag's fill and weight, not a colour. */
-.priority-high {
+/* Priority carries a colour as well as the flag's fill and weight (the owner's
+   request, against brief 7.1). Full opacity: the chips' reduced emphasis would
+   wash the hue out and cost the contrast the tokens were picked for. */
+.priority-high,
+.priority-medium,
+.priority-low {
   opacity: 1;
+}
+
+.priority-high {
+  color: var(--priority-high);
+}
+
+.priority-medium {
+  color: var(--priority-medium);
+}
+
+.priority-low {
+  color: var(--priority-low);
 }
 
 .overdue {

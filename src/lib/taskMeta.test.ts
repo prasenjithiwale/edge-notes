@@ -1,20 +1,42 @@
 import { describe, expect, it } from "vitest";
 
+import type { Task } from "./ipc";
 import {
   addMonths,
   compareTasks,
   dueLabel,
   dueSection,
-  formatTaskText,
   nextOccurrence,
   parseTaskText,
   reminderAt,
-  repeatOnTick,
+  taskSection,
 } from "./taskMeta";
 
 /** Mon 14 Sep 2026, 13:30 local. */
 const NOW = new Date(2026, 8, 14, 13, 30);
 
+let made = 0;
+function task(fields: Partial<Task> = {}): Task {
+  made += 1;
+  return {
+    id: `t${String(made)}`,
+    title: "",
+    notes: "",
+    doneAt: null,
+    dueDate: null,
+    dueTime: null,
+    priority: null,
+    repeat: null,
+    createdAt: made,
+    updatedAt: made,
+    ...fields,
+  };
+}
+
+/**
+ * Quick entry: the tokens are no longer how a task is stored, but typing them
+ * into the add field still fills the fields in.
+ */
 describe("parseTaskText", () => {
   it("reads every token from the end of the line, in any order", () => {
     expect(parseTaskText("Call the bank !high @2026-09-20 14:00 repeat:weekly")).toEqual({
@@ -53,10 +75,8 @@ describe("parseTaskText", () => {
     expect(parseTaskText("!high")).toEqual({ title: "", priority: "high", due: null, repeat: null });
   });
 
-  it("round-trips through formatTaskText in the canonical order", () => {
-    const text = "Pay rent repeat:monthly @2026-10-01 !low";
-    expect(formatTaskText(parseTaskText(text))).toBe("Pay rent !low @2026-10-01 repeat:monthly");
-    expect(formatTaskText(parseTaskText("Plain"))).toBe("Plain");
+  it("collapses the whitespace a title was typed with", () => {
+    expect(parseTaskText("  Call   the bank  ").title).toBe("Call the bank");
   });
 });
 
@@ -87,35 +107,53 @@ describe("repeats", () => {
     expect(addMonths("2026-12-15", 1)).toBe("2027-01-15");
   });
 
-  it("rewrites a repeating task on tick and leaves others to be ticked", () => {
-    expect(repeatOnTick("Water plants @2026-09-14 repeat:daily", NOW)).toBe(
-      "Water plants @2026-09-15 repeat:daily",
-    );
-    expect(repeatOnTick("Water plants @2026-09-14", NOW)).toBeNull();
-  });
 });
 
 describe("dueSection", () => {
-  it("sorts dates into overdue, today, upcoming and none", () => {
+  it("sorts dates into overdue, today, tomorrow, upcoming and none", () => {
     expect(dueSection({ date: "2026-09-13", time: null }, NOW)).toBe("overdue");
     expect(dueSection({ date: "2026-09-14", time: null }, NOW)).toBe("today");
     expect(dueSection({ date: "2026-09-14", time: "15:00" }, NOW)).toBe("today");
     expect(dueSection({ date: "2026-09-14", time: "09:00" }, NOW)).toBe("overdue");
-    expect(dueSection({ date: "2026-09-15", time: null }, NOW)).toBe("upcoming");
+    expect(dueSection({ date: "2026-09-15", time: null }, NOW)).toBe("tomorrow");
+    expect(dueSection({ date: "2026-09-16", time: null }, NOW)).toBe("upcoming");
     expect(dueSection(null, NOW)).toBe("none");
+  });
+});
+
+describe("taskSection", () => {
+  it("puts a completed task in Done, whatever it was due", () => {
+    expect(taskSection(task({ dueDate: "2026-09-13" }), NOW)).toBe("overdue");
+    expect(taskSection(task({ dueDate: "2026-09-13", doneAt: 1 }), NOW)).toBe("done");
+    expect(taskSection(task({ doneAt: 1 }), NOW)).toBe("done");
   });
 });
 
 describe("compareTasks", () => {
   it("puts priority first, then the sooner date, whole-day before timed", () => {
     const tasks = [
-      "c @2026-09-16",
-      "b !low @2026-09-15",
-      "a !high",
-      "d @2026-09-15 08:00",
-      "e @2026-09-15",
-    ].map(parseTaskText);
-    expect([...tasks].sort(compareTasks).map((task) => task.title)).toEqual(["a", "b", "e", "d", "c"]);
+      task({ title: "c", dueDate: "2026-09-16" }),
+      task({ title: "b", priority: "low", dueDate: "2026-09-15" }),
+      task({ title: "a", priority: "high" }),
+      task({ title: "d", dueDate: "2026-09-15", dueTime: "08:00" }),
+      task({ title: "e", dueDate: "2026-09-15" }),
+    ];
+    expect([...tasks].sort(compareTasks).map((entry) => entry.title)).toEqual([
+      "a",
+      "b",
+      "e",
+      "d",
+      "c",
+    ]);
+  });
+
+  it("falls back to the order they were made in, so a plain list keeps its own", () => {
+    const first = task({ title: "first", createdAt: 10 });
+    const second = task({ title: "second", createdAt: 20 });
+    expect([second, first].sort(compareTasks).map((entry) => entry.title)).toEqual([
+      "first",
+      "second",
+    ]);
   });
 });
 

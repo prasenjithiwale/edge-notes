@@ -18,6 +18,7 @@ import {
 } from "../lib/ipc";
 import { facetColors, filterNotes } from "../lib/notes";
 import { openTaskCount, taskReminders } from "../lib/tasks";
+import { useTasksStore } from "../store/tasks";
 import { moveCardFocus } from "../notes/cardFocus";
 import { ColorFilter } from "../notes/ColorFilter";
 import { EmptyState } from "../notes/EmptyState";
@@ -30,7 +31,7 @@ import {
 import { NoteEditor } from "../notes/NoteEditor";
 import { NoteList } from "../notes/NoteList";
 import { NoteReader } from "../notes/NoteReader";
-import { TodoView } from "../notes/TodoView";
+import { TasksView } from "../notes/TasksView";
 import { ViewTabs } from "../notes/ViewTabs";
 import { SearchField } from "../notes/SearchField";
 import { SettingsView } from "../settings/SettingsView";
@@ -93,6 +94,10 @@ export function Panel({ className }: PanelProps) {
   const shrink = useNotesStore((state) => state.shrink);
   const toggleTask = useNotesStore((state) => state.toggleTask);
   const pendingUndo = useNotesStore((state) => state.pendingUndo);
+  const tasks = useTasksStore((state) => state.tasks);
+  const loadTasks = useTasksStore((state) => state.load);
+  const taskUndo = useTasksStore((state) => state.pendingUndo);
+  const undoTaskRemove = useTasksStore((state) => state.undoRemove);
   const searching = useNotesStore((state) => state.searching);
   const query = useNotesStore((state) => state.query);
   const colorFilter = useNotesStore((state) => state.colorFilter);
@@ -111,8 +116,9 @@ export function Panel({ className }: PanelProps) {
 
   useEffect(() => {
     void load();
+    void loadTasks();
     void loadSettings();
-  }, [load, loadSettings]);
+  }, [load, loadTasks, loadSettings]);
 
   useEffect(
     () => subscription(onSettingsChanged(applySettings), "settings:changed"),
@@ -162,6 +168,13 @@ export function Panel({ className }: PanelProps) {
     setLock("expanded", expanded);
   }, [expanded, setLock]);
 
+  // Brief 6.3: an undo toast in use holds the panel open. Without this, deleting
+  // a note and moving the cursor away collapsed the panel with the toast still
+  // counting down, and the only way to undo went with it.
+  useEffect(() => {
+    setLock("undo", pendingUndo !== null || taskUndo !== null);
+  }, [pendingUndo, taskUndo, setLock]);
+
   // Rust ends the large panel when the dock collapses; the frontend follows, so
   // the next open shows the list rather than a note in a panel that is not large.
   useEffect(() => {
@@ -209,6 +222,7 @@ export function Panel({ className }: PanelProps) {
       }
 
       const notesStore = useNotesStore.getState();
+      const tasksStore = useTasksStore.getState();
       const accel = event.metaKey || event.ctrlKey;
 
       // Formatting belongs to the note editor's textarea, and only to it.
@@ -265,8 +279,9 @@ export function Panel({ className }: PanelProps) {
       }
       if (event.key === "Escape") {
         // One ordered cascade (brief 6.11): the editor, then an expanded note,
-        // then search, then the panel. Deciding it in a single place beats
-        // several handlers racing to swallow the same key.
+        // then search, then the Tasks tab's picker and draft, then the panel.
+        // Deciding it in a single place beats several handlers racing to
+        // swallow the same key.
         if (settingsOpenRef.current) {
           setShowSettings(false);
         } else if (notesStore.editingId !== null) {
@@ -275,9 +290,12 @@ export function Panel({ className }: PanelProps) {
           notesStore.shrink();
         } else if (notesStore.searching) {
           notesStore.closeSearch();
-        } else if (notesStore.view === "todo" && notesStore.taskDraft !== "") {
+        } else if (notesStore.view === "todo" && tasksStore.detailsId !== null) {
+          // The open sheet is the front-most thing on the tab, so it goes first.
+          tasksStore.openDetails(null);
+        } else if (notesStore.view === "todo" && tasksStore.draft !== "") {
           // A half-typed task clears before the panel goes.
-          notesStore.setTaskDraft("");
+          tasksStore.setDraft("");
         } else {
           void dockToggle();
         }
@@ -318,15 +336,15 @@ export function Panel({ className }: PanelProps) {
       return;
     }
     const timer = setTimeout(() => {
-      void remindersSet(taskReminders(notes));
+      void remindersSet(taskReminders(tasks));
     }, REMINDERS_DEBOUNCE_MS);
     return () => {
       clearTimeout(timer);
     };
-  }, [notes, loaded]);
+  }, [tasks, loaded]);
 
   const isEmpty = loaded && notes.length === 0;
-  const openTasks = useMemo(() => openTaskCount(notes), [notes]);
+  const openTasks = useMemo(() => openTaskCount(tasks), [tasks]);
 
   // Only once Rust has actually grown the window: drawing the large layout into
   // the normal panel would squeeze a note meant for reading into 320 px.
@@ -472,20 +490,15 @@ export function Panel({ className }: PanelProps) {
               aria-hidden={view !== "todo"}
               inert={view !== "todo"}
             >
-              <TodoView
-                active={view === "todo"}
-                onOpenNote={(id) => {
-                  void setView("notes").then(() => {
-                    startEditing(id);
-                  });
-                }}
-              />
+              <TasksView active={view === "todo"} />
             </div>
           </div>
         </div>
       )}
 
-      {pendingUndo && (
+      {/* One toast at a time: a delete in one tab is the only thing being
+          undone, and the tabs cannot both be in front. */}
+      {pendingUndo ? (
         <Toast
           message="Note deleted"
           actionLabel="Undo"
@@ -493,6 +506,16 @@ export function Panel({ className }: PanelProps) {
             void undoRemove();
           }}
         />
+      ) : (
+        taskUndo && (
+          <Toast
+            message="Task deleted"
+            actionLabel="Undo"
+            onAction={() => {
+              void undoTaskRemove();
+            }}
+          />
+        )
       )}
     </section>
   );

@@ -1,164 +1,143 @@
 import { describe, expect, it } from "vitest";
 
-import type { Note } from "./ipc";
-import {
-  appendTask,
-  collectTasks,
-  findTodoNote,
-  newTodoNote,
-  openTaskCount,
-  setTaskText,
-  taskLine,
-  taskReminders,
-  tickTask,
-} from "./tasks";
+import type { Task } from "./ipc";
+import { groupTasks, openTaskCount, overdueCount, taskReminders } from "./tasks";
 
-function note(overrides: Partial<Note> & { id: string }): Note {
+/** Mon 14 Sep 2026, 13:30 local. */
+const NOW = new Date(2026, 8, 14, 13, 30);
+
+let made = 0;
+function task(fields: Partial<Task> = {}): Task {
+  made += 1;
   return {
-    content: "",
-    color: "yellow",
-    pinned: false,
-    createdAt: 1_000,
-    updatedAt: 1_000,
-    ...overrides,
+    id: `t${String(made)}`,
+    title: `task ${String(made)}`,
+    notes: "",
+    doneAt: null,
+    dueDate: null,
+    dueTime: null,
+    priority: null,
+    repeat: null,
+    createdAt: made,
+    updatedAt: made,
+    ...fields,
   };
 }
 
-describe("collectTasks", () => {
-  it("gathers tasks by note, in list order, with their line numbers", () => {
-    const groceries = note({
-      id: "g",
-      content: "**Groceries**\n- [ ] milk\n- [x] eggs\nplain line\n- [ ] rice",
-      updatedAt: 10,
-    });
-    const release = note({ id: "r", content: "Release\n1. first\n- [ ] test", updatedAt: 20 });
-    const plain = note({ id: "p", content: "Just text\n- bullet", updatedAt: 30 });
+describe("groupTasks", () => {
+  it("groups by when a task is due, in the order the list shows them", () => {
+    const tasks = [
+      task({ title: "someday" }),
+      task({ title: "later", dueDate: "2026-09-30" }),
+      task({ title: "late", dueDate: "2026-09-01" }),
+      task({ title: "today", dueDate: "2026-09-14" }),
+      task({ title: "tomorrow", dueDate: "2026-09-15" }),
+    ];
 
-    const groups = collectTasks([groceries, release, plain]);
-
-    expect(groups.map((group) => group.note.id)).toEqual(["r", "g"]);
-    expect(groups[1]?.title).toBe("Groceries");
-    expect(groups[1]?.tasks.map(({ line, text, checked }) => ({ line, text, checked }))).toEqual([
-      { line: 1, text: "milk", checked: false },
-      { line: 2, text: "eggs", checked: true },
-      { line: 4, text: "rice", checked: false },
+    expect(groupTasks(tasks, NOW).map((section) => section.kind)).toEqual([
+      "overdue",
+      "today",
+      "tomorrow",
+      "upcoming",
+      "none",
     ]);
   });
 
-  it("puts locked notes first, as the list does", () => {
-    const recent = note({ id: "a", content: "A\n- [ ] one", updatedAt: 50 });
-    const locked = note({ id: "b", content: "B\n- [ ] two", updatedAt: 1, pinned: true });
-    expect(collectTasks([recent, locked]).map((group) => group.note.id)).toEqual(["b", "a"]);
+  it("leaves out a section with nothing in it", () => {
+    const sections = groupTasks([task({ dueDate: "2026-09-14" })], NOW);
+    expect(sections).toHaveLength(1);
+    expect(sections[0]?.kind).toBe("today");
   });
 
-  it("skips empty task lines and titles a note that starts with a task", () => {
-    const groups = collectTasks([note({ id: "t", content: "- [ ] first\n- [ ] " })]);
-    expect(groups[0]?.title).toBe("first");
-    expect(groups[0]?.tasks).toHaveLength(1);
-  });
-});
-
-describe("openTaskCount", () => {
-  it("counts unticked tasks across notes", () => {
-    expect(
-      openTaskCount([
-        note({ id: "1", content: "A\n- [ ] one\n- [x] two" }),
-        note({ id: "2", content: "B\n- [ ] three" }),
-      ]),
-    ).toBe(2);
-  });
-});
-
-describe("findTodoNote", () => {
-  it("finds the note titled To-Do, ignoring case and formatting", () => {
-    const notes = [
-      note({ id: "x", content: "Shopping\n- [ ] milk", updatedAt: 30 }),
-      note({ id: "t", content: "\n**to-do**\n- [ ] call", updatedAt: 20 }),
+  it("orders each section by priority, then by when", () => {
+    const tasks = [
+      task({ title: "plain", dueDate: "2026-09-14" }),
+      task({ title: "urgent", dueDate: "2026-09-14", priority: "high" }),
+      task({ title: "timed", dueDate: "2026-09-14", dueTime: "23:00" }),
     ];
-    expect(findTodoNote(notes)?.id).toBe("t");
+    expect(groupTasks(tasks, NOW)[0]?.tasks.map((entry) => entry.title)).toEqual([
+      "urgent",
+      "plain",
+      "timed",
+    ]);
   });
 
-  it("finds a note titled Tasks, and still one titled To-Do", () => {
-    expect(findTodoNote([note({ id: "a", content: "tasks\n- [ ] x" })])?.id).toBe("a");
-    expect(findTodoNote([note({ id: "b", content: "To-Do\n- [ ] x" })])?.id).toBe("b");
+  it("shows what was finished recently, newest first", () => {
+    const tasks = [
+      task({ title: "first", doneAt: NOW.getTime() - 60_000 }),
+      task({ title: "second", doneAt: NOW.getTime() - 1_000 }),
+    ];
+    const done = groupTasks(tasks, NOW).find((section) => section.kind === "done");
+    expect(done?.tasks.map((entry) => entry.title)).toEqual(["second", "first"]);
   });
 
-  it("does not match a title that merely contains the word", () => {
-    expect(findTodoNote([note({ id: "a", content: "To-Do later\n- [ ] x" })])).toBeUndefined();
-    expect(findTodoNote([note({ id: "b", content: "" })])).toBeUndefined();
-  });
-});
-
-describe("adding a task", () => {
-  it("makes one clean task line from what was typed", () => {
-    expect(taskLine("  call   the\nbank ")).toBe("- [ ] call the bank");
-    expect(taskLine("   ")).toBeNull();
+  /** A list of what is left should not be mostly what is not. */
+  it("stops showing a task completed more than a day ago", () => {
+    const tasks = [
+      task({ title: "yesterday", doneAt: NOW.getTime() - 25 * 60 * 60 * 1000 }),
+      task({ title: "just now", doneAt: NOW.getTime() - 1000 }),
+    ];
+    const done = groupTasks(tasks, NOW).find((section) => section.kind === "done");
+    expect(done?.tasks.map((entry) => entry.title)).toEqual(["just now"]);
   });
 
-  it("appends after the last non-blank line", () => {
-    expect(appendTask("To-Do\n- [ ] one\n\n", "two")).toBe("To-Do\n- [ ] one\n- [ ] two");
-    expect(appendTask("", "first")).toBe("- [ ] first");
-    expect(appendTask("To-Do", " ")).toBeNull();
-  });
-
-  it("starts a Tasks note with its first task", () => {
-    expect(newTodoNote("Pay rent")).toBe("Tasks\n- [ ] Pay rent");
-  });
-});
-
-describe("tickTask", () => {
-  const NOW = new Date(2026, 8, 14, 13, 30);
-
-  it("ticks an ordinary task and unticks it again", () => {
-    const content = "List\n- [ ] milk !high";
-    expect(tickTask(content, 1, NOW)).toBe("List\n- [x] milk !high");
-    expect(tickTask("List\n- [x] milk", 1, NOW)).toBe("List\n- [ ] milk");
-  });
-
-  it("moves a repeating task to its next date and keeps it open", () => {
-    expect(tickTask("  - [ ] water plants @2026-09-14 repeat:daily", 0, NOW)).toBe(
-      "  - [ ] water plants @2026-09-15 repeat:daily",
-    );
-  });
-
-  it("refuses a line that is not a task", () => {
-    expect(tickTask("List\n- milk", 1, NOW)).toBeNull();
+  it("puts a task due earlier today at a set time in Overdue", () => {
+    const tasks = [task({ dueDate: "2026-09-14", dueTime: "09:00" })];
+    expect(groupTasks(tasks, NOW)[0]?.kind).toBe("overdue");
   });
 });
 
-describe("setTaskText", () => {
-  it("replaces the text and keeps the box, tick and indent", () => {
-    expect(setTaskText("List\n  - [x] milk", 1, "milk !low")).toBe("List\n  - [x] milk !low");
+describe("counts", () => {
+  it("counts what is still open, whatever it is due", () => {
+    const tasks = [task(), task({ dueDate: "2026-09-01" }), task({ doneAt: 1 })];
+    expect(openTaskCount(tasks)).toBe(2);
   });
 
-  it("refuses an empty text or a line that is not a task", () => {
-    expect(setTaskText("List\n- [ ] milk", 1, "  ")).toBeNull();
-    expect(setTaskText("List", 0, "x")).toBeNull();
+  it("counts what is actually late", () => {
+    const tasks = [
+      task({ dueDate: "2026-09-01" }),
+      task({ dueDate: "2026-09-14", dueTime: "09:00" }),
+      task({ dueDate: "2026-09-14" }),
+      task({ dueDate: "2026-09-01", doneAt: 1 }),
+    ];
+    expect(overdueCount(tasks, NOW)).toBe(2);
   });
 });
 
 describe("taskReminders", () => {
-  it("reminds for open tasks with a date, at their time or nine in the morning", () => {
-    const reminders = taskReminders([
-      note({
-        id: "n",
-        content:
-          "Errands\n- [ ] **Call** the bank @2026-09-20 14:00\n- [ ] Pay rent @2026-10-01\n- [x] Done @2026-09-20\n- [ ] Someday",
-      }),
-    ]);
-    expect(reminders).toEqual([
-      {
-        id: "n|Call the bank|2026-09-20|14:00",
-        at: new Date(2026, 8, 20, 14, 0).getTime(),
-        title: "Call the bank",
-        body: "Due now · Errands",
-      },
-      {
-        id: "n|Pay rent|2026-10-01|",
-        at: new Date(2026, 9, 1, 9, 0).getTime(),
-        title: "Pay rent",
-        body: "Due today · Errands",
-      },
-    ]);
+  it("is one reminder per open task with a date, at its time", () => {
+    const tasks = [
+      task({ title: "Call the bank", dueDate: "2026-09-20", dueTime: "14:00" }),
+      task({ title: "Whole day", dueDate: "2026-09-20" }),
+      task({ title: "No date" }),
+      task({ title: "Finished", dueDate: "2026-09-20", doneAt: 1 }),
+    ];
+
+    const reminders = taskReminders(tasks);
+    expect(reminders).toHaveLength(2);
+    expect(reminders[0]).toMatchObject({
+      title: "Call the bank",
+      at: new Date(2026, 8, 20, 14, 0).getTime(),
+      body: "Due now",
+    });
+    expect(reminders[1]).toMatchObject({
+      title: "Whole day",
+      at: new Date(2026, 8, 20, 9, 0).getTime(),
+      body: "Due today",
+    });
+  });
+
+  /** Rust remembers what it has shown by id, so the id has to move when the task does. */
+  it("changes its id when the task moves, and not when it does not", () => {
+    const before = task({ id: "a", dueDate: "2026-09-20", dueTime: "14:00" });
+    const sameAgain = { ...before, updatedAt: before.updatedAt + 5 };
+    const moved = { ...before, dueDate: "2026-09-21" };
+
+    expect(taskReminders([before])[0]?.id).toBe(taskReminders([sameAgain])[0]?.id);
+    expect(taskReminders([before])[0]?.id).not.toBe(taskReminders([moved])[0]?.id);
+  });
+
+  it("falls back to a name rather than announcing nothing", () => {
+    expect(taskReminders([task({ title: "   ", dueDate: "2026-09-20" })])[0]?.title).toBe("Task");
   });
 });

@@ -11,6 +11,10 @@ pub enum AppError {
     DockUnavailable,
     #[error("no note with id {0}")]
     NoteNotFound(String),
+    #[error("no task with id {0}")]
+    TaskNotFound(String),
+    #[error("{1} is not a known task {0}")]
+    UnknownTaskField(&'static str, String),
     #[error("{0} is not a known palette colour")]
     UnknownColor(String),
     #[error("database error: {0}")]
@@ -23,6 +27,10 @@ pub enum AppError {
     Io(#[from] std::io::Error),
     #[error("not a web link: {0}")]
     InvalidUrl(String),
+    #[error("{0}")]
+    ShortcutUnavailable(String),
+    #[error("launch at login could not be changed: {0}")]
+    Autostart(String),
 }
 
 impl AppError {
@@ -32,12 +40,16 @@ impl AppError {
             Self::WindowNotFound(_) => "window_not_found",
             Self::DockUnavailable => "dock_unavailable",
             Self::NoteNotFound(_) => "note_not_found",
+            Self::TaskNotFound(_) => "task_not_found",
+            Self::UnknownTaskField(..) => "unknown_task_field",
             Self::UnknownColor(_) => "unknown_color",
             Self::Database(_) => "database",
             Self::Serde(_) => "serde",
             Self::Tauri(_) => "tauri",
             Self::Io(_) => "io",
             Self::InvalidUrl(_) => "invalid_url",
+            Self::ShortcutUnavailable(_) => "shortcut_unavailable",
+            Self::Autostart(_) => "autostart",
         }
     }
 }

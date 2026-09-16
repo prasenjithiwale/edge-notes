@@ -9,6 +9,100 @@ To release, see "Releasing" in the README.
 
 ## [Unreleased]
 
+### Added
+
+- **Edge Notes installs from Homebrew on macOS**, from a tap of its own:
+
+  ```bash
+  brew trust --cask prasenjithiwale/tap/edge-notes
+  brew install --cask prasenjithiwale/tap/edge-notes
+  ```
+
+  The `.dmg` is published to the downloads site alongside the Linux and Windows
+  packages, and `brew upgrade` brings new versions. The app is not signed with an
+  Apple Developer ID, so the cask removes the quarantine attribute that would
+  otherwise stop macOS opening it — which also means it is installed without a
+  Gatekeeper check.
+- **A new task can choose its note.** The Tasks tab's "Add a task" row now has a
+  picker beside the field naming the note the task will go to, with that note's
+  colour as a dot. Every note is offered; the note titled Tasks is still the
+  default, so typing and pressing Enter works exactly as it did.
+- **The dock side and Launch at login are in Settings**, not only in the tray
+  menu. Screen edge sits under Dock; Launch at login is read from the system, so
+  it matches the login item even when that is changed outside the app. The tray's
+  ticks follow a change made in the panel.
+- **The search field has a clear button.** Searching replaces the Notes and Tasks
+  tabs, so with Esc the only way out a mouse had no way back to the list.
+
+### Changed
+
+- **Tasks are their own thing, not lines inside notes.** A task now has real
+  fields — title, notes, due date and time, priority, repeat — instead of tokens
+  at the end of a `- [ ]` line, and it no longer needs a note to live in. The
+  Tasks tab is a task list: add without choosing a note, grouped into Overdue,
+  Today, Tomorrow, Upcoming and Someday, with what you finished today behind a
+  Done toggle.
+
+  Tasks already written into notes are moved across the first time this version
+  starts, keeping their priority, due date and repeat. The lines are removed from
+  the notes, and a note that held nothing but tasks is moved to the deleted notes
+  it can be restored from for 30 days.
+
+  Notes still have checkboxes for ad-hoc lists — they tick, and Enter still
+  continues the list — but they are formatting now, and do not appear in the
+  Tasks tab.
+- **Typing the old shorthand still works** where it is most useful: put
+  `!high @2026-09-20 14:00 repeat:weekly` after a task in the add field and the
+  details are filled in for you.
+- **The new note shortcut is recorded by pressing it.** The setting used to be a
+  text field holding Tauri's accelerator syntax (`CmdOrCtrl+Alt+N`); it is now a
+  button you press the keys into, and it shows them the way the platform does —
+  ⌘⌥N on macOS, Ctrl + Alt + N elsewhere.
+- **Settings is grouped into Appearance, Dock and General**, and the settings
+  that are simply on or off — Task reminders, Launch at login — are switches
+  rather than pairs of On/Off buttons.
+- **An expanded note is set in a column** about seventy characters wide instead
+  of running the full width of the large panel.
+- **The collapsed tab is easier to see**, particularly in dark mode over a dark
+  desktop, where its outline had almost no contrast to carry its shape.
+- **Keep open looks like the mode it is**, filling its button rather than only
+  tinting the pin.
+- **A locked note's card is no taller than its text.** Its three buttons sit in a
+  row instead of a stack, which used to set the height of the card.
+- **The macOS app is ad-hoc signed.** The bundle used to ship unsealed, with only
+  the executable carrying the linker's signature and an identity of
+  `edge_notes-<hash>` rather than `dev.edgenotes.app`. It is still not signed with
+  a Developer ID.
+- **Priority flags are coloured** — red for high, amber for medium, green for
+  low, on the card, the Tasks tab and the details picker. The flag is still
+  filled for high and thinner for low, so priority does not depend on seeing
+  colour. Every colour is checked against all sixteen note backgrounds in both
+  themes.
+
+### Fixed
+
+- **A shortcut the system refuses no longer leaves you with none.** Setting the
+  new note shortcut to a combination another application owns used to unbind the
+  old one, store the new one, fail to register it, and say nothing. The shortcut
+  is now registered before it is stored, the previous one is put back if that
+  fails, and the settings field says what happened.
+- **Deleting a note no longer takes the undo with it.** Moving the cursor away
+  after a delete collapsed the panel while the "Note deleted" toast was still
+  counting down. The toast holds the panel open, as brief 6.3 always said it
+  should.
+- **A note edited less than a minute ago reads "Edited just now"** rather than
+  "Edited 0m ago" for the fifteen seconds before the first minute.
+- **Focus rings stop glowing when the panel does not have the keyboard.** The
+  widget is inactive most of the time, and a lit ring on a field whose keystrokes
+  were going to another app was a promise it could not keep.
+- **An empty search result appears near the top of the panel**, not centred three
+  hundred pixels below the field being typed into.
+- **The priority chips in the task details sheet** run None, Low, Medium, High
+  rather than None, High, Medium, Low.
+- **Linux: the window is no longer called "Tauri App".** Switching apps with
+  Alt+Tab on Ubuntu showed the widget under Tauri's default window title, which
+  had never been set. It is now "Edge Notes".
+
 ## [0.0.4] - 2026-09-15
 
 macOS (universal), Linux (x86_64) and Windows (x64).

@@ -31,7 +31,9 @@ const ID_AUTOSTART: &str = "autostart";
 const ID_QUIT: &str = "quit";
 
 /// The check items are rebuilt from state on every menu event, so the handler
-/// needs to reach them after the tray is built.
+/// needs to reach them after the tray is built. They live in app state rather
+/// than only in the menu closure because the settings view changes the same two
+/// things, and a tick that disagrees with the panel is worse than no tick.
 struct MenuHandles<R: Runtime> {
     side_left: CheckMenuItem<R>,
     side_right: CheckMenuItem<R>,
@@ -103,15 +105,38 @@ fn set_side(app: &AppHandle, side: Side) {
     }
 }
 
-fn set_autostart(app: &AppHandle, enabled: bool) {
+/// Turn launch-at-login on or off. The settings view calls this too, so the
+/// failure is returned rather than only logged: a switch that silently springs
+/// back with no reason given is the bug this replaces.
+pub fn set_autostart(app: &AppHandle, enabled: bool) -> Result<(), String> {
     let manager = app.autolaunch();
     let result = if enabled {
         manager.enable()
     } else {
         manager.disable()
     };
-    if let Err(error) = result {
-        log::error!("tray: failed to set launch at login: {error}");
+    match result {
+        Ok(()) => {
+            sync_menu(app);
+            Ok(())
+        }
+        Err(error) => {
+            log::error!("tray: failed to set launch at login: {error}");
+            Err(error.to_string())
+        }
+    }
+}
+
+/// Whether launch-at-login is on, for the settings view.
+#[must_use]
+pub fn autostart_is_enabled(app: &AppHandle) -> bool {
+    autostart_enabled(app)
+}
+
+/// Re-read the real state into the tray menu from wherever it changed.
+pub fn sync_menu(app: &AppHandle) {
+    if let Some(handles) = app.try_state::<MenuHandles<tauri::Wry>>() {
+        sync_checks(app, &handles);
     }
 }
 
@@ -142,7 +167,9 @@ fn handle_event(app: &AppHandle, handles: &MenuHandles<tauri::Wry>, event: &Menu
         ID_NEW => open_with_new_note(app),
         ID_SIDE_LEFT => set_side(app, Side::Left),
         ID_SIDE_RIGHT => set_side(app, Side::Right),
-        ID_AUTOSTART => set_autostart(app, !autostart_enabled(app)),
+        ID_AUTOSTART => {
+            let _ = set_autostart(app, !autostart_enabled(app));
+        }
         ID_QUIT => {
             request_quit(app);
             return;
@@ -218,10 +245,17 @@ pub fn init(app: &AppHandle) -> tauri::Result<()> {
     )?;
 
     let handles = MenuHandles {
+        side_left: side_left.clone(),
+        side_right: side_right.clone(),
+        autostart: launch.clone(),
+    };
+    // A second set for `sync_menu`, so a change made in the settings view shows
+    // in the tray. The items are `Arc` handles, so these are the same items.
+    app.manage(MenuHandles {
         side_left,
         side_right,
         autostart: launch,
-    };
+    });
 
     let mut builder = TrayIconBuilder::with_id("dock-tray")
         .menu(&menu)
@@ -255,24 +289,10 @@ pub fn init(app: &AppHandle) -> tauri::Result<()> {
     Ok(())
 }
 
-/// Brief 6.11: one global shortcut, opening the panel with a new note ready to
-/// type into. The accelerator is a setting, so someone who has already given
-/// `CmdOrCtrl+Alt+N` to another app can move it.
-///
-/// `accelerator` is `None` at startup, meaning "whatever is stored".
-pub fn bind_new_note_shortcut(app: &AppHandle, accelerator: Option<&str>) {
-    let accelerator = accelerator.map_or_else(
-        || {
-            app.try_state::<Database>()
-                .and_then(|db| db.with(settings::get).ok())
-                .map_or_else(
-                    || Settings::default().shortcut_new_note,
-                    |settings| settings.shortcut_new_note,
-                )
-        },
-        ToOwned::to_owned,
-    );
-
+/// Register `accelerator` as the one global shortcut, replacing whatever is
+/// bound now. Returns the reason it could not be, which is almost always that
+/// another application already owns the combination.
+fn register_shortcut(app: &AppHandle, accelerator: &str) -> Result<(), String> {
     let shortcuts = app.global_shortcut();
     // Only ever one shortcut is registered, so clearing the lot is the simplest
     // way to make rebinding idempotent.
@@ -280,17 +300,60 @@ pub fn bind_new_note_shortcut(app: &AppHandle, accelerator: Option<&str>) {
         log::warn!("shortcut: could not clear existing shortcuts: {error}");
     }
 
-    let result = shortcuts.on_shortcut(accelerator.as_str(), |app, _shortcut, event| {
-        // Both press and release arrive; acting on each would open two notes.
-        if event.state() == ShortcutState::Pressed {
-            open_with_new_note(app);
-        }
-    });
+    shortcuts
+        .on_shortcut(accelerator, |app, _shortcut, event| {
+            // Both press and release arrive; acting on each would open two notes.
+            if event.state() == ShortcutState::Pressed {
+                open_with_new_note(app);
+            }
+        })
+        .map_err(|error| error.to_string())
+}
 
-    if let Err(error) = result {
+/// Brief 6.11: one global shortcut, opening the panel with a new note ready to
+/// type into. The accelerator is a setting, so someone who has already given
+/// `CmdOrCtrl+Alt+N` to another app can move it.
+///
+/// `accelerator` is `None` at startup, meaning "whatever is stored".
+pub fn bind_new_note_shortcut(app: &AppHandle, accelerator: Option<&str>) {
+    let accelerator = accelerator.map_or_else(|| stored_shortcut(app), ToOwned::to_owned);
+
+    if let Err(error) = register_shortcut(app, accelerator.as_str()) {
         // A shortcut another app already owns must not stop the widget from
         // starting, or from accepting the rest of a settings change.
         log::error!("shortcut: could not register {accelerator}: {error}");
+    }
+}
+
+/// The accelerator in the settings table, or the default if it cannot be read.
+pub fn stored_shortcut(app: &AppHandle) -> String {
+    app.try_state::<Database>()
+        .and_then(|db| db.with(settings::get).ok())
+        .map_or_else(
+            || Settings::default().shortcut_new_note,
+            |settings| settings.shortcut_new_note,
+        )
+}
+
+/// Re-bind after the setting changes, so a new accelerator works immediately.
+///
+/// Unlike [`bind_new_note_shortcut`] this reports failure, and puts `previous`
+/// back when the new accelerator is refused. Registration clears the old binding
+/// before it tries the new one, so without that restore a rejected accelerator
+/// left the app with no shortcut at all and nothing on screen saying so.
+pub fn try_rebind_new_note_shortcut(
+    app: &AppHandle,
+    accelerator: &str,
+    previous: &str,
+) -> Result<(), String> {
+    match register_shortcut(app, accelerator) {
+        Ok(()) => Ok(()),
+        Err(error) => {
+            if let Err(restore) = register_shortcut(app, previous) {
+                log::error!("shortcut: could not restore {previous}: {restore}");
+            }
+            Err(error)
+        }
     }
 }
 

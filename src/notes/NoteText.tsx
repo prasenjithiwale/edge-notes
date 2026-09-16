@@ -1,18 +1,9 @@
 import { Fragment, useMemo, type MouseEvent, type ReactNode } from "react";
-import { Flag, Repeat, Square, SquareCheck } from "lucide-react";
+import { Square, SquareCheck } from "lucide-react";
 
 import { cx } from "../lib/cx";
 import { openUrl } from "../lib/ipc";
 import { parseInline, parseLine, plainText, type Inline, type Line } from "../lib/markdown";
-import {
-  dueLabel,
-  dueSection,
-  parseTaskText,
-  priorityLabel,
-  repeatLabel,
-  type TaskMeta,
-} from "../lib/taskMeta";
-import { useNow } from "../lib/useNow";
 import styles from "./NoteText.module.css";
 
 /**
@@ -88,54 +79,6 @@ export function FlowText({ lines }: { lines: string[] }) {
   );
 }
 
-/**
- * A task's details as small chips after its text: a flag for priority, the due
- * date, and a repeat mark. Neutral, in the text's own colour — colour belongs to
- * notes (brief 7.1) — with an overdue date carried by weight instead.
- */
-export function TaskChips({ meta, checked }: { meta: TaskMeta; checked: boolean }) {
-  const now = useNow();
-  if (meta.priority === null && meta.due === null && meta.repeat === null) {
-    return null;
-  }
-  const overdue = !checked && meta.due !== null && dueSection(meta.due, new Date(now)) === "overdue";
-  return (
-    <span className={styles.chips}>
-      {meta.priority !== null && (
-        <span
-          className={cx(styles.chip, styles[`priority-${meta.priority}`])}
-          title={`${priorityLabel(meta.priority)} priority`}
-          aria-label={`${priorityLabel(meta.priority)} priority`}
-        >
-          <Flag
-            size={11}
-            strokeWidth={2}
-            fill={meta.priority === "high" ? "currentColor" : "none"}
-            aria-hidden="true"
-          />
-        </span>
-      )}
-      {meta.due !== null && (
-        <span
-          className={cx(styles.chip, overdue && styles.overdue)}
-          title={overdue ? "Overdue" : "Due"}
-        >
-          {dueLabel(meta.due, new Date(now))}
-        </span>
-      )}
-      {meta.repeat !== null && (
-        <span
-          className={styles.chip}
-          title={`Repeats ${repeatLabel(meta.repeat).toLowerCase()}`}
-          aria-label={`Repeats ${repeatLabel(meta.repeat).toLowerCase()}`}
-        >
-          <Repeat size={11} strokeWidth={2} aria-hidden="true" />
-        </span>
-      )}
-    </span>
-  );
-}
-
 interface LineRowProps {
   line: Line;
   className?: string | undefined;
@@ -145,15 +88,16 @@ interface LineRowProps {
   onToggle?: (() => void) | undefined;
 }
 
-/** A list item or paragraph on its own row: marker, then its formatted text. */
+/**
+ * A list item or paragraph on its own row: marker, then its formatted text.
+ *
+ * A checkbox here is markdown, not a task. Tasks are their own records since
+ * schema v2; a note keeps checkboxes because an ad-hoc list inside a note is
+ * useful, and this row no longer reads details out of the text or draws them as
+ * chips — that would claim the line is something the Tasks tab knows about.
+ */
 export function LineRow({ line, className, wrap = false, onToggle }: LineRowProps) {
-  // A task's details are tokens at the end of its text; the row shows its title
-  // and draws the details as chips.
-  const meta = useMemo(
-    () => (line.kind === "task" ? parseTaskText(line.text) : null),
-    [line.kind, line.text],
-  );
-  const text = meta === null ? line.text : meta.title;
+  const text = line.text;
   const label = useMemo(() => plainText(parseInline(text)), [text]);
 
   let marker: ReactNode = null;
@@ -193,7 +137,6 @@ export function LineRow({ line, className, wrap = false, onToggle }: LineRowProp
       <span className={cx(styles.rowText, line.kind === "task" && line.checked && styles.done)}>
         <InlineText text={text} />
       </span>
-      {meta !== null && <TaskChips meta={meta} checked={line.checked} />}
     </div>
   );
 }

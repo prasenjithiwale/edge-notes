@@ -160,6 +160,11 @@ describe("editedLabel", () => {
     expect(editedLabel(now - 5_000, now)).toBe("Edited just now");
   });
 
+  it("stays just now right up to a minute, rather than saying 0m ago", () => {
+    expect(editedLabel(now - 50_000, now)).toBe("Edited just now");
+    expect(editedLabel(now - 59_999, now)).toBe("Edited just now");
+  });
+
   it("switches to minutes at a minute", () => {
     expect(editedLabel(now - 60_000, now)).toBe("Edited 1m ago");
     expect(editedLabel(now - 59 * 60_000, now)).toBe("Edited 59m ago");

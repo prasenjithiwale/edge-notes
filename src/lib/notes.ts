@@ -132,7 +132,9 @@ const MONTH_MS = 30 * DAY_MS;
 export function editedLabel(updatedAt: number, now: number): string {
   const age = Math.max(0, now - updatedAt);
 
-  if (age < 45 * 1_000) {
+  // A full minute, not 45 seconds: the next branch floors to whole minutes, so
+  // the fifteen seconds in between used to read "Edited 0m ago".
+  if (age < MINUTE_MS) {
     return "Edited just now";
   }
   if (age < HOUR_MS) {

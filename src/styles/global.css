@@ -42,6 +42,15 @@ button {
   outline-offset: 2px;
 }
 
+/* ...but only the window that has the keyboard draws a live ring. The panel is
+   inactive nearly all the time, and an accent ring on a field that is not
+   receiving keys is a promise the window cannot keep. The ring stays — the
+   focused control is still where typing will resume — it just goes quiet, as a
+   native control does when its window resigns key. */
+:root[data-window-inactive] :focus-visible {
+  outline-color: var(--text-tertiary);
+}
+
 input {
   font: inherit;
   cursor: text;

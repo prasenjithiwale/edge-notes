@@ -21,6 +21,20 @@
   margin: 0;
 }
 
+/* Settings are grouped, so eleven controls read as three short lists rather
+   than one long one. The heading is the only thing that separates them: no
+   rules or boxes (brief 7.1, "no decorative dividers"). */
+.section + .section {
+  margin-top: 16px;
+}
+
+.sectionTitle {
+  margin: 0 0 8px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-tertiary);
+}
+
 .fields {
   display: flex;
   flex-direction: column;
@@ -151,4 +165,74 @@
   font-size: 12px;
   color: var(--text-primary);
   font-variant-numeric: tabular-nums;
+}
+
+/* A switch, for the settings that are simply on or off. Sized off the 4 px grid:
+   a 28x16 track with a 12 px knob. */
+.switch {
+  flex: none;
+  width: 28px;
+  height: 16px;
+  padding: 2px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-sunken);
+  display: flex;
+  align-items: center;
+  transition: background 120ms var(--open-easing);
+}
+
+/* On is neutral, not accent: brief 7.1 keeps the accent for focus rings and
+   Keep open. A filled track against an empty one is the whole signal. */
+.switch[aria-checked="true"] {
+  background: var(--text-primary);
+  border-color: transparent;
+}
+
+.knob {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--surface);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 30%);
+  transition: transform 120ms var(--open-easing);
+}
+
+.switch[aria-checked="true"] .knob {
+  transform: translateX(12px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .switch,
+  .knob {
+    transition: none;
+  }
+}
+
+/* The shortcut, shown as the keys themselves and recorded by pressing them. */
+.recorder {
+  min-width: 96px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  background: var(--surface-sunken);
+  color: var(--text-primary);
+  font-size: 12px;
+  padding: 4px 10px;
+  text-align: center;
+}
+
+.recorder:hover {
+  border-color: var(--text-tertiary);
+}
+
+/* While recording, the field is the only thing the keyboard is talking to. */
+.recorder[data-recording] {
+  border-color: var(--text-primary);
+  color: var(--text-secondary);
+}
+
+.error {
+  margin: 0;
+  font-size: 11px;
+  color: var(--text-primary);
 }

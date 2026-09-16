@@ -95,6 +95,41 @@ export function DockShell() {
     };
   }, [applyState]);
 
+  /**
+   * Mark the root while the window does not have the keyboard, so a focus ring
+   * stops claiming keys are going somewhere they are not.
+   *
+   * This widget is inactive nearly all the time — it is a panel beside whatever
+   * you are actually working in — and a search field kept a lit accent ring
+   * while every keystroke went to the app in front. Native controls dim when
+   * their window resigns key; these now do too.
+   */
+  useEffect(() => {
+    const root = document.documentElement;
+    const mark = (active: boolean) => {
+      if (active) {
+        delete root.dataset["windowInactive"];
+      } else {
+        root.dataset["windowInactive"] = "";
+      }
+    };
+
+    mark(document.hasFocus());
+    const onFocus = () => {
+      mark(true);
+    };
+    const onBlur = () => {
+      mark(false);
+    };
+    window.addEventListener("focus", onFocus);
+    window.addEventListener("blur", onBlur);
+    return () => {
+      window.removeEventListener("focus", onFocus);
+      window.removeEventListener("blur", onBlur);
+      delete root.dataset["windowInactive"];
+    };
+  }, []);
+
   // Tell Rust the slide has finished so it can resize (closing) or settle (opening).
   const handleTransitionEnd = useCallback(
     (event: React.TransitionEvent<HTMLDivElement>) => {

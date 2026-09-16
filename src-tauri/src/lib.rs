@@ -65,12 +65,21 @@ pub fn run() {
             commands::notes_set_pinned,
             commands::notes_delete,
             commands::notes_restore,
+            commands::tasks_list,
+            commands::tasks_create,
+            commands::tasks_update,
+            commands::tasks_set_done,
+            commands::tasks_delete,
+            commands::tasks_restore,
             commands::notes_export,
             commands::open_url,
             commands::reminders_set,
             commands::monitors_list,
             commands::settings_get,
             commands::settings_update,
+            commands::shortcut_set,
+            commands::autostart_get,
+            commands::autostart_set,
         ])
         .setup(|app| {
             #[cfg(target_os = "macos")]

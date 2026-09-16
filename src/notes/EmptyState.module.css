@@ -1,11 +1,14 @@
+/* Near the top, not centred: in a panel that is 620 px tall with nothing in it,
+   a message centred vertically sat 300 px below the field that had just been
+   typed into, which is not where anyone was looking. */
 .empty {
   flex: 1;
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
   gap: 12px;
-  padding: 24px 16px;
+  padding: 40px 16px 24px;
   text-align: center;
 }
 

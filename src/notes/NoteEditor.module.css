@@ -150,4 +150,9 @@
   flex: 1;
   min-height: 0;
   font-size: 14px;
+  /* A column, not the full 700 px the large panel can reach: at 14 px that was
+     over a hundred characters a line, about double what stays readable. */
+  width: 100%;
+  max-width: var(--reading-measure);
+  align-self: center;
 }

@@ -1941,6 +1941,489 @@ still ticks the right line.
 - [ ] An unlocked card still previews as before, "N more" and all
 - [ ] Expanding a locked note still shows the reader, unchanged
 
+## Priority flags carry a colour (15 Sep 2026)
+
+The owner asked for the priority flag to be coloured by priority, red for high.
+This is a **deliberate exception to brief 7.1** ("the note colours are the only
+colour; the chrome is neutral"), recorded here the way the card shadow and the
+tab appearance were. The accent stays reserved for focus rings and Keep open —
+these are their own tokens and are used nowhere else.
+
+### What changed
+
+- `--priority-high` / `-medium` / `-low` in `tokens.css`, in the light block and
+  **both** dark blocks. Traffic light: red, amber, green.
+- `NoteText.module.css` colours the chip on a card and on the Tasks tab;
+  `TaskDetails.module.css` colours the same flag in the picker, from the same
+  tokens, so the two cannot disagree.
+- The chips' reduced-emphasis opacity is dropped for the coloured flag, and
+  `.flagLow`'s `opacity: 0.7` is gone. Opacity blends the hue toward the
+  background and would have spent exactly the contrast the colours were chosen
+  for.
+
+### Why these values
+
+The flag is drawn on **eighteen** backgrounds, not one: all sixteen note colours
+plus `--surface` and `--surface-sunken`, in each theme. A red that reads on a
+yellow note disappears on a red one. The values were picked by measuring every
+combination and keeping a margin over **3:1** (WCAG 1.4.11 non-text contrast —
+the flag is a meaningful graphic, so 3:1 is the bar, not text's 4.5). The worst
+case of the set is medium in light at 3.95 against the indigo note.
+
+**Colour is not the only signal.** High is still a filled flag, low still a
+thinner stroke. That was the whole encoding before and it stays, so priority
+survives colour blindness, a monochrome screenshot, and forced-colours mode. The
+red/amber pair is the one a deuteranope would struggle with, which is exactly the
+pair that fill weight separates.
+
+`contrast.test.ts` grew to cover it: every priority against every one of those
+eighteen backgrounds in both themes, the two dark blocks agreeing, and a minimum
+25 degrees of hue between any two priorities so a future retune cannot quietly
+make two of them the same colour. 213 tests in that file alone, 458 in all. All
+three failure modes were confirmed to actually fail before being reverted — a
+washed-out red, an amber moved next to the red, and the dark blocks drifting
+apart.
+
+### Checklist
+
+- [ ] A task with each priority: the flags read red, amber and green
+- [ ] The same on a red note and on a green note — both still legible
+- [ ] Dark theme, and system-dark with no explicit choice
+- [ ] The details sheet's priority picker matches the flag on the card
+- [ ] A ticked task's flag still steps back with the rest of the line
+
+## "Add a task" can choose its note (15 Sep 2026)
+
+The owner reported that the Tasks tab has no way to say which note a new task
+belongs to: everything typed into "Add a task" went to the note titled Tasks, and
+the first task ever added made that note whether or not there was a better home
+for it. Tasks live in notes — the tab has always said so, with each task's note
+named under it — but the one place that *writes* a task ignored that.
+
+### What changed
+
+- **A target picker beside the field.** The add row is now the field plus a small
+  button naming the note the next task goes to, with that note's colour as a dot.
+  Pressing it discloses the list of notes under the field; picking one closes it.
+  The name is on the button rather than behind it, so the target is readable
+  without opening anything — which matters because adding a task is one keystroke
+  away from being wrong in a note you did not mean.
+- **The default is unchanged.** The first entry is the Tasks note, found by title
+  exactly as before, and it is the default until something else is picked. So the
+  old behaviour — type, Enter, it lands in Tasks, and the note is made on the
+  first task — is still what happens if the picker is never touched.
+- **`taskTargets` and `taskTargetNote` in `lib/tasks.ts`** are the whole rule,
+  pure and tested: the default first (with no colour before the note exists),
+  then every other note in list order, and the picked note resolved at the moment
+  a task is added.
+- **`noteTitle`** came out of `collectTasks` and `findTodoNote`, which each had
+  their own copy of "first non-blank line, markers stripped". The picker needs it
+  for notes that have no tasks yet, so all three now share one function.
+- **The target is an id, not a note.** A picked note that is deleted resolves back
+  to the default on its own, because nothing cached the note — the same reasoning
+  as the interaction lock being derived rather than held.
+- **Esc closes the picker first**, ahead of clearing a half-typed task, in
+  `Panel`'s one cascade. The picker's open state lives in the store for that
+  reason: the cascade is decided in one place, so what it closes has to be
+  visible there.
+
+### What was decided against
+
+- **A native `<select>`.** Its popup is an AppKit menu, and this window is a
+  non-activating panel that already has to fight for the keyboard on macOS
+  (see M3). A disclosure in the DOM cannot lose that fight.
+- **A floating popover.** The panel is 320 px wide; a popover would cover the
+  task list it is about to add to. The list pushes down instead.
+- **Remembering the target across launches.** It would need a setting and a
+  migration to save a note id that may not exist next time. It resets to the
+  Tasks note on restart, which is also what a deleted target does.
+- **Moving an existing task between notes.** Real, but a different job — that
+  belongs with the details sheet, not the add field.
+
+Ten new tests (468 in all): the pure target list and its fallbacks, adding to a
+picked note without making a Tasks note, and Esc closing the picker before it
+touches the draft.
+
+### Checklist
+
+- [ ] With no Tasks note, the button reads "Tasks" with a hollow dot; adding a
+      task still makes that note and the dot takes its colour
+- [ ] Pick another note, add a task: it lands at the end of that note, and the
+      button keeps naming it for the next one
+- [ ] The picked note's card shows the new task in the Notes tab
+- [ ] Delete the picked note: the button falls back to Tasks rather than nowhere
+- [ ] A long note title truncates in the button instead of widening the row
+- [ ] Esc with the picker open closes it and leaves a half-typed task alone; Esc
+      again clears the task; Esc again collapses the panel
+- [ ] Leaving the tab and coming back finds the picker closed
+- [ ] The panel stays open while the picker is being used
+
+## Homebrew on macOS (15 Sep 2026)
+
+The owner asked to distribute the Mac app through Homebrew using "the quarantine
+trick" — `brew install --cask --no-quarantine`, which is how an unsigned app is
+normally made installable. That flag no longer exists. It was deprecated on
+23 Oct 2025 and the code removed on 30 Jul 2026 (`ba25213c81`), and there has
+never been a cask-level opt-out; Homebrew's own security document now says it
+applies quarantine rather than bypassing Gatekeeper.
+
+Checked rather than remembered: a throwaway tap around the existing 0.0.4 `.dmg`,
+installed locally, came out with `com.apple.quarantine: 0381;...` on every file in
+the bundle, and `spctl -a -t exec` rejected the app — `source=no usable
+signature`. That is the dialog a user would have got.
+
+### What works instead
+
+A `postflight_steps` block, which is where Homebrew 7 moved free-form install
+steps:
+
+```ruby
+  postflight_steps do
+    run "/usr/bin/xattr",
+        args: ["-dr", "com.apple.quarantine", "{{appdir}}/Edge Notes.app"]
+  end
+```
+
+It runs in Homebrew's install sandbox, which allows writes to `appdir`, so it
+needs no privileges, and `{{appdir}}` is expanded from the user's own
+configuration rather than assuming `/Applications`. Verified end to end: from a
+cleared `~/.homebrew/trust.json` and no tap, two commands install the app and it
+opens with no Gatekeeper dialog.
+
+Three further things Homebrew 7 rejects that a cask written from memory would
+have had: the old `postflight do ... end` (deprecated), `depends_on macos:
+">= :monterey"` (the bare symbol already compares with `>=`), and `verified:` in
+the `url` stanza. Each was found by installing, not by reading.
+
+### The part that decided the shape
+
+This repository is private, so its release assets are not anonymous downloads —
+`curl` on the `.dmg` URL returns 404, which is the same wall that created the
+Pages site for the `.deb`. A cask cannot fetch from GitHub Releases here. So the
+`.dmg` is published to `edge-notes-apt/macos/` next to the Windows installers,
+and the cask points at the site.
+
+Ordering follows from that: the cask pins a sha256 for a URL on the site, so it
+is pushed **after** the site push, never before, or it would advertise a download
+that is not there yet.
+
+### What changed
+
+- **`tools/publish_macos.sh`**, the `.dmg` twin of `publish_windows.sh`: copies
+  into `macos/`, rebuilds `macos/SHA256SUMS`, keeps older versions.
+- **`tools/publish_cask.sh`** generates `Casks/edge-notes.rb` — version and
+  sha256 off the file itself. The cask is generated like the landing page, so an
+  edit in the tap is overwritten by the next release, and the comment in the
+  script says why the quarantine step exists and what would remove it.
+- **`tools/render_site.sh`** grew a macOS section: the Homebrew commands, the
+  `.dmg`, and the Gatekeeper trade-off stated plainly rather than buried.
+- **`release.yml`**'s Pages job fetches the `.dmg`, publishes it, then pushes the
+  cask and checks the published URL and hash from the live site. That last check
+  is as much of `brew install` as an Ubuntu runner can do; there is no macOS
+  runner, and on a private repository those minutes bill at ten times the rate.
+- **`signingIdentity: "-"`** in `tauri.conf.json`. The bundle used to ship
+  unsealed — `Sealed Resources=none`, identity `edge_notes-d0912e8b978c6865`,
+  only the executable carrying the linker's signature. Ad-hoc signing seals it
+  and restores `dev.edgenotes.app`, which is the identity macOS remembers a
+  notification permission against. Verified by signing a copy of the built
+  bundle: `valid on disk`, `satisfies its Designated Requirement`. It changes
+  nothing about Gatekeeper — ad-hoc is not a Developer ID — so the cask still
+  needs its quarantine step. It lands with the next build; 0.0.4 was already cut.
+
+### What was decided against
+
+- **`homebrew/cask` proper.** It rejects quarantine workarounds outright, and the
+  notability requirements would rule this out anyway.
+- **A macOS runner to verify `brew install` in CI.** Ten times the minutes on a
+  private repository, to prove what the URL-and-hash check already covers.
+- **Rebuilding 0.0.4 with the ad-hoc signature.** It would mean replacing the
+  artifact of a published release. The published `.dmg` was confirmed byte for
+  byte identical to the local build first, so what the site serves is exactly
+  what the release has.
+
+### Still open
+
+`brew trust` is a real step for a first-time user, not a detail: Homebrew 7
+refuses to load a cask from a tap outside its own repositories until it is
+trusted, and the error it prints first is the misleading `Cannot tap ...: invalid
+syntax in tap!`. Both the landing page and the README lead with the trust
+command for that reason.
+
+The honest fix for all of this is a Developer ID and notarisation, after which
+the `postflight_steps` block can go. README's signing section says so.
+
+### Checklist
+
+- [ ] On another Mac: the two commands from the landing page install and open it
+- [ ] `brew upgrade edge-notes` picks up the next release
+- [ ] `brew uninstall --cask edge-notes` removes it; `--zap` also clears
+      `~/Library/Application Support/dev.edgenotes.app`
+- [ ] The `.dmg` route: download, drag, and the `xattr` line opens it
+- [ ] Next release: the Pages job publishes the `.dmg`, pushes the cask, and the
+      hash check passes
+- [ ] A release made with no `.dmg` attached leaves the site and the cask alone
+      rather than failing
+- [ ] The next build is ad-hoc signed: `codesign --verify --deep --strict` passes
+      and the identifier is `dev.edgenotes.app`
+
+## Design review fixes, round 1 (16 Sep 2026)
+
+A design review of the running app — driven through the real UI on macOS rather
+than read off the source — turned up nineteen findings. This round takes the four
+that cost people the product, plus everything cheap enough to fix in the same
+pass. What is left is listed under "Not in this round".
+
+### What changed
+
+- **The collapsed tab is findable again.** The pill was `--surface` behind a
+  `--border` hairline at 60 % opacity; in dark mode that is a dark shape outlined
+  in almost nothing, on a dark desktop, and it disappeared. The tab now has a
+  border token of its own — `--tab-border`, much stronger than the chrome
+  hairline, and stronger again in dark — carries the chevron in
+  `--text-primary` rather than `--text-secondary`, and sits at 0.85 opacity in
+  dark when translucent. The one part of the app that is always on screen has to
+  be the one part you can always see.
+- **The shortcut is recorded, not typed.** The setting was a free-text field
+  holding Tauri's accelerator syntax (`CmdOrCtrl+Alt+N`), which is neither
+  documented in the app nor how macOS writes a shortcut anywhere. It is now a
+  button you press the keys into. `lib/accelerator.ts` is the whole translation
+  and is pure: `acceleratorFromEvent` builds the accelerator from a
+  `KeyboardEvent` — using `code`, so a dead key such as ⌥N records as `KeyN` —
+  and `formatAccelerator` draws it as ⌘⌥N on macOS and Ctrl + Alt + N elsewhere.
+  A press with no Ctrl, Alt or Cmd is refused, because a global shortcut on a
+  bare key takes that key from every other application.
+- **...and a shortcut that cannot be registered says so.** `settings_update`
+  wrote the value and then asked the OS, and `bind_new_note_shortcut` only
+  logged the refusal — so a combination another app owned left the field showing
+  a shortcut that did nothing. Worse, registration clears the old binding first,
+  so a rejected one left the app with no shortcut at all. The new `shortcut_set`
+  command registers **before** it stores, puts the previous accelerator back when
+  the OS refuses, and returns `AppError::ShortcutUnavailable`, which the field
+  reports in place: "Another app is using that shortcut. The old one is still
+  set."
+- **Dock side and Launch at login are in Settings.** Both lived only in the tray
+  menu, and nothing in the panel points at the tray: the single most spatial
+  setting in the app was somewhere you had to already know about. `dock.side` was
+  always a settings key, so it needed only a control; launch at login is read
+  from the OS through two new commands, `autostart_get` and `autostart_set`,
+  because the login item can be removed from System Settings without telling the
+  app. The tray's ticks follow a change made in the panel: the menu items are
+  `Arc` handles (verified in the Tauri 2.11.5 source), so a second set lives in
+  app state and `tray::sync_menu` re-reads the real state into them.
+- **Settings is grouped, and one rule decides each row's shape.** Eleven controls
+  in a flat list, in two different grammars, read as two half-finished forms.
+  They are now three sections — Appearance, Dock, General — and the rule is: a
+  choice of more than two options gets a line of its own, because three legible
+  segments do not fit beside a label at the 280 px minimum panel width;
+  everything else is a row with the label left and the control right. Task
+  reminders and Launch at login are switches rather than On/Off segment pairs,
+  which stopped asking the eye to read both labels to find out which way a
+  setting was set. The switch is neutral, not accent: brief 7.1 keeps the accent
+  for focus rings and Keep open.
+- **Keep open reads as a mode.** It is the one control that stops the panel
+  closing itself, and the only thing saying so was an accent tint on a 16 px
+  glyph. `IconButton`'s active state now also fills a chip in `--accent-soft`.
+- **The large panel has a measure.** An expanded note set 14 px text across the
+  full ~700 px panel — over a hundred characters a line, about double what stays
+  readable. Both the editor's textarea and the reader's body are capped at
+  `--reading-measure` (34 rem, about 70 characters) and centred, so expanding a
+  note to read it and expanding it to write in it are the same column of text.
+- **A locked card is as tall as its text.** Three stacked 22 px tool buttons made
+  a locked card 80 px tall for two lines: the controls were setting the height
+  instead of fitting inside it. `.tools` is a row now.
+- **The search field can be left with the mouse.** Search replaces the view tabs
+  (brief 6.6), so with no clear button and Esc the only way out, a mouse had no
+  way back. There is an × inside the field when it has text; it keeps the caret
+  where it is, because blurring an empty field abandons the search that the click
+  just used. The focus ring moved to the field and button together.
+- **An empty state sits where the eye is.** Centred vertically in a 620 px panel,
+  "No notes match ..." sat 300 px below the field that had just been typed into.
+  It is near the top now.
+- **An undo toast holds the panel open.** Brief 6.3 says it should and it never
+  did: deleting a note and moving the cursor away collapsed the panel with the
+  toast still counting down, taking the only way to undo with it. `Panel` holds
+  the `undo` lock while `pendingUndo` is set.
+- **A focus ring stops lying when the window is inactive.** This widget is
+  inactive nearly all the time, and a search field kept a lit accent ring while
+  every keystroke went to the app in front. `DockShell` marks the root on window
+  blur and the ring falls back to `--text-tertiary` — still showing where typing
+  will resume, no longer claiming it is happening.
+- **"Edited 0m ago"** was a fifteen-second window between "just now" ending at
+  45 s and the minutes branch flooring to whole minutes. "Just now" now runs to a
+  full minute.
+- **Priority chips run None, Low, Medium, High.** They came off `PRIORITIES`,
+  which is ordered high-first for ranking tasks, and put High between None and
+  Medium. The details sheet has its own display order; `PRIORITIES` is unchanged.
+- **The due row's × says what it clears** — "Clear due date and repeat", which is
+  what it does.
+
+### What was decided against
+
+- **Searching tasks.** The search icon is absent in the Tasks tab, which is a
+  real gap, but tasks are lines inside notes and searching them means deciding
+  what a result even is — a task, or the note it lives in. That is a feature, not
+  a fix.
+- **Sizing the panel to its content.** Three notes leave two-thirds of the panel
+  empty. The height is `min(640, 80 % of the work area)` in brief 6.4 and lives in
+  Rust's geometry; changing it would move the tab every time a note was added.
+- **The stale tooltip** left floating after the layout changes under the cursor.
+  It is WebKit's own `title` tooltip, and nothing in the DOM can dismiss it.
+- **The time field's ghost value.** An empty `<input type="time">` renders its own
+  placeholder, which reads as a value that is set. Replacing it with an "Add
+  time" chip is a change to the details sheet's shape, not a one-line fix.
+- **Changing the undo window from 5 s.** Brief 6.9 names it; the real problem was
+  the panel closing over it, which is fixed above.
+- **Onboarding.** Hover to open, drag to move, the Esc cascade, ⌘F and the task
+  tokens are all invisible knowledge. Worth doing, worth doing properly.
+
+Eighteen new tests (486 in all): `lib/accelerator.ts` in full, the "just now"
+boundary, and the settings view's dock side, launch at login, and shortcut
+recorder — including the OS refusing a shortcut and a bare key being ignored.
+The Rust side is unchanged in test count: `shortcut_set` and the autostart pair
+need a live `AppHandle` and a real global-shortcut registration, so they are
+covered by the manual checklist below rather than by a unit test.
+
+### Checklist
+
+- [ ] The collapsed tab is visible against a dark desktop and a dark app, in both
+      themes and with the tab set to Translucent
+- [ ] Settings: Screen edge moves the dock, and the tray's Dock on left/right
+      ticks follow it
+- [ ] Settings: Launch at login matches System Settings > General > Login Items,
+      in both directions, and the tray's tick follows
+- [ ] The shortcut field shows ⌘⌥N; pressing it and then a combination stores and
+      binds that combination, and the new shortcut opens a new note
+- [ ] Recording ⌘F stores ⌘F rather than opening search
+- [ ] Recording a combination another app owns (try ⌘Space) leaves the old
+      shortcut working and says so under the field
+- [ ] Pressing a bare key while recording is ignored, with the hint shown
+- [ ] Esc while recording cancels and leaves the shortcut alone
+- [ ] Task reminders and Launch at login read as on or off at a glance
+- [ ] Keep open reads as on from across the room
+- [ ] An expanded note's text is a centred column, not the full panel width, in
+      both the reader and the editor
+- [ ] A locked note's card is no taller than its text
+- [ ] Search: the × clears the query and keeps the caret in the field; Esc still
+      closes search
+- [ ] Delete a note and move the cursor away: the panel stays open until the
+      toast has gone
+- [ ] Click into the search field, then click another app: the ring goes grey and
+      comes back when the panel is clicked again
+- [ ] A note edited 50 seconds ago reads "Edited just now", not "Edited 0m ago"
+- [ ] Task details: the priority chips run None, Low, Medium, High
+
+## Tasks are their own thing now (16 Sep 2026)
+
+Until today a task was a `- [ ]` line inside a note, and the Tasks tab was a view
+assembled out of every note's text. That was a good call while tasks were a
+by-product of note-taking, and it stopped being one: a task could not exist
+without a note to live in, its details were tokens hidden inside a sentence, and
+ticking one was an edit to a paragraph somewhere. The owner asked for tasks to be
+independent, and for the tab to be built like a task list rather than a reading of
+one.
+
+### What changed
+
+- **A `tasks` table (schema v2).** `id`, `title`, `notes`, `done_at`, `due_date`,
+  `due_time`, `priority`, `repeat_rule`, the usual timestamps, and `sort_order`
+  reserved for manual ordering as notes' is. `db/tasks.rs` is the repository, in
+  the shape `db/notes.rs` already had: soft deletes, `now` passed in, a partial
+  update, and errors rather than silent no-ops for a task that is not there.
+- **Six commands.** `tasks_list`, `tasks_create`, `tasks_update`,
+  `tasks_set_done`, `tasks_delete`, `tasks_restore`. `tasks_list` returns every
+  task that is not deleted, in a stable order, and says nothing about sections:
+  what "today" means depends on the reader's clock, which is not Rust's business.
+- **Absent and null are different.** A patch that leaves `dueDate` out must not
+  clear it, and one that sends `null` must. Serde collapses both onto `Option`,
+  so `TaskPatch` uses `Option<Option<T>>` with a small `present` deserializer.
+  Clearing the due date clears the time with it: a time with no day is not a when.
+- **A migration that moves what is already written (v3).** `MIGRATIONS` now holds
+  `Sql` or `Code` steps, both inside the one startup transaction, and the code
+  step lifts every `- [ ]` line out of every note into `tasks`, removing the line
+  as it goes. `db/task_import.rs` is the only thing that still understands the old
+  format — the list markers from `lib/markdown.ts` and the tokens from
+  `lib/taskMeta.ts` — and it is hand-rolled rather than regex, which would have
+  meant a new dependency for one migration.
+- **The note that only held tasks is soft-deleted.** After the lines are removed,
+  a note with nothing left, or with nothing but the heading "Tasks" or "To-Do", is
+  marked deleted rather than left as an empty card. Soft, so it is recoverable for
+  30 days, and so a mistake here is not permanent. Note timestamps are not bumped:
+  a migration is not an edit the user made, and the notes list must not reshuffle
+  on first launch.
+- **A task list, not a list of notes' contents.** `TasksView` replaces `TodoView`.
+  The add field is first, because adding is the first thing anyone does here, and
+  it no longer asks which note to put it in. Rows are grouped Overdue / Today /
+  Tomorrow / Upcoming / Someday, with Done behind a disclosure showing what was
+  finished in the last day. A row is a box and one button: the box ticks, the
+  button opens the details sheet, and the details worth a glance — due, repeats,
+  has notes, priority — are on the row itself.
+- **The details sheet writes fields.** Title, priority, due date and time,
+  repeat, a free-text notes field, and a delete button with the undo toast as the
+  safety net. It used to rewrite a line of text in a note, which meant re-parsing
+  the details out of a sentence every time they were read back.
+- **Quick entry survives.** Typing `call the bank !high @2026-09-20 14:00` into
+  the add field still sets the fields: the tokens are read once, on the way in,
+  and stored as columns. That is a real convenience and the muscle memory of
+  everyone who used the old format, and it is now the only place `parseTaskText`
+  is used.
+- **Repeats stay in the frontend.** `tick` moves a repeating task to its next
+  date with `tasks_update` and leaves it open, rather than completing it. Rust
+  does not do this because the next date is calendar arithmetic in the reader's
+  timezone, and Rust has neither a timezone nor a calendar crate.
+- **Notes keep their checkboxes, and they are formatting.** A `- [ ]` line in a
+  note still ticks, and Enter still continues the list. It never reaches the Tasks
+  tab, and `LineRow` no longer parses details out of it or draws them as chips —
+  which would claim the line is something the Tasks tab knows about.
+- **The reminders path follows the tasks** rather than the notes, and its ids
+  carry the task id and its due date, so moving a task re-arms its reminder and
+  leaving it alone does not.
+
+### What was decided against
+
+- **Keeping the note lines as well as the rows.** Every existing task would have
+  existed twice, with no connection between the copies, and ticking one would do
+  nothing to the other.
+- **A `note_id` on a task.** Tempting, and it would have kept the old "which note
+  is this from" line. But it re-introduces the dependency the split exists to
+  remove; a task that belongs to a note is a feature to design, not a column to
+  keep by default.
+- **Doing the date arithmetic in Rust.** It would need `chrono`, which is outside
+  section 4 of the brief, and Rust would still have no locale to format with.
+- **Purging completed tasks.** They stop being listed after a day; they are not
+  deleted. Finishing something is not a reason to lose the record of it.
+- **Subtasks, manual reordering and named lists.** Asked about and deferred: each
+  is a milestone of its own, and `sort_order` is already reserved for the second.
+
+Thirty-six new Rust tests (155 in all) and thirteen new frontend tests (489 in
+all): the import parser against every token and near-miss, the migration against
+a v1-shaped database, the repository's partial updates and soft deletes, the
+grouping and reminder rules, and the store's ticking, renaming and undo. The
+migration was also run against a copy of the owner's real database, which had one
+task in a "To-Do" note: it came out with its priority, date and repeat intact and
+the note went with it.
+
+### Checklist
+
+- [ ] First launch after this: the tasks that were in notes are in the Tasks tab,
+      with their priority, due date and repeat
+- [ ] The note that held them is gone from the list, and any note that had other
+      text in it kept that text and its place in the list
+- [ ] The notes list has not reordered itself
+- [ ] Add a task with nothing else open: it appears without a note being made
+- [ ] Type `pay rent !high @2026-10-01 09:00 repeat:monthly` and press Enter: the
+      row shows the date and the flag, and the text holds no tokens
+- [ ] Tick a task: it stays where it is, struck through, and is in Done on the
+      next visit to the tab
+- [ ] Tick a repeating task: it moves to its next date and stays open
+- [ ] Open a task, set and clear a date: clearing it clears the time and the
+      repeat with it
+- [ ] Delete a task from the sheet: the toast offers Undo, and the panel stays
+      open until it has gone
+- [ ] A `- [ ]` line typed into a *note* ticks in place and never appears in the
+      Tasks tab
+- [ ] Reminders still fire for a dated task, and only once
+- [ ] Quit and reopen: everything is where it was
+
 ## M0 acceptance checklist
 
 From brief section 12. Run `npm run tauri dev`, then work through these with

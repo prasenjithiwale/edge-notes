@@ -5,7 +5,10 @@ use std::sync::Arc;
 
 use tauri::{AppHandle, Emitter, Manager, State};
 
-use crate::db::{Database, Note, NoteColor, Settings, SettingsPatch, notes, now_ms, settings};
+use crate::db::{
+    Database, Note, NoteColor, Settings, SettingsPatch, Task, TaskPatch, notes, now_ms, settings,
+    tasks,
+};
 use crate::dock::{DOCK_WINDOW_LABEL, Dock, Input, Phase, poller};
 use crate::error::{AppError, AppResult};
 use crate::platform;
@@ -281,8 +284,105 @@ pub fn settings_update(
         crate::tray::rebind_new_note_shortcut(&app, accelerator);
     }
 
+    // The tray shows the dock side too, and the settings view can change it.
+    if patch.dock_side.is_some() {
+        crate::tray::sync_menu(&app);
+    }
+
     if let Err(error) = app.emit(SETTINGS_CHANGED_EVENT, &updated) {
         log::error!("settings: failed to emit change: {error}");
     }
     Ok(updated)
+}
+
+/// Set the global shortcut, refusing an accelerator the OS will not give us.
+///
+/// Registration is tried *before* the value is stored, and the previous binding
+/// is restored if it fails, so the settings field can never leave the app with a
+/// shortcut that does nothing. `settings_update` writes first and binds after,
+/// which is right for every other key but wrong for this one.
+#[tauri::command]
+pub fn shortcut_set(
+    app: AppHandle,
+    db: State<'_, Database>,
+    accelerator: String,
+) -> AppResult<Settings> {
+    let trimmed = accelerator.trim();
+    if trimmed.is_empty() {
+        return Err(AppError::ShortcutUnavailable(
+            "that is not a shortcut".to_owned(),
+        ));
+    }
+
+    let previous = crate::tray::stored_shortcut(&app);
+    crate::tray::try_rebind_new_note_shortcut(&app, trimmed, &previous)
+        .map_err(AppError::ShortcutUnavailable)?;
+
+    let patch = SettingsPatch {
+        shortcut_new_note: Some(trimmed.to_owned()),
+        ..SettingsPatch::default()
+    };
+    let updated = db.with(|connection| settings::update(connection, &patch))?;
+
+    if let Err(error) = app.emit(SETTINGS_CHANGED_EVENT, &updated) {
+        log::error!("settings: failed to emit change: {error}");
+    }
+    Ok(updated)
+}
+
+/// Whether the app starts at login. Read from the OS, never mirrored into the
+/// settings table: the login item can be removed from outside the app.
+#[tauri::command]
+pub fn autostart_get(app: AppHandle) -> AppResult<bool> {
+    Ok(crate::tray::autostart_is_enabled(&app))
+}
+
+/// Brief 6.12's tray checkbox, also offered in the settings view. Returns what
+/// the OS reports afterwards rather than what was asked for.
+#[tauri::command]
+pub fn autostart_set(app: AppHandle, enabled: bool) -> AppResult<bool> {
+    crate::tray::set_autostart(&app, enabled).map_err(AppError::Autostart)?;
+    Ok(crate::tray::autostart_is_enabled(&app))
+}
+
+// -- Tasks ------------------------------------------------------------------
+
+/// Every task that has not been deleted, open and done alike. Which ones the
+/// list shows, and in what order, is the frontend's decision: it depends on the
+/// reader's clock, and Rust has no business grouping by "today".
+#[tauri::command]
+pub fn tasks_list(db: State<'_, Database>) -> AppResult<Vec<Task>> {
+    db.with(tasks::list)
+}
+
+#[tauri::command]
+pub fn tasks_create(db: State<'_, Database>, patch: TaskPatch) -> AppResult<Task> {
+    db.with(|connection| tasks::create(connection, &patch, now_ms()))
+}
+
+/// Partial update. A field the patch leaves out is untouched; sending it as null
+/// clears it.
+#[tauri::command]
+pub fn tasks_update(db: State<'_, Database>, id: String, patch: TaskPatch) -> AppResult<Task> {
+    db.with(|connection| tasks::update(connection, &id, &patch, now_ms()))
+}
+
+/// Complete a task, or reopen it.
+///
+/// A repeating task is never completed through this: the frontend moves it to
+/// its next date with `tasks_update`, because calendar months and local time are
+/// its department.
+#[tauri::command]
+pub fn tasks_set_done(db: State<'_, Database>, id: String, done: bool) -> AppResult<Task> {
+    db.with(|connection| tasks::set_done(connection, &id, done, now_ms()))
+}
+
+#[tauri::command]
+pub fn tasks_delete(db: State<'_, Database>, id: String) -> AppResult<()> {
+    db.with(|connection| tasks::delete(connection, &id, now_ms()))
+}
+
+#[tauri::command]
+pub fn tasks_restore(db: State<'_, Database>, id: String) -> AppResult<Task> {
+    db.with(|connection| tasks::restore(connection, &id))
 }

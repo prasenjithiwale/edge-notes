@@ -21,6 +21,12 @@ function updates(): unknown[] {
 }
 
 beforeEach(() => {
+  // The shortcut is drawn with macOS symbols or spelled-out names depending on
+  // the platform; pin it so the assertions below can read as they would on a Mac.
+  Object.defineProperty(window.navigator, "userAgent", {
+    value: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)",
+    configurable: true,
+  });
   invoke.mockReset();
   invoke.mockImplementation((command: string, args?: unknown) => {
     if (command === "monitors_list") {
@@ -29,6 +35,19 @@ beforeEach(() => {
     if (command === "settings_update") {
       const { patch } = args as { patch: Partial<Settings> };
       return Promise.resolve({ ...useSettingsStore.getState().settings, ...patch });
+    }
+    if (command === "autostart_get") {
+      return Promise.resolve(false);
+    }
+    if (command === "autostart_set") {
+      return Promise.resolve((args as { enabled: boolean }).enabled);
+    }
+    if (command === "shortcut_set") {
+      const { accelerator } = args as { accelerator: string };
+      return Promise.resolve({
+        ...useSettingsStore.getState().settings,
+        "shortcut.newNote": accelerator,
+      });
     }
     return Promise.resolve(null);
   });
@@ -113,14 +132,119 @@ describe("panel translucency setting", () => {
 describe("task reminders setting", () => {
   it("is on by default and can be turned off", async () => {
     render(<SettingsView onClose={() => undefined} />);
-    const group = screen.getByRole("group", { name: "Task reminders" });
-    const on = Array.from(group.querySelectorAll("button")).find((b) => b.textContent === "On");
-    const off = Array.from(group.querySelectorAll("button")).find((b) => b.textContent === "Off");
-    expect(on?.getAttribute("aria-pressed")).toBe("true");
+    const toggle = screen.getByRole("switch", { name: "Task reminders" });
+    expect(toggle.getAttribute("aria-checked")).toBe("true");
 
-    off?.click();
+    fireEvent.click(toggle);
     await waitFor(() => {
       expect(updates()).toEqual([{ patch: { "tasks.reminders": false } }]);
     });
+    await waitFor(() => {
+      expect(
+        screen.getByRole("switch", { name: "Task reminders" }).getAttribute("aria-checked"),
+      ).toBe("false");
+    });
+  });
+});
+
+describe("dock side setting", () => {
+  it("moves the dock to the other edge, without going to the tray for it", async () => {
+    render(<SettingsView onClose={() => undefined} />);
+
+    expect(screen.getByRole("button", { name: "Right" }).getAttribute("aria-pressed")).toBe("true");
+    screen.getByRole("button", { name: "Left" }).click();
+
+    await waitFor(() => {
+      expect(updates()).toEqual([{ patch: { "dock.side": "left" } }]);
+    });
+  });
+});
+
+describe("launch at login setting", () => {
+  it("reads the state from the OS and writes it back", async () => {
+    render(<SettingsView onClose={() => undefined} />);
+
+    // autostart_get resolves false in the mock, so the switch starts off.
+    const toggle = await screen.findByRole("switch", { name: "Launch at login" });
+    await waitFor(() => {
+      expect(toggle.getAttribute("aria-checked")).toBe("false");
+    });
+
+    fireEvent.click(toggle);
+    await waitFor(() => {
+      expect(
+        invoke.mock.calls.filter(([command]) => command === "autostart_set"),
+      ).toEqual([["autostart_set", { enabled: true }]]);
+    });
+    await waitFor(() => {
+      expect(
+        screen.getByRole("switch", { name: "Launch at login" }).getAttribute("aria-checked"),
+      ).toBe("true");
+    });
+  });
+});
+
+describe("the new note shortcut", () => {
+  it("records the keys pressed instead of asking for accelerator syntax", async () => {
+    render(<SettingsView onClose={() => undefined} />);
+
+    const recorder = screen.getByRole("button", { name: "New note shortcut" });
+    expect(recorder.textContent).toBe("⌘⌥N");
+
+    fireEvent.click(recorder);
+    expect(screen.getByRole("button", { name: "New note shortcut" }).textContent).toBe(
+      "Press a shortcut",
+    );
+
+    fireEvent.keyDown(window, { code: "KeyJ", metaKey: true, shiftKey: true });
+
+    await waitFor(() => {
+      expect(
+        invoke.mock.calls.filter(([command]) => command === "shortcut_set"),
+      ).toEqual([["shortcut_set", { accelerator: "Shift+Cmd+KeyJ" }]]);
+    });
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "New note shortcut" }).textContent).toBe("⇧⌘J");
+    });
+  });
+
+  it("says so when the OS refuses the shortcut, and keeps the old one", async () => {
+    invoke.mockImplementation((command: string) => {
+      if (command === "monitors_list") {
+        return Promise.resolve([]);
+      }
+      if (command === "shortcut_set") {
+        // Tauri rejects with the serialized `AppError` object, not an Error, and
+        // this is the shape `isIpcErrorOf` has to recognise.
+        // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors
+        return Promise.reject({
+          code: "shortcut_unavailable",
+          message: "HotKey already registered",
+        });
+      }
+      return Promise.resolve(null);
+    });
+    render(<SettingsView onClose={() => undefined} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "New note shortcut" }));
+    fireEvent.keyDown(window, { code: "KeyN", metaKey: true, altKey: true });
+
+    await waitFor(() => {
+      expect(screen.getByRole("alert").textContent).toContain("Another app is using that shortcut");
+    });
+    // Still showing the accelerator that is actually bound.
+    expect(screen.getByRole("button", { name: "New note shortcut" }).textContent).toBe("⌘⌥N");
+  });
+
+  it("ignores a press with no modifier rather than binding a bare key", async () => {
+    render(<SettingsView onClose={() => undefined} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "New note shortcut" }));
+    fireEvent.keyDown(window, { code: "KeyN" });
+
+    await waitFor(() => {
+      expect(screen.getByText(/Hold/).textContent).toContain("Hold");
+    });
+    expect(invoke.mock.calls.filter(([command]) => command === "shortcut_set")).toEqual([]);
   });
 });

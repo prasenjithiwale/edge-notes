@@ -1,3 +1,14 @@
+/* The field and its clear button share one sunken surface, so the button reads
+   as part of the field rather than as another icon in the header row. */
+.wrap {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  border-radius: var(--radius-control);
+  background: var(--surface-sunken);
+}
+
 .field {
   flex: 1;
   min-width: 0;
@@ -5,11 +16,41 @@
   padding: 0 8px;
   border: none;
   border-radius: var(--radius-control);
-  background: var(--surface-sunken);
+  background: transparent;
   color: var(--text-primary);
   font-size: 13px;
 }
 
+/* The ring goes round the field and its button together, so clearing the query
+   does not make the focused control change shape. */
+.wrap:focus-within {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.field:focus-visible {
+  outline: none;
+}
+
 .field::placeholder {
   color: var(--text-tertiary);
+}
+
+.clear {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  margin-right: 2px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-secondary);
+}
+
+.clear:hover {
+  color: var(--text-primary);
 }

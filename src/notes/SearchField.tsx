@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { X } from "lucide-react";
 
 import { useDockStore } from "../store/dock";
 import styles from "./SearchField.module.css";
@@ -41,27 +42,51 @@ export function SearchField({ query, onQueryChange, onAbandon }: SearchFieldProp
   }, [focused, setLock]);
 
   return (
-    <input
-      ref={inputRef}
-      type="text"
-      className={styles.field}
-      value={query}
-      aria-label="Search notes"
-      placeholder="Search notes"
-      autoComplete="off"
-      spellCheck={false}
-      onChange={(event) => {
-        onQueryChange(event.target.value);
-      }}
-      onFocus={() => {
-        setFocused(true);
-      }}
-      onBlur={() => {
-        setFocused(false);
-        if (query.trim() === "") {
-          onAbandon();
-        }
-      }}
-    />
+    <div className={styles.wrap}>
+      <input
+        ref={inputRef}
+        type="text"
+        className={styles.field}
+        value={query}
+        aria-label="Search notes"
+        placeholder="Search notes"
+        autoComplete="off"
+        spellCheck={false}
+        onChange={(event) => {
+          onQueryChange(event.target.value);
+        }}
+        onFocus={() => {
+          setFocused(true);
+        }}
+        onBlur={() => {
+          setFocused(false);
+          if (query.trim() === "") {
+            onAbandon();
+          }
+        }}
+      />
+      {query !== "" && (
+        // Esc does the same thing, but only for someone who knows it does, and
+        // this field replaces the view tabs while it is open (brief 6.6): with
+        // nothing to click, a mouse had no way back out.
+        <button
+          type="button"
+          className={styles.clear}
+          aria-label="Clear search"
+          title="Clear search"
+          // Keep the caret in the field: blurring an empty field abandons the
+          // search, which would close the field the click just used.
+          onMouseDown={(event) => {
+            event.preventDefault();
+          }}
+          onClick={() => {
+            onQueryChange("");
+            inputRef.current?.focus();
+          }}
+        >
+          <X size={14} strokeWidth={2} />
+        </button>
+      )}
+    </div>
   );
 }

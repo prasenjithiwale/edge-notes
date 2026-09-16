@@ -1,0 +1,270 @@
+.tasks {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* The add field is the first thing in the tab, because adding is the first thing
+   anyone does here. The 4 px on top is room for the focus ring (2 px outline,
+   2 px offset): the pane clips at its edges for the tab slide. */
+.add {
+  flex: none;
+  display: flex;
+  align-items: center;
+  margin: 4px 12px 8px;
+  border-radius: var(--radius-control);
+  background: var(--surface-sunken);
+}
+
+.add:focus-within {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.addIcon {
+  flex: none;
+  display: flex;
+  align-items: center;
+  padding-left: 8px;
+  color: var(--text-tertiary);
+}
+
+.field {
+  box-sizing: border-box;
+  flex: 1;
+  min-width: 0;
+  height: 28px;
+  padding: 0 8px;
+  border: none;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 13px;
+}
+
+.field:focus-visible {
+  outline: none;
+}
+
+.field::placeholder {
+  color: var(--text-tertiary);
+}
+
+.list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  /* Top padding: room for a focus ring on the first row inside the scroller. */
+  padding: 4px 12px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.heading {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin: 0 0 2px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+/* Overdue earns emphasis, but in weight: colour belongs to notes (brief 7.1). */
+.overdue {
+  color: var(--text-primary);
+}
+
+.count {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--text-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+
+.rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.item {
+  display: flex;
+  flex-direction: column;
+}
+
+.row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 2px 0;
+}
+
+/* The box: 16 px painted, 22 px of reach, so it is a target and not a pixel. */
+.box {
+  flex: none;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  margin-top: 3px;
+  padding: 0;
+  border: 1.5px solid var(--text-tertiary);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--surface);
+}
+
+.box:hover {
+  border-color: var(--text-secondary);
+}
+
+.box[aria-checked="true"] {
+  border-color: var(--text-secondary);
+  background: var(--text-secondary);
+}
+
+/* The rest of the row: the title, and what is worth knowing at a glance. One
+   control, so a task has a single keyboard path in and out. */
+.body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  text-align: left;
+}
+
+.title {
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+}
+
+/* A task ticked in this visit stays where it is, struck through, until the next
+   one: the list must not reshuffle under the cursor that just ticked it. */
+.ticked {
+  color: var(--text-tertiary);
+  text-decoration: line-through;
+}
+
+.meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--text-tertiary);
+}
+
+.due {
+  font-variant-numeric: tabular-nums;
+}
+
+.meta .overdue {
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+
+/* Priority keeps the colours the flags have everywhere else, and its weight
+   still tells the three apart without them. */
+.flag {
+  flex: none;
+  margin-top: 4px;
+}
+
+.priority-high {
+  color: var(--priority-high);
+}
+
+.priority-medium {
+  color: var(--priority-medium);
+}
+
+.priority-low {
+  color: var(--priority-low);
+}
+
+.doneToggle {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  align-self: flex-start;
+  padding: 2px 4px;
+  margin-left: -4px;
+  border: none;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.doneToggle:hover {
+  background: var(--surface-sunken);
+}
+
+.chevron {
+  transition: transform var(--open-duration) var(--open-easing);
+}
+
+.chevronOpen {
+  transform: rotate(90deg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chevron {
+    transition: none;
+  }
+}
+
+/* Near the top, where the field that has just been typed into is, rather than
+   centred in an empty panel. */
+.empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 4px;
+  padding: 40px 16px 24px;
+  text-align: center;
+}
+
+.headline {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.hint {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+/* Everything is done, but there are still tasks: not the same as having none. */
+.clear {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: var(--text-secondary);
+  text-align: center;
+}

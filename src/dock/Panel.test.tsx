@@ -2,7 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 
-import type { Note, Settings } from "../lib/ipc";
+import type { Note, Settings, Task } from "../lib/ipc";
 
 const invoke = vi.fn<(command: string, args?: unknown) => Promise<unknown>>();
 vi.mock("@tauri-apps/api/core", () => ({
@@ -20,6 +20,7 @@ vi.mock("@tauri-apps/api/event", () => ({
 const { Panel } = await import("./Panel");
 const { useDockStore } = await import("../store/dock");
 const { useNotesStore } = await import("../store/notes");
+const { useTasksStore } = await import("../store/tasks");
 
 function note(overrides: Partial<Note> & { id: string }): Note {
   return {
@@ -38,6 +39,24 @@ const NOTES: Note[] = [
   note({ id: "3", content: "Book flights", color: "mint", updatedAt: 10 }),
 ];
 
+let madeTask = 0;
+function task(overrides: Partial<Task> = {}): Task {
+  madeTask += 1;
+  return {
+    id: `task-${String(madeTask)}`,
+    title: `task ${String(madeTask)}`,
+    notes: "",
+    doneAt: null,
+    dueDate: null,
+    dueTime: null,
+    priority: null,
+    repeat: null,
+    createdAt: madeTask,
+    updatedAt: madeTask,
+    ...overrides,
+  };
+}
+
 const SETTINGS: Settings = {
   "dock.side": "right",
   "dock.monitor": "primary",
@@ -54,6 +73,9 @@ const SETTINGS: Settings = {
   "panel.translucency": 0,
 };
 
+/** What `tasks_list` answers with, and what the write commands change. */
+let tasksInDb: Task[] = [];
+
 function commandCalls(command: string): unknown[] {
   return invoke.mock.calls.filter(([name]) => name === command).map(([, args]) => args);
 }
@@ -69,7 +91,7 @@ function press(key: string, init: KeyboardEventInit = {}) {
 
 beforeEach(() => {
   invoke.mockReset();
-  invoke.mockImplementation((command: string) => {
+  invoke.mockImplementation((command: string, args?: unknown) => {
     if (command === "notes_list") {
       return Promise.resolve(NOTES);
     }
@@ -79,13 +101,43 @@ beforeEach(() => {
     if (command === "notes_create") {
       return Promise.resolve(note({ id: "new", color: "yellow", updatedAt: 40 }));
     }
+    if (command === "tasks_list") {
+      return Promise.resolve(tasksInDb);
+    }
+    if (command === "tasks_create") {
+      const { patch } = args as { patch: Partial<Task> };
+      const created = task({ id: `created-${String(madeTask + 1)}`, ...patch });
+      tasksInDb = [...tasksInDb, created];
+      return Promise.resolve(created);
+    }
+    if (command === "tasks_update") {
+      const { id, patch } = args as { id: string; patch: Partial<Task> };
+      const updated = { ...(tasksInDb.find((entry) => entry.id === id) ?? task()), ...patch };
+      tasksInDb = tasksInDb.map((entry) => (entry.id === id ? updated : entry));
+      return Promise.resolve(updated);
+    }
+    if (command === "tasks_set_done") {
+      const { id, done } = args as { id: string; done: boolean };
+      const found = tasksInDb.find((entry) => entry.id === id) ?? task();
+      const updated = { ...found, doneAt: done ? 1_000 : null };
+      tasksInDb = tasksInDb.map((entry) => (entry.id === id ? updated : entry));
+      return Promise.resolve(updated);
+    }
     return Promise.resolve(null);
   });
   useDockStore.setState({ locks: new Set(), large: false, panelWidth: 320 });
+  tasksInDb = [];
+  useTasksStore.setState({
+    tasks: [],
+    loaded: false,
+    draft: "",
+    editingId: null,
+    detailsId: null,
+    pendingUndo: null,
+  });
   useNotesStore.setState({
     notes: [],
     view: "notes",
-    taskDraft: "",
     loaded: false,
     editingId: null,
     expandedId: null,
@@ -544,128 +596,171 @@ describe("the colour palette", () => {
 });
 
 describe("the Tasks tab", () => {
-  async function withTasks() {
+  async function withTasks(...tasks: Task[]) {
+    tasksInDb = tasks;
     await renderPanel();
-    useNotesStore.getState().setContent("2", "Groceries\n- [ ] milk\n- [x] eggs");
-    useNotesStore.getState().setContent("3", "Book flights\n- [ ] compare prices");
+    await waitFor(() => {
+      expect(useTasksStore.getState().loaded).toBe(true);
+    });
   }
 
-  it("counts open tasks on the tab and lists them by note", async () => {
-    await withTasks();
+  it("counts open tasks on the tab and lists them under their section", async () => {
+    await withTasks(
+      task({ title: "milk" }),
+      task({ title: "compare prices" }),
+      task({ title: "eggs", doneAt: Date.now() }),
+    );
+
     const tab = await screen.findByRole("tab", { name: "Tasks, 2 open" });
     tab.click();
 
     const panel = await screen.findByRole("tabpanel", { name: "Tasks" });
-    expect(within(panel).getByRole("button", { name: /Groceries/ })).toBeTruthy();
     expect(within(panel).getByRole("checkbox", { name: "milk" })).toBeTruthy();
-    expect(within(panel).getByRole("checkbox", { name: "compare prices" })).toBeTruthy();
-    // Ticked tasks wait behind the Done toggle.
+    expect(within(panel).getByText("Someday")).toBeTruthy();
+    // Finished tasks wait behind the Done toggle.
     expect(within(panel).queryByRole("checkbox", { name: "eggs" })).toBeNull();
-    expect(within(panel).getByRole("button", { name: "Done (1)" })).toBeTruthy();
+    expect(within(panel).getByRole("button", { name: /Done/ })).toBeTruthy();
     // Search and the colour filter belong to the Notes tab.
     expect(screen.queryByRole("button", { name: "Search notes" })).toBeNull();
     expect(screen.queryByRole("group", { name: "Filter by colour" })).toBeNull();
   });
 
-  it("ticks a task into its note, and keeps it in place until the tab is left", async () => {
+  it("adds a task without asking which note it belongs to", async () => {
     await withTasks();
+    await useNotesStore.getState().setView("todo");
+
+    const field = await screen.findByLabelText("Add a task");
+    fireEvent.change(field, { target: { value: "renew passport" } });
+    fireEvent.keyDown(field, { key: "Enter" });
+
+    await waitFor(() => {
+      expect(commandCalls("tasks_create")).toEqual([
+        {
+          patch: {
+            title: "renew passport",
+            priority: null,
+            dueDate: null,
+            dueTime: null,
+            repeat: null,
+          },
+        },
+      ]);
+    });
+    // The field empties and keeps focus, so a list can be typed in one go.
+    await waitFor(() => {
+      expect((field as HTMLInputElement).value).toBe("");
+    });
+    expect(commandCalls("notes_update")).toEqual([]);
+  });
+
+  it("reads the old tokens as details when they are typed into the field", async () => {
+    await withTasks();
+    await useNotesStore.getState().setView("todo");
+
+    const field = await screen.findByLabelText("Add a task");
+    fireEvent.change(field, { target: { value: "call the bank !high @2026-09-20 14:00" } });
+    fireEvent.keyDown(field, { key: "Enter" });
+
+    await waitFor(() => {
+      expect(commandCalls("tasks_create")).toEqual([
+        {
+          patch: {
+            title: "call the bank",
+            priority: "high",
+            dueDate: "2026-09-20",
+            dueTime: "14:00",
+            repeat: null,
+          },
+        },
+      ]);
+    });
+  });
+
+  it("ticks a task and keeps it in place until the tab is left", async () => {
+    await withTasks(task({ id: "milk", title: "milk" }));
     await useNotesStore.getState().setView("todo");
 
     const milk = await screen.findByRole("checkbox", { name: "milk" });
     milk.click();
 
     await waitFor(() => {
-      expect(contentOf("2")).toBe("Groceries\n- [x] milk\n- [x] eggs");
+      expect(commandCalls("tasks_set_done")).toEqual([{ id: "milk", done: true }]);
     });
     const still = screen.getByRole("checkbox", { name: "milk" });
     expect(still.getAttribute("aria-checked")).toBe("true");
 
+    // Coming back is a new visit, and by then it has settled into Done.
     await useNotesStore.getState().setView("notes");
     await useNotesStore.getState().setView("todo");
-    await screen.findByRole("button", { name: "Done (2)" });
-    expect(screen.queryByRole("checkbox", { name: "milk" })).toBeNull();
+    await waitFor(() => {
+      expect(screen.queryByRole("checkbox", { name: "milk" })).toBeNull();
+    });
   });
 
-  it("adds a task to the note titled To-Do, as the tab was once called", async () => {
-    await renderPanel();
-    useNotesStore.getState().setContent("3", "To-Do\n- [ ] call the bank");
+  it("never writes a note when a task changes", async () => {
+    await withTasks(task({ id: "milk", title: "milk" }));
     await useNotesStore.getState().setView("todo");
 
-    const field = await screen.findByLabelText("Add a task");
-    fireEvent.change(field, { target: { value: "renew passport" } });
-    fireEvent.submit(field);
+    (await screen.findByRole("checkbox", { name: "milk" })).click();
 
     await waitFor(() => {
-      expect(contentOf("3")).toBe("To-Do\n- [ ] call the bank\n- [ ] renew passport");
+      expect(commandCalls("tasks_set_done")).toHaveLength(1);
     });
-    expect(useNotesStore.getState().taskDraft).toBe("");
-    expect(commandCalls("notes_create")).toEqual([]);
+    expect(commandCalls("notes_update")).toEqual([]);
   });
 
-  it("creates the Tasks note the first time a task is added", async () => {
-    await renderPanel();
+  it("closes the details sheet on Esc before clearing the draft", async () => {
+    await withTasks(task({ id: "milk", title: "milk" }));
     await useNotesStore.getState().setView("todo");
+    useTasksStore.setState({ draft: "half typed" });
 
-    const field = await screen.findByLabelText("Add a task");
-    fireEvent.change(field, { target: { value: "pay rent" } });
-    fireEvent.submit(field);
-
+    (await screen.findByRole("button", { name: /milk/ })).click();
     await waitFor(() => {
-      expect(contentOf("new")).toBe("Tasks\n- [ ] pay rent");
+      expect(useTasksStore.getState().detailsId).toBe("milk");
     });
-    expect(commandCalls("notes_create")).toHaveLength(1);
-    await screen.findByRole("checkbox", { name: "pay rent" });
-    // It stays on the Tasks tab rather than opening the new note.
-    expect(useNotesStore.getState()).toMatchObject({ view: "todo", editingId: null });
-  });
 
-  it("opens a task's note from its group", async () => {
-    await withTasks();
-    await useNotesStore.getState().setView("todo");
+    press("Escape");
+    await waitFor(() => {
+      expect(useTasksStore.getState().detailsId).toBeNull();
+    });
+    expect(useTasksStore.getState().draft).toBe("half typed");
 
-    (await screen.findByRole("button", { name: /Book flights/ })).click();
-
-    await screen.findByLabelText("Note content");
-    expect(useNotesStore.getState()).toMatchObject({ view: "notes", editingId: "3" });
+    press("Escape");
+    await waitFor(() => {
+      expect(useTasksStore.getState().draft).toBe("");
+    });
   });
 
   it("closes the editor when switching to Tasks", async () => {
-    await renderPanel();
+    await withTasks();
     useNotesStore.getState().startEditing("1");
-    await screen.findByLabelText("Note content");
-
-    screen.getByRole("tab", { name: "Tasks" }).click();
-
-    await screen.findByRole("tabpanel", { name: "Tasks" });
-    expect(useNotesStore.getState().editingId).toBeNull();
-    expect(screen.getByText("Nothing to do")).toBeTruthy();
-  });
-
-  it("clears a half-typed task on Esc before collapsing the panel", async () => {
-    await renderPanel();
     await useNotesStore.getState().setView("todo");
-    useNotesStore.getState().setTaskDraft("half a th");
-
-    press("Escape");
-    await waitFor(() => {
-      expect(useNotesStore.getState().taskDraft).toBe("");
-    });
-    expect(commandCalls("dock_toggle")).toEqual([]);
-
-    press("Escape");
-    await waitFor(() => {
-      expect(commandCalls("dock_toggle")).toHaveLength(1);
-    });
+    expect(useNotesStore.getState().editingId).toBeNull();
   });
 
   it("goes back to Notes for Cmd+F", async () => {
-    await renderPanel();
+    await withTasks();
     await useNotesStore.getState().setView("todo");
 
     press("f", { metaKey: true });
 
     await screen.findByLabelText("Search notes");
     expect(useNotesStore.getState().view).toBe("notes");
+  });
+
+  it("offers an undo after a task is deleted", async () => {
+    await withTasks(task({ id: "milk", title: "milk" }));
+    await useNotesStore.getState().setView("todo");
+
+    (await screen.findByRole("button", { name: /milk/ })).click();
+    (await screen.findByRole("button", { name: "Delete task" })).click();
+
+    await screen.findByText("Task deleted");
+    expect(commandCalls("tasks_delete")).toEqual([{ id: "milk" }]);
+    // Brief 6.3: the toast holds the panel open while it is there to be used.
+    await waitFor(() => {
+      expect(useDockStore.getState().locks.has("undo")).toBe(true);
+    });
   });
 });
 
@@ -724,113 +819,167 @@ describe("task details", () => {
     vi.useRealTimers();
   });
 
-  async function todoWith(content: string) {
+  async function tasksWith(...tasks: Task[]) {
+    tasksInDb = tasks;
     await renderPanel();
-    useNotesStore.getState().setContent("2", content);
     await useNotesStore.getState().setView("todo");
     return screen.findByRole("tabpanel", { name: "Tasks" });
   }
 
   it("sorts tasks into date sections, highest priority first", async () => {
-    const panel = await todoWith(
-      [
-        "Errands",
-        "- [ ] someday",
-        "- [ ] pay rent @2026-09-01",
-        "- [ ] call bank !low @2026-09-14",
-        "- [ ] submit form !high @2026-09-14 18:00",
-        "- [ ] dentist @2026-09-20 09:00",
-      ].join("\n"),
+    const panel = await tasksWith(
+      task({ title: "late", dueDate: "2026-09-01" }),
+      task({ title: "soon", dueDate: "2026-09-20" }),
+      task({ title: "now", dueDate: "2026-09-14" }),
+      task({ title: "urgent", dueDate: "2026-09-14", priority: "high" }),
+      task({ title: "whenever" }),
     );
 
-    const section = (name: string) =>
-      within(within(panel).getByRole("region", { name }))
-        .getAllByRole("checkbox")
-        .map((box) => box.getAttribute("aria-label"));
+    const headings = within(panel)
+      .getAllByRole("heading")
+      .map((heading) => heading.textContent);
+    expect(headings).toEqual(["Overdue1", "Today2", "Upcoming1", "Someday1"]);
 
-    expect(section("Overdue")).toEqual(["pay rent"]);
-    expect(section("Today")).toEqual(["submit form", "call bank"]);
-    expect(section("Upcoming")).toEqual(["dentist"]);
-    expect(section("No date")).toEqual(["someday"]);
-    // Tokens are shown as details, not as text.
-    expect(within(panel).queryByText(/@2026/)).toBeNull();
-    expect(within(panel).getAllByLabelText("High priority")).toHaveLength(1);
+    // Within a section, priority comes before everything else.
+    const today = panel.querySelectorAll("section")[1];
+    const titles = Array.from(today?.querySelectorAll("[data-task-row]") ?? []).map((row) =>
+      row.textContent?.replace("Today", ""),
+    );
+    expect(titles).toEqual(["urgent", "now"]);
   });
 
   it("sets priority, date and repeat from the details sheet", async () => {
-    const panel = await todoWith("Errands\n- [ ] call the bank");
+    const panel = await tasksWith(task({ id: "plants", title: "water plants" }));
+    within(panel).getByRole("button", { name: /water plants/ }).click();
 
-    within(panel).getByRole("button", { name: "Task details" }).click();
-    const sheet = await within(panel).findByRole("group", { name: "Task details" });
-
-    within(sheet).getByRole("button", { name: "High" }).click();
+    (await within(panel).findByRole("button", { name: "High" })).click();
     await waitFor(() => {
-      expect(contentOf("2")).toBe("Errands\n- [ ] call the bank !high");
+      expect(commandCalls("tasks_update")).toContainEqual({
+        id: "plants",
+        patch: { priority: "high" },
+      });
     });
 
-    fireEvent.change(within(sheet).getByLabelText("Due date"), { target: { value: "2026-09-20" } });
+    within(panel).getByRole("button", { name: "Tomorrow" }).click();
     await waitFor(() => {
-      expect(contentOf("2")).toBe("Errands\n- [ ] call the bank !high @2026-09-20");
-    });
-    // The date belongs in Upcoming now, but the task holds its place while the
-    // sheet is open, so the sheet is the same element and keeps focus.
-    expect(document.body.contains(sheet)).toBe(true);
-
-    fireEvent.change(within(sheet).getByLabelText("Due time"), { target: { value: "14:00" } });
-    within(sheet).getByRole("button", { name: "Weekly" }).click();
-    await waitFor(() => {
-      expect(contentOf("2")).toBe(
-        "Errands\n- [ ] call the bank !high @2026-09-20 14:00 repeat:weekly",
-      );
+      expect(commandCalls("tasks_update")).toContainEqual({
+        id: "plants",
+        patch: { dueDate: "2026-09-15" },
+      });
     });
 
-    within(sheet).getByRole("button", { name: "Clear due date" }).click();
+    within(panel).getByRole("button", { name: "Daily" }).click();
     await waitFor(() => {
-      expect(contentOf("2")).toBe("Errands\n- [ ] call the bank !high");
+      expect(commandCalls("tasks_update")).toContainEqual({
+        id: "plants",
+        patch: { repeat: "daily" },
+      });
+    });
+  });
+
+  it("clears the date and the repeat together: a time with no day is not a when", async () => {
+    const panel = await tasksWith(
+      task({ id: "plants", title: "water plants", dueDate: "2026-09-15", repeat: "daily" }),
+    );
+    within(panel).getByRole("button", { name: /water plants/ }).click();
+
+    (await within(panel).findByRole("button", { name: "Clear due date and repeat" })).click();
+
+    await waitFor(() => {
+      expect(commandCalls("tasks_update")).toContainEqual({
+        id: "plants",
+        patch: { dueDate: null, repeat: null },
+      });
     });
   });
 
   it("renames a task when its title field is left", async () => {
-    const panel = await todoWith("Errands\n- [ ] call the bnak !low");
-    within(panel).getByRole("button", { name: "Task details" }).click();
-    const title = await within(panel).findByLabelText("Task");
+    const panel = await tasksWith(task({ id: "plants", title: "water plants" }));
+    within(panel).getByRole("button", { name: /water plants/ }).click();
 
-    fireEvent.change(title, { target: { value: "call the bank" } });
-    expect(contentOf("2")).toBe("Errands\n- [ ] call the bnak !low");
-    fireEvent.blur(title);
+    const field = await within(panel).findByLabelText("Task");
+    fireEvent.change(field, { target: { value: "water the plants" } });
+    fireEvent.blur(field);
 
     await waitFor(() => {
-      expect(contentOf("2")).toBe("Errands\n- [ ] call the bank !low");
+      expect(commandCalls("tasks_update")).toContainEqual({
+        id: "plants",
+        patch: { title: "water the plants" },
+      });
     });
   });
 
-  it("moves a repeating task to its next date when ticked, from a card too", async () => {
-    await renderPanel();
-    useNotesStore.getState().setContent("2", "Plants\n- [ ] water @2026-09-14 repeat:daily");
+  it("does not write a title that has not changed", async () => {
+    const panel = await tasksWith(task({ id: "plants", title: "water plants" }));
+    within(panel).getByRole("button", { name: /water plants/ }).click();
 
-    (await screen.findByRole("checkbox", { name: "water" })).click();
+    const field = await within(panel).findByLabelText("Task");
+    fireEvent.focus(field);
+    fireEvent.blur(field);
+
+    expect(commandCalls("tasks_update")).toEqual([]);
+  });
+
+  it("keeps a notes field for what the title has no room for", async () => {
+    const panel = await tasksWith(task({ id: "plants", title: "water plants" }));
+    within(panel).getByRole("button", { name: /water plants/ }).click();
+
+    const field = await within(panel).findByLabelText("Task notes");
+    fireEvent.change(field, { target: { value: "the ones on the balcony" } });
+    fireEvent.blur(field);
 
     await waitFor(() => {
-      expect(contentOf("2")).toBe("Plants\n- [ ] water @2026-09-15 repeat:daily");
+      expect(commandCalls("tasks_update")).toContainEqual({
+        id: "plants",
+        patch: { notes: "the ones on the balcony" },
+      });
     });
   });
 
-  it("shows details as chips on a card", async () => {
-    await renderPanel();
-    useNotesStore.getState().setContent("2", "Plants\n- [ ] water !high @2026-09-15 repeat:daily");
+  /** Repeating means it comes back, not that it is ever finished. */
+  it("moves a repeating task to its next date instead of completing it", async () => {
+    const panel = await tasksWith(
+      task({ id: "plants", title: "water plants", dueDate: "2026-09-14", repeat: "daily" }),
+    );
 
-    const card = (await screen.findByRole("checkbox", { name: "water" })).closest("div");
-    expect(card?.textContent).toContain("Tomorrow");
-    expect(within(card as HTMLElement).getByLabelText("High priority")).toBeTruthy();
-    expect(within(card as HTMLElement).getByLabelText("Repeats daily")).toBeTruthy();
-    expect(card?.textContent).not.toContain("repeat:");
+    (await within(panel).findByRole("checkbox", { name: "water plants" })).click();
+
+    await waitFor(() => {
+      expect(commandCalls("tasks_update")).toContainEqual({
+        id: "plants",
+        patch: { dueDate: "2026-09-15", dueTime: null },
+      });
+    });
+    expect(commandCalls("tasks_set_done")).toEqual([]);
+  });
+
+  it("shows the details that matter at a glance on the row", async () => {
+    const panel = await tasksWith(
+      task({
+        title: "water plants",
+        dueDate: "2026-09-15",
+        repeat: "daily",
+        priority: "high",
+        notes: "balcony",
+      }),
+    );
+
+    const row = within(panel).getByRole("checkbox", { name: "water plants" }).closest("li");
+    expect(row?.textContent).toContain("Tomorrow");
+    expect(within(row as HTMLElement).getByLabelText("high priority")).toBeTruthy();
+    expect(within(row as HTMLElement).getByLabelText("Repeats")).toBeTruthy();
+    expect(within(row as HTMLElement).getByLabelText("Has notes")).toBeTruthy();
+    expect(row?.textContent).not.toContain("repeat:");
   });
 });
 
 describe("reminders", () => {
-  it("sends Rust the reminders for open dated tasks once notes settle", async () => {
+  it("sends Rust the reminders for open dated tasks once they settle", async () => {
+    tasksInDb = [
+      task({ title: "pay rent", dueDate: "2026-10-01" }),
+      task({ title: "no date" }),
+    ];
     await renderPanel();
-    useNotesStore.getState().setContent("2", "Home\n- [ ] pay rent @2026-10-01\n- [ ] no date");
 
     await waitFor(
       () => {

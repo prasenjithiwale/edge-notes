@@ -36,9 +36,12 @@
   gap: 5px;
   border-radius: 999px;
   background: var(--surface);
-  border: 1px solid var(--border);
+  /* Its own border token, not the chrome hairline: the collapsed pill is the
+     only part of the app that is always on screen, and against a dark desktop
+     a `--border` outline on a dark surface left nothing to aim at. */
+  border: 1px solid var(--tab-border);
   box-shadow: var(--shadow-tab);
-  color: var(--text-secondary);
+  color: var(--text-primary);
   /* Solid as the panel slides out, see-through again as it slides away. The
      slide handshake ignores this: only `data-slide` elements acknowledge. */
   transition: opacity var(--open-duration) var(--open-easing);

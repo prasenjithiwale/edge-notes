@@ -4,6 +4,8 @@
 pub mod migrations;
 pub mod notes;
 pub mod settings;
+pub mod task_import;
+pub mod tasks;
 
 use std::path::Path;
 use std::sync::Mutex;
@@ -15,6 +17,7 @@ use crate::error::AppResult;
 
 pub use notes::{Note, NoteColor};
 pub use settings::{Settings, SettingsPatch, Theme};
+pub use tasks::{Task, TaskPatch};
 
 /// Unix milliseconds. Every write takes its timestamp as an argument so the
 /// repositories stay deterministic under test.
@@ -69,9 +72,13 @@ impl Database {
         }
     }
 
-    /// Housekeeping at startup: drop notes soft-deleted more than 30 days ago.
+    /// Housekeeping at startup: drop notes and tasks soft-deleted more than 30
+    /// days ago.
     pub fn purge_expired(&self) -> AppResult<usize> {
-        self.with(|connection| notes::purge_expired(connection, now_ms()))
+        self.with(|connection| {
+            let now = now_ms();
+            Ok(notes::purge_expired(connection, now)? + tasks::purge_expired(connection, now)?)
+        })
     }
 }
 

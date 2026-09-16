@@ -1,8 +1,17 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { ArrowLeft } from "lucide-react";
 
 import { IconButton } from "../components/IconButton";
-import { monitorsList, notesExport, type Settings } from "../lib/ipc";
+import { acceleratorFromEvent, formatAccelerator } from "../lib/accelerator";
+import {
+  autostartGet,
+  autostartSet,
+  isIpcErrorOf,
+  monitorsList,
+  notesExport,
+  shortcutSet,
+  type Settings,
+} from "../lib/ipc";
 import { useDockStore } from "../store/dock";
 import { applyPanelTranslucency, useSettingsStore } from "../store/settings";
 import styles from "./SettingsView.module.css";
@@ -111,7 +120,15 @@ interface SegmentedSettingProps<T extends string> {
   onChange: (value: T) => void;
 }
 
-/** A row of mutually exclusive buttons, like a native segmented control. */
+/**
+ * A row of mutually exclusive buttons, like a native segmented control.
+ *
+ * One rule decides the shape of every setting here: a choice of more than two
+ * options gets a line of its own, because three legible segments do not fit
+ * beside a label at the narrowest panel width; everything else is a row with the
+ * label on the left and the control on the right. The view used to mix the two
+ * without a reason, which read as two half-finished forms.
+ */
 function SegmentedSetting<T extends string>({
   legend,
   choices,
@@ -137,6 +154,42 @@ function SegmentedSetting<T extends string>({
         ))}
       </div>
     </fieldset>
+  );
+}
+
+interface SwitchSettingProps {
+  label: string;
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+  onFocus: () => void;
+  onBlur: () => void;
+}
+
+/**
+ * A boolean, as a switch rather than an On/Off pair of segments: two segments
+ * asked the eye to read both labels to find out which way a setting was set.
+ */
+function SwitchSetting({ label, checked, onChange, onFocus, onBlur }: SwitchSettingProps) {
+  return (
+    <div className={styles.row}>
+      <span className={styles.label}>{label}</span>
+      <button
+        type="button"
+        role="switch"
+        aria-checked={checked}
+        // The label is a sibling `span`, and `aria-labelledby` takes a list of
+        // ids: a label with a space in it would be read as two of them.
+        aria-label={label}
+        className={styles.switch}
+        onFocus={onFocus}
+        onBlur={onBlur}
+        onClick={() => {
+          onChange(!checked);
+        }}
+      >
+        <span className={styles.knob} />
+      </button>
+    </div>
   );
 }
 
@@ -210,10 +263,118 @@ function SliderSetting({ label, value, range, step, onPreview, onCommit }: Slide
   );
 }
 
-const REMINDERS: Choice<"on" | "off">[] = [
-  { value: "on", label: "On" },
-  { value: "off", label: "Off" },
-];
+interface ShortcutSettingProps {
+  accelerator: string;
+  onRecord: (accelerator: string) => void;
+  error: string | null;
+  onFocus: () => void;
+  onBlur: () => void;
+}
+
+/**
+ * Records the shortcut by listening for it, instead of asking for Tauri's
+ * accelerator syntax as free text.
+ *
+ * The listener is on `window` in the capture phase so the press never reaches
+ * the panel's own keyboard cascade — recording ⌘F should store ⌘F, not open
+ * search. A press with no Ctrl, Alt or Cmd is ignored and recording continues,
+ * because a global shortcut on a bare key would take that key from every other
+ * application.
+ */
+function ShortcutSetting({
+  accelerator,
+  onRecord,
+  error,
+  onFocus,
+  onBlur,
+}: ShortcutSettingProps) {
+  const [recording, setRecording] = useState(false);
+  const [hint, setHint] = useState(false);
+
+  useEffect(() => {
+    if (!recording) {
+      return;
+    }
+    const onKeyDown = (event: KeyboardEvent) => {
+      event.preventDefault();
+      event.stopPropagation();
+
+      if (event.key === "Escape") {
+        setRecording(false);
+        setHint(false);
+        return;
+      }
+      const next = acceleratorFromEvent(event);
+      if (next === null) {
+        // Modifiers on their own are the start of a shortcut, not a mistake;
+        // only a complete press without one earns the hint.
+        setHint(!event.ctrlKey && !event.altKey && !event.metaKey);
+        return;
+      }
+      setRecording(false);
+      setHint(false);
+      onRecord(next);
+    };
+
+    window.addEventListener("keydown", onKeyDown, true);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown, true);
+    };
+  }, [recording, onRecord]);
+
+  const message = hint
+    ? "Hold ⌘, ⌃ or ⌥ as well"
+    : recording
+      ? "Press the keys, or Esc to cancel"
+      : error;
+
+  return (
+    <>
+      <div className={styles.row}>
+        <span className={styles.label} id="shortcut-label">
+          New note shortcut
+        </span>
+        <button
+          type="button"
+          className={styles.recorder}
+          aria-labelledby="shortcut-label"
+          aria-describedby={message === null ? undefined : "shortcut-message"}
+          data-recording={recording ? "" : undefined}
+          onFocus={onFocus}
+          onBlur={() => {
+            setRecording(false);
+            setHint(false);
+            onBlur();
+          }}
+          onClick={() => {
+            setRecording((value) => !value);
+            setHint(false);
+          }}
+        >
+          {recording ? "Press a shortcut" : formatAccelerator(accelerator)}
+        </button>
+      </div>
+      {message !== null && (
+        <p
+          id="shortcut-message"
+          className={error !== null && !recording && !hint ? styles.error : styles.note}
+          role={error !== null && !recording && !hint ? "alert" : "status"}
+        >
+          {message}
+        </p>
+      )}
+    </>
+  );
+}
+
+function Section({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <section className={styles.section}>
+      <h3 className={styles.sectionTitle}>{title}</h3>
+      <div className={styles.fields}>{children}</div>
+    </section>
+  );
+}
 
 const THEMES: Choice<Settings["theme"]>[] = [
   { value: "system", label: "System" },
@@ -231,21 +392,33 @@ const TAB_APPEARANCE: Choice<Settings["tab.appearance"]>[] = [
   { value: "solid", label: "Solid" },
 ];
 
+const SIDES: Choice<Settings["dock.side"]>[] = [
+  { value: "left", label: "Left" },
+  { value: "right", label: "Right" },
+];
+
 /** Brief M4: a small settings view inside the panel. */
 export function SettingsView({ onClose }: SettingsViewProps) {
   const settings = useSettingsStore((state) => state.settings);
   const patch = useSettingsStore((state) => state.patch);
+  const apply = useSettingsStore((state) => state.apply);
   const setLock = useDockStore((state) => state.setLock);
   const [monitors, setMonitors] = useState<string[]>([]);
   const [focused, setFocused] = useState(false);
-  const [shortcutDraft, setShortcutDraft] = useState(
-    settings["shortcut.newNote"],
-  );
+  const [autostart, setAutostart] = useState<boolean | null>(null);
+  const [shortcutError, setShortcutError] = useState<string | null>(null);
   const [exportedTo, setExportedTo] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
 
   useEffect(() => {
     void monitorsList().then(setMonitors);
+    // Launch at login is read from the OS, which is the only honest source: the
+    // login item can be removed from System Settings without telling the app.
+    void autostartGet()
+      .then(setAutostart)
+      .catch((error: unknown) => {
+        console.error("settings: could not read launch at login", error);
+      });
   }, []);
 
   // Same rule as the editor and the search field: a focused text field holds the
@@ -275,22 +448,13 @@ export function SettingsView({ onClose }: SettingsViewProps) {
         <h2 className={styles.heading}>Settings</h2>
       </div>
 
-      <div className={styles.fields}>
+      <Section title="Appearance">
         <SegmentedSetting
           legend="Theme"
           choices={THEMES}
           value={settings.theme}
           onChange={(theme) => {
             void patch({ theme });
-          }}
-        />
-
-        <SegmentedSetting
-          legend="Open panel"
-          choices={OPEN_ON}
-          value={settings["dock.openOn"]}
-          onChange={(openOn) => {
-            void patch({ "dock.openOn": openOn });
           }}
         />
 
@@ -314,14 +478,56 @@ export function SettingsView({ onClose }: SettingsViewProps) {
           }}
         />
 
+        <NumberSetting
+          label="Panel width"
+          unit="px"
+          value={settings["panel.width"]}
+          range={PANEL_WIDTH}
+          step={10}
+          onCommit={(value) => {
+            void patch({ "panel.width": value });
+          }}
+          {...fieldProps}
+        />
+      </Section>
+
+      <Section title="Dock">
         <SegmentedSetting
-          legend="Task reminders"
-          choices={REMINDERS}
-          value={settings["tasks.reminders"] ? "on" : "off"}
-          onChange={(choice) => {
-            void patch({ "tasks.reminders": choice === "on" });
+          legend="Screen edge"
+          choices={SIDES}
+          value={settings["dock.side"]}
+          onChange={(side) => {
+            void patch({ "dock.side": side });
           }}
         />
+
+        <SegmentedSetting
+          legend="Open panel"
+          choices={OPEN_ON}
+          value={settings["dock.openOn"]}
+          onChange={(openOn) => {
+            void patch({ "dock.openOn": openOn });
+          }}
+        />
+
+        <label className={styles.row}>
+          <span className={styles.label}>Monitor</span>
+          <select
+            className={styles.select}
+            value={settings["dock.monitor"]}
+            {...fieldProps}
+            onChange={(event) => {
+              void patch({ "dock.monitor": event.target.value });
+            }}
+          >
+            <option value="primary">Primary</option>
+            {monitors.map((monitor) => (
+              <option key={monitor} value={monitor}>
+                {monitor}
+              </option>
+            ))}
+          </select>
+        </label>
 
         <NumberSetting
           label="Open delay"
@@ -348,64 +554,54 @@ export function SettingsView({ onClose }: SettingsViewProps) {
           }}
           {...fieldProps}
         />
+      </Section>
 
-        <NumberSetting
-          label="Panel width"
-          unit="px"
-          value={settings["panel.width"]}
-          range={PANEL_WIDTH}
-          step={10}
-          onCommit={(value) => {
-            void patch({ "panel.width": value });
+      <Section title="General">
+        <SwitchSetting
+          label="Task reminders"
+          checked={settings["tasks.reminders"]}
+          onChange={(checked) => {
+            void patch({ "tasks.reminders": checked });
           }}
           {...fieldProps}
         />
 
-        <label className={styles.row}>
-          <span className={styles.label}>Monitor</span>
-          <select
-            className={styles.select}
-            value={settings["dock.monitor"]}
-            {...fieldProps}
-            onChange={(event) => {
-              void patch({ "dock.monitor": event.target.value });
-            }}
-          >
-            <option value="primary">Primary</option>
-            {monitors.map((monitor) => (
-              <option key={monitor} value={monitor}>
-                {monitor}
-              </option>
-            ))}
-          </select>
-        </label>
+        <SwitchSetting
+          label="Launch at login"
+          checked={autostart ?? false}
+          onChange={(checked) => {
+            // The OS is asked, and what it reports afterwards is what is shown:
+            // a switch that moves on its own is better than one that lies.
+            void autostartSet(checked)
+              .then(setAutostart)
+              .catch((error: unknown) => {
+                console.error("settings: could not set launch at login", error);
+                void autostartGet().then(setAutostart);
+              });
+          }}
+          {...fieldProps}
+        />
 
-        <label className={styles.row}>
-          <span className={styles.label}>New note shortcut</span>
-          <input
-            type="text"
-            className={styles.text}
-            value={shortcutDraft}
-            spellCheck={false}
-            autoComplete="off"
-            onFocus={() => {
-              setFocused(true);
-            }}
-            onChange={(event) => {
-              setShortcutDraft(event.target.value);
-            }}
-            onBlur={() => {
-              setFocused(false);
-              // Rebinding on every keystroke would try to register "C", "Cm",
-              // "Cmd"... and log a failure for each.
-              if (shortcutDraft !== settings["shortcut.newNote"]) {
-                void patch({ "shortcut.newNote": shortcutDraft });
-              }
-            }}
-          />
-        </label>
+        <ShortcutSetting
+          accelerator={settings["shortcut.newNote"]}
+          error={shortcutError}
+          onRecord={(accelerator) => {
+            setShortcutError(null);
+            void shortcutSet(accelerator)
+              .then(apply)
+              .catch((error: unknown) => {
+                setShortcutError(
+                  isIpcErrorOf(error, "shortcut_unavailable")
+                    ? "Another app is using that shortcut. The old one is still set."
+                    : "That shortcut could not be set.",
+                );
+              });
+          }}
+          {...fieldProps}
+        />
+
         <div className={styles.row}>
-          <span className={styles.label}>Export notes</span>
+          <span className={styles.label}>Notes as text files</span>
           <button
             type="button"
             className={styles.action}
@@ -434,7 +630,7 @@ export function SettingsView({ onClose }: SettingsViewProps) {
             Saved to {exportedTo}
           </p>
         )}
-      </div>
+      </Section>
     </div>
   );
 }

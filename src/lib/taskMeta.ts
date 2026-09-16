@@ -1,22 +1,28 @@
 /**
- * A task's details — priority, due date and time, repeat — kept as short tokens
- * at the end of its checklist line, so a task is still one plain line of text:
+ * Everything about *when* a task is: local calendar arithmetic, the sections the
+ * list is grouped into, and the words each one is shown with.
  *
- *     - [ ] Call the bank !high @2026-09-20 14:00 repeat:weekly
+ * A task's fields live in the database now, not in tokens at the end of a line,
+ * so this no longer parses storage — with one exception. `parseTaskText` is kept
+ * for quick entry: typing
  *
- * Tokens are read only from the end of the line, so "email @john" or "fix !bug"
- * in the middle of a sentence is never mistaken for one. They are written back in
- * that fixed order. Dates and times are local, as a person means them.
+ *     Call the bank !high @2026-09-20 14:00 repeat:weekly
+ *
+ * into the add field still fills in the details, which is both a real
+ * convenience and the muscle memory of everyone who used the old format.
+ *
+ * Dates are local `YYYY-MM-DD` and times local `HH:MM`, because "the 20th at
+ * 2 pm" means that wherever you are. Rust stores them as written and does none
+ * of this arithmetic: it has no timezone and no locale to do it in.
  *
  * Pure: every function that needs the current time takes it.
  */
+import { PRIORITIES, REPEATS, type Priority, type Repeat, type Task } from "./ipc";
 
-export const PRIORITIES = ["high", "medium", "low"] as const;
-export type Priority = (typeof PRIORITIES)[number];
+export type { Priority, Repeat };
+export { PRIORITIES, REPEATS };
 
-export const REPEATS = ["daily", "weekly", "monthly", "yearly"] as const;
-export type Repeat = (typeof REPEATS)[number];
-
+/** The when of a task, as the pickers and the labels pass it around. */
 export interface Due {
   /** `YYYY-MM-DD`, local. */
   date: string;
@@ -24,17 +30,13 @@ export interface Due {
   time: string | null;
 }
 
-export interface TaskMeta {
-  /** The task text with its tokens removed. */
-  title: string;
-  priority: Priority | null;
-  due: Due | null;
-  repeat: Repeat | null;
+export function dueOf(task: Task): Due | null {
+  return task.dueDate === null ? null : { date: task.dueDate, time: task.dueTime };
 }
 
-const PRIORITY_TOKEN = /(^|\s+)!(high|medium|low)$/i;
-const DUE_TOKEN = /(^|\s+)@(\d{4}-\d{2}-\d{2})(?:\s+(\d{1,2}):(\d{2}))?$/;
-const REPEAT_TOKEN = /(^|\s+)repeat:(daily|weekly|monthly|yearly)$/i;
+export function isDone(task: Task): boolean {
+  return task.doneAt !== null;
+}
 
 function pad(value: number): string {
   return String(value).padStart(2, "0");
@@ -49,14 +51,34 @@ function isValidDate(key: string): boolean {
   );
 }
 
-export function parseTaskText(text: string): TaskMeta {
+// ---------------------------------------------------------------------------
+// Quick entry
+// ---------------------------------------------------------------------------
+
+const PRIORITY_TOKEN = /(^|\s+)!(high|medium|low)$/i;
+const DUE_TOKEN = /(^|\s+)@(\d{4}-\d{2}-\d{2})(?:\s+(\d{1,2}):(\d{2}))?$/;
+const REPEAT_TOKEN = /(^|\s+)repeat:(daily|weekly|monthly|yearly)$/i;
+
+export interface QuickTask {
+  title: string;
+  priority: Priority | null;
+  due: Due | null;
+  repeat: Repeat | null;
+}
+
+/**
+ * Read the detail tokens off the end of something typed into the add field.
+ *
+ * Tokens are taken only from the end, so "email @john" or "fix !bug" in the
+ * middle of a sentence is never mistaken for one. Anything that does not parse
+ * cleanly stays part of the title.
+ */
+export function parseTaskText(text: string): QuickTask {
   let rest = text.trim();
   let priority: Priority | null = null;
   let due: Due | null = null;
   let repeat: Repeat | null = null;
 
-  // Peel tokens off the end, in any order, each kind at most once. Anything that
-  // does not parse cleanly stays part of the title.
   for (;;) {
     const p: RegExpExecArray | null = priority === null ? PRIORITY_TOKEN.exec(rest) : null;
     if (p) {
@@ -87,19 +109,7 @@ export function parseTaskText(text: string): TaskMeta {
     break;
   }
 
-  return { title: rest, priority, due, repeat };
-}
-
-/** The task line's text from its parts, tokens in their fixed order. */
-export function formatTaskText(meta: TaskMeta): string {
-  return [
-    meta.title.trim(),
-    meta.priority === null ? "" : `!${meta.priority}`,
-    meta.due === null ? "" : `@${meta.due.date}${meta.due.time === null ? "" : ` ${meta.due.time}`}`,
-    meta.repeat === null ? "" : `repeat:${meta.repeat}`,
-  ]
-    .filter((part) => part !== "")
-    .join(" ");
+  return { title: rest.replace(/\s+/g, " ").trim(), priority, due, repeat };
 }
 
 // ---------------------------------------------------------------------------
@@ -165,30 +175,37 @@ export function nextOccurrence(due: Due | null, repeat: Repeat, now: Date): Due 
   return { date: next, time: due?.time ?? null };
 }
 
+// ---------------------------------------------------------------------------
+// Sections, order and labels
+// ---------------------------------------------------------------------------
+
+export type DueSection = "overdue" | "today" | "tomorrow" | "upcoming" | "none" | "done";
+
 /**
- * The line's new text when its box is ticked: a repeating task moves to its next
- * date and stays open; anything else is simply ticked. Null means "just tick it".
+ * The order the list shows them in. Done last, and only for what was finished
+ * recently: a task list is about what is left, and yesterday's ticks are
+ * reassurance, not work.
  */
-export function repeatOnTick(text: string, now: Date): string | null {
-  const meta = parseTaskText(text);
-  if (meta.repeat === null) {
-    return null;
-  }
-  return formatTaskText({ ...meta, due: nextOccurrence(meta.due, meta.repeat, now) });
-}
-
-// ---------------------------------------------------------------------------
-// Sections, order and labels for the Tasks tab
-// ---------------------------------------------------------------------------
-
-export type DueSection = "overdue" | "today" | "upcoming" | "none";
+export const SECTIONS: readonly DueSection[] = [
+  "overdue",
+  "today",
+  "tomorrow",
+  "upcoming",
+  "none",
+  "done",
+];
 
 export const SECTION_LABELS: Record<DueSection, string> = {
   overdue: "Overdue",
   today: "Today",
+  tomorrow: "Tomorrow",
   upcoming: "Upcoming",
-  none: "No date",
+  none: "Someday",
+  done: "Done",
 };
+
+/** How long a completed task stays in the Done section. */
+export const DONE_WINDOW_MS = 24 * 60 * 60 * 1000;
 
 /** A task due earlier today at a set time is overdue once that time has passed. */
 export function dueSection(due: Due | null, now: Date): DueSection {
@@ -199,27 +216,43 @@ export function dueSection(due: Due | null, now: Date): DueSection {
   if (due.date < today) {
     return "overdue";
   }
+  if (due.date === addDays(today, 1)) {
+    return "tomorrow";
+  }
   if (due.date > today) {
     return "upcoming";
   }
   return due.time !== null && due.time < timeKey(now) ? "overdue" : "today";
 }
 
+/** Which section a task belongs in, completion included. */
+export function taskSection(task: Task, now: Date): DueSection {
+  return isDone(task) ? "done" : dueSection(dueOf(task), now);
+}
+
 const PRIORITY_RANK: Record<Priority, number> = { high: 0, medium: 1, low: 2 };
 
 /**
  * Order within a section: higher priority first, then sooner, with a whole-day
- * task before the timed tasks of the same day. Stable otherwise, so tasks without
- * details keep the order they are written in.
+ * task before the timed tasks of the same day, and oldest first when neither
+ * says otherwise — so a list with no details keeps the order it was written in.
  */
-export function compareTasks(a: TaskMeta, b: TaskMeta): number {
-  const rank = (meta: TaskMeta) => (meta.priority === null ? 3 : PRIORITY_RANK[meta.priority]);
+export function compareTasks(a: Task, b: Task): number {
+  const rank = (task: Task) => (task.priority === null ? 3 : PRIORITY_RANK[task.priority]);
   if (rank(a) !== rank(b)) {
     return rank(a) - rank(b);
   }
-  const when = (meta: TaskMeta) =>
-    meta.due === null ? "~" : `${meta.due.date} ${meta.due.time ?? ""}`;
-  return when(a) < when(b) ? -1 : when(a) > when(b) ? 1 : 0;
+  const when = (task: Task) =>
+    task.dueDate === null ? "~" : `${task.dueDate} ${task.dueTime ?? ""}`;
+  if (when(a) !== when(b)) {
+    return when(a) < when(b) ? -1 : 1;
+  }
+  return a.createdAt - b.createdAt;
+}
+
+/** Most recently finished first: the Done section is a history, newest at the top. */
+export function compareDone(a: Task, b: Task): number {
+  return (b.doneAt ?? 0) - (a.doneAt ?? 0);
 }
 
 /** When a reminder fires: the due time, or 09:00 for a whole-day task. */

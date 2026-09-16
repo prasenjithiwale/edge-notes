@@ -29,6 +29,11 @@
 .body {
   flex: 1;
   min-height: 0;
+  /* The same measure the editor keeps, so expanding a note to read it and
+     expanding it to write in it are the same column of text. */
+  width: 100%;
+  max-width: var(--reading-measure);
+  align-self: center;
   overflow-y: auto;
   overscroll-behavior: contain;
   font-size: 14px;
