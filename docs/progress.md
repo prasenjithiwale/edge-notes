@@ -2664,6 +2664,26 @@ search, empty states and Focus settings.
 - [ ] Settings: Advanced folds the delays and the panel width away, and the
       steppers stop at the ends of their ranges
 
+### Released as 0.1.0
+
+Tagged from `master`, all four workflow jobs green. What is live:
+
+- `Provides`/`Conflicts`/`Replaces` reached the published index — the live
+  `Packages` file lists `ledge 0.1.0` carrying all three, with `edge-notes`
+  0.0.3 and 0.0.4 still in the pool and still installable. The workflow's
+  install-from-the-live-repository check passed against `ledge`.
+- The cask points at `Ledge_0.1.0_macOS_universal.dmg` with a sha256 that
+  matches the disk image, and installs `Ledge.app`.
+- The landing page reads Ledge and offers `apt install ledge`.
+- The database adoption ran against the owner's real database before the tag was
+  cut, and logged the line it should have.
+
+One defect found afterwards and fixed for the next release: the cask heredoc in
+`publish_cask.sh` is unquoted, so a pair of backticks written in a comment was
+run as a command while generating the cask. The published cask is correct in
+every field that matters; only the comment lost a word. The script now says in
+as many words that nothing in that heredoc may be backticked.
+
 ## M0 acceptance checklist
 
 From brief section 12. Run `npm run tauri dev`, then work through these with

@@ -40,9 +40,12 @@ fi
 
 mkdir -p "$tap/Casks"
 cat > "$tap/Casks/edge-notes.rb" <<CASK
-# The token stays `edge-notes` although the app is Ledge now: it is what an
+# The token stays edge-notes although the app is Ledge now: it is what an
 # existing install is upgraded by, and changing it would strand everyone who has
 # already installed from this tap on 0.0.4.
+#
+# No backticks anywhere in this heredoc: it is unquoted, so the shell would run
+# what is between them while generating the cask.
 cask "edge-notes" do
   version "$version"
   sha256 "$sha"
