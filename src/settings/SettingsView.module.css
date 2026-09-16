@@ -74,6 +74,11 @@
   gap: 6px;
 }
 
+.segmented {
+  display: flex;
+  gap: 4px;
+}
+
 .labelWrap {
   display: flex;
   flex-direction: column;
@@ -93,13 +98,6 @@
   color: var(--text-tertiary);
   font-size: 11px;
   line-height: 1.35;
-}
-
-/* `fieldset` is a flex container here, so the legend is simply its first row. */
-.legend {
-  width: 100%;
-  padding: 0;
-  margin: 0;
 }
 
 /* The rarely-touched settings, folded away behind one row. */
@@ -181,10 +179,6 @@
   font-size: 11px;
 }
 
-.segmented {
-  display: flex;
-  gap: 4px;
-}
 
 .segment {
   flex: 1;

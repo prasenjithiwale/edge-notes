@@ -147,10 +147,11 @@ function SegmentedSetting<T extends string>({
   onChange,
 }: SegmentedSettingProps<T>) {
   return (
-    <fieldset className={cx(styles.row, styles.stacked)}>
-      <legend className={styles.legend}>
-        <Label text={legend} description={description} />
-      </legend>
+    // A `div` with `role="group"`, not a `fieldset` with a `legend`: WebKit
+    // renders a legend outside the flow of a flex fieldset, which put the name
+    // and its control back on one cramped line.
+    <div className={cx(styles.row, styles.stacked)} role="group" aria-label={legend}>
+      <Label text={legend} description={description} />
       <div className={styles.segmented}>
         {choices.map((choice) => (
           <button
@@ -166,7 +167,7 @@ function SegmentedSetting<T extends string>({
           </button>
         ))}
       </div>
-    </fieldset>
+    </div>
   );
 }
 
