@@ -1,12 +1,12 @@
 [package]
-name = "edge-notes"
-version = "0.0.4"
+name = "ledge"
+version = "0.1.0"
 description = "Edge-docked notes widget"
 edition = "2024"
 rust-version = "1.85"
 
 [lib]
-name = "edge_notes_lib"
+name = "ledge_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]

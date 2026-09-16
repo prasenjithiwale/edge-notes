@@ -1,4 +1,4 @@
-//! Edge Notes: an edge-docked notes widget.
+//! Ledge: an edge-docked notes widget.
 //!
 //! Rust owns the window geometry, the dock state machine and (from M1) the
 //! database, so the webview needs no privileged permissions.
@@ -90,7 +90,24 @@ pub fn run() {
             // Rust owns the database; the webview never sees a path or SQL.
             let data_dir = handle.path().app_data_dir()?;
             std::fs::create_dir_all(&data_dir)?;
-            let database = Database::open(&data_dir.join("notes.db"))?;
+            let database_path = data_dir.join("notes.db");
+
+            // The app was renamed from Edge Notes to Ledge in 0.1.0, and the
+            // folder above is named after the bundle identifier, so an install
+            // upgrading from 0.0.x arrives here pointing at an empty directory.
+            // Copy the old database across once (see `db::adopt`).
+            if let Some(base) = data_dir.parent() {
+                let previous = base.join(db::adopt::PREVIOUS_IDENTIFIER).join("notes.db");
+                match db::adopt::adopt_database(&previous, &database_path) {
+                    Ok(true) => log::info!("db: adopted the database from {}", previous.display()),
+                    Ok(false) => {}
+                    // Not fatal: the app still starts, on an empty database, and
+                    // the old folder is untouched for a second attempt.
+                    Err(error) => log::error!("db: could not adopt the previous database: {error}"),
+                }
+            }
+
+            let database = Database::open(&database_path)?;
             // Brief 9.1: drop notes soft-deleted more than 30 days ago.
             match database.purge_expired() {
                 Ok(0) => {}
@@ -146,5 +163,5 @@ pub fn run() {
             Ok(())
         })
         .run(tauri::generate_context!())
-        .unwrap_or_else(|error| panic!("failed to start Edge Notes: {error}"));
+        .unwrap_or_else(|error| panic!("failed to start Ledge: {error}"));
 }

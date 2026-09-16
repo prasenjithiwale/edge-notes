@@ -6,6 +6,7 @@ import {
   compareTasks,
   dueLabel,
   dueSection,
+  hasQuickDetails,
   nextOccurrence,
   parseTaskText,
   reminderAt,
@@ -39,13 +40,13 @@ function task(fields: Partial<Task> = {}): Task {
  */
 describe("parseTaskText", () => {
   it("reads every token from the end of the line, in any order", () => {
-    expect(parseTaskText("Call the bank !high @2026-09-20 14:00 repeat:weekly")).toEqual({
+    expect(parseTaskText("Call the bank !high @2026-09-20 14:00 repeat:weekly", NOW)).toEqual({
       title: "Call the bank",
       priority: "high",
       due: { date: "2026-09-20", time: "14:00" },
       repeat: "weekly",
     });
-    expect(parseTaskText("Pay rent repeat:MONTHLY @2026-10-01 !Low")).toEqual({
+    expect(parseTaskText("Pay rent repeat:MONTHLY @2026-10-01 !Low", NOW)).toEqual({
       title: "Pay rent",
       priority: "low",
       due: { date: "2026-10-01", time: null },
@@ -54,7 +55,7 @@ describe("parseTaskText", () => {
   });
 
   it("leaves tokens in the middle of a sentence alone", () => {
-    expect(parseTaskText("email @john about !bugs today")).toMatchObject({
+    expect(parseTaskText("email @john about !bugs today", NOW)).toMatchObject({
       title: "email @john about !bugs today",
       priority: null,
       due: null,
@@ -62,21 +63,74 @@ describe("parseTaskText", () => {
   });
 
   it("pads a one-digit hour", () => {
-    expect(parseTaskText("Run @2026-09-15 7:05").due).toEqual({ date: "2026-09-15", time: "07:05" });
+    expect(parseTaskText("Run @2026-09-15 7:05", NOW).due).toEqual({ date: "2026-09-15", time: "07:05" });
   });
 
   it("keeps a malformed date or time in the title", () => {
-    expect(parseTaskText("Party @2026-02-30").due).toBeNull();
-    expect(parseTaskText("Party @2026-02-10 25:00").due).toBeNull();
-    expect(parseTaskText("Party @2026-02-10 25:00").title).toBe("Party @2026-02-10 25:00");
+    expect(parseTaskText("Party @2026-02-30", NOW).due).toBeNull();
+    expect(parseTaskText("Party @2026-02-10 25:00", NOW).due).toBeNull();
+    expect(parseTaskText("Party @2026-02-10 25:00", NOW).title).toBe("Party @2026-02-10 25:00");
   });
 
   it("reads a line that is only tokens", () => {
-    expect(parseTaskText("!high")).toEqual({ title: "", priority: "high", due: null, repeat: null });
+    expect(parseTaskText("!high", NOW)).toEqual({ title: "", priority: "high", due: null, repeat: null });
   });
 
   it("collapses the whitespace a title was typed with", () => {
-    expect(parseTaskText("  Call   the bank  ").title).toBe("Call the bank");
+    expect(parseTaskText("  Call   the bank  ", NOW).title).toBe("Call the bank");
+  });
+
+  /**
+   * The point of the words: a widget's add field is typed into in a hurry, and
+   * nobody in a hurry writes a date in ISO.
+   */
+  it("reads a date written as a word", () => {
+    expect(parseTaskText("Ship it @today", NOW).due).toEqual({ date: "2026-09-14", time: null });
+    expect(parseTaskText("Ship it @tomorrow", NOW).due).toEqual({
+      date: "2026-09-15",
+      time: null,
+    });
+    // Monday the 14th: "@thu" is the Thursday coming.
+    expect(parseTaskText("Ship it @thu", NOW).due).toEqual({ date: "2026-09-17", time: null });
+    expect(parseTaskText("Ship it @thursday", NOW).due?.date).toBe("2026-09-17");
+  });
+
+  /** Today is a Monday, and a task for today would have been typed "@today". */
+  it("reads a weekday as the next one, never the day it is typed on", () => {
+    expect(parseTaskText("Ship it @mon", NOW).due).toEqual({ date: "2026-09-21", time: null });
+  });
+
+  it("reads a time written with am or pm", () => {
+    expect(parseTaskText("Call @tomorrow 2pm", NOW).due).toEqual({
+      date: "2026-09-15",
+      time: "14:00",
+    });
+    expect(parseTaskText("Call @tomorrow 2:30 PM", NOW).due?.time).toBe("14:30");
+    expect(parseTaskText("Call @tomorrow 12am", NOW).due?.time).toBe("00:00");
+    expect(parseTaskText("Call @tomorrow 12pm", NOW).due?.time).toBe("12:00");
+  });
+
+  it("reads the exclamation shorthand", () => {
+    expect(parseTaskText("Ship it !!!", NOW).priority).toBe("high");
+    expect(parseTaskText("Ship it !!", NOW).priority).toBe("medium");
+    expect(parseTaskText("Ship it !!!", NOW).title).toBe("Ship it");
+  });
+
+  /** A word that is not a date is a word: the title keeps it rather than a guess. */
+  it("leaves an @ that names no date in the title", () => {
+    const quick = parseTaskText("Reply to @janet", NOW);
+    expect(quick.due).toBeNull();
+    expect(quick.title).toBe("Reply to @janet");
+  });
+
+  it("refuses digits after a date word that are not a time", () => {
+    expect(parseTaskText("Ship it @fri 99", NOW).due).toBeNull();
+    expect(parseTaskText("Ship it @fri 13pm", NOW).due).toBeNull();
+  });
+
+  it("says whether it found anything, for the preview under the field", () => {
+    expect(hasQuickDetails(parseTaskText("Just a task", NOW))).toBe(false);
+    expect(hasQuickDetails(parseTaskText("Just a task @today", NOW))).toBe(true);
   });
 });
 

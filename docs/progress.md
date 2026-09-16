@@ -1,4 +1,4 @@
-# Edge Notes: progress
+# Ledge: progress
 
 Status, decisions and platform findings. Read before any task; update at the end
 of every milestone. The spec is [build-brief.md](build-brief.md).
@@ -2513,6 +2513,156 @@ to be squinted at is not doing its job.
       when it ends, and the tab shows the break waiting when it is opened again
 - [ ] Four finished sessions earn the long break, and the dots fill as they go
 - [ ] The undo toast (delete a note) clears the toolbar rather than covering it
+
+## Ledge: the rename, and the Tasks and Focus tabs redesigned (17 Sep 2026)
+
+Four requests from the owner, taken as one milestone because they touch the same
+screens: improve the Tasks tab, do the same for Focus and give it more to do,
+rename the app to **Ledge**, and unclutter Settings.
+
+### The rename
+
+`Edge Notes` → `Ledge` everywhere it is read, and `dev.edgenotes.app` →
+`dev.ledge.app` with it. The identifier matters more than the words: Tauri builds
+`app_data_dir()` from it, so changing it hands every existing install an empty
+folder and the app opens looking as though it has lost everything.
+
+- **`db::adopt::adopt_database` carries the database over, once.** It copies with
+  `VACUUM INTO` rather than copying files: a WAL database is three files, and
+  copying only the first loses every commit since the last checkpoint. `VACUUM
+  INTO` writes one consistent file from the live connection and preserves
+  `user_version`, which is how migrations are tracked — a test asserts exactly
+  that, because a copy that lost it would re-run every migration. It refuses when
+  the new file already exists, so a second run cannot replace what has been
+  written since, and the old folder is never touched: an older build must still
+  find its data, and a copy that goes wrong should cost nothing.
+- **The crate, the binary and the package followed.** `ledge` / `ledge_lib`,
+  `/usr/bin/ledge`, and the Debian package is `ledge` with
+  `Provides`/`Conflicts`/`Replaces` on `edge-notes` so `apt install ledge` takes
+  the old one out rather than leaving two copies of the same app. `publish_apt.sh`
+  now reads the package name out of the `.deb`'s own control file and picks the
+  pool directory from it; `render_site.sh` looks in both pools and sorts on the
+  version rather than the path.
+- **What deliberately did not change:** the GitHub repository, the `edge-notes-apt`
+  Pages site, and the Homebrew cask token `edge-notes`. The token is what an
+  existing install is upgraded by; renaming it would strand everyone who installed
+  before 0.1.0 on the version they already had. The cask's contents — url, app,
+  name, zap paths — are Ledge.
+
+### Tasks
+
+- **A row is a list row.** Its own rounded background under the cursor and under
+  the keyboard, a circular box with a tick that scales in rather than a glyph that
+  appears, priority in front of the title where it changes how the title reads
+  instead of at the far edge as a second thing to look at, and a disclosure
+  chevron that is always drawn — the row opens into a sheet, and nothing says so
+  if the only hint is a hover state this window may never see.
+- **Sections fold.** The heading is the disclosure and keeps its count, so a
+  folded section still answers "how many". Done starts folded: a list of what is
+  left should not open on what is not. Kept for the session, not stored — which
+  part of a list you are looking at is where you are, not a preference.
+- **Search searches the tab in front of you.** `Cmd+F` on the Tasks tab used to
+  throw you back to the notes. One field, told `what` it is searching so the
+  placeholder is honest, filtering titles and the free-text notes under them.
+- **The keyboard reaches the list.** Arrow keys move between rows through the
+  same `moveCardFocus` the cards use — the `selector` argument had been sitting
+  there unused since it was written — Space ticks the row it is on, Enter opens
+  the sheet, `Cmd+N` puts the caret in the add field.
+- **Quick entry shows its work, and understands words.** `@today`, `@tomorrow`,
+  `@fri`, `2pm`, `2:30 pm`, `!!!` and `!!` beside the old `@2026-09-20` and
+  `!high`. What it has understood appears as chips under the field as it is
+  typed. The tokens had worked since 0.0.2 and nobody knew; a feature you have to
+  read the changelog to find is not a feature. A word after `@` that names no
+  date stays in the title — "reply to @janet" is not Friday.
+- **A sheet opened on the last row scrolls into view**, which it did not before.
+
+### Focus
+
+- **The lengths are settings.** `Durations` moved inside the timer's state, so
+  every function that needs one already has it in hand, and `withDurations` gives
+  a stopped phase the new length whole while leaving a running one ending exactly
+  where it was. Moving the finish line under someone mid-session is the one thing
+  a timer must not do.
+- **The tally, the streak and the task survive a restart.** `focus.day`,
+  `focus.today`, `focus.streak` and `focus.taskId` are in the settings table —
+  state rather than preferences, kept there because that is the app's key/value
+  store and a counter does not deserve a table of its own. `hydrate` reads the
+  lengths every time and the tally exactly once: what is on screen is newer than
+  what is stored, because the stored copy is written from here.
+- **A session can name the task it is for.** The Focus tab picks from the open
+  tasks, the details sheet has "Focus on this", and the notification says which
+  task finished. A pomodoro with a name on it is a session; one without is a
+  kitchen timer. Nothing else crosses: completing a session does not tick the
+  task.
+- **Auto-start, off by default.** It was decided against in September as a nag,
+  which it is when nobody asked for it; as a switch it is the classic pomodoro.
+  The next phase begins *now* rather than at the moment the last one ended —
+  noticing twenty minutes late must not hand you a break that is already over.
+- **The clock says when it ends**, not only how long is left: one is a glance at
+  the same clock the day's meetings are in, the other is arithmetic. Breaks draw
+  the ring in the quieter grey, the panel's tab shows a dot while a session runs,
+  and Space, R and S do what they would in a media player.
+
+### Settings
+
+Fourteen controls in one column read as a wall, which is what the owner saw.
+
+- **Four inset cards**, hairlines between rows, which is what every system
+  preferences pane does and for the same reason: the eye finds a card of three
+  rows without reading any of them.
+- **A row's name is primary text** with an optional one-line description under
+  it. Every label was secondary before, so the whole pane read as small print
+  with nothing to catch the eye.
+- **Advanced** hides the two hover delays and the panel width — worth having, not
+  worth being among the first things anyone sees.
+- **Phase lengths are nudged, not typed.** A stepper is the right control for
+  "twenty-five minutes"; the panel width keeps its field.
+
+### What was decided against
+
+- **Renaming the Homebrew cask and the Pages repository.** Both are addresses
+  that existing installs and existing links point at, and the app's name is not
+  worth breaking them for.
+- **Moving the pomodoro's state into Rust.** Still not worth it: `endsAt` is in
+  the frontend, the notification is already scheduled in Rust, and the only thing
+  a restart lost — the tally — is now stored.
+- **Auto-completing the linked task when a session ends.** A session is time
+  spent on something, not the thing being finished.
+- **"Clear completed" in the Done section.** It deletes in bulk and the undo
+  toast holds one task. Either it grows a bulk undo or it stays out.
+- **Filter chips (Today, Flagged) above the list.** The sections already answer
+  "what is due today", and a 320 px panel has one row to spare, not two.
+
+Eight new Rust tests (160 in all) and thirty-two new frontend tests (544 in all):
+the database adoption against a real v3 file, the new settings keys and their
+clamps, the timer against lengths that are not the classic ones, hydration and
+auto-start, the natural-language tokens and their near-misses, and the panel's
+search, empty states and Focus settings.
+
+### Checklist
+
+- [ ] First launch after upgrading from 0.0.4: every note, task and setting is
+      there, and `~/Library/Application Support/dev.edgenotes.app` still is too
+- [ ] The window title, the tray's Quit item and the export folder all say Ledge
+- [ ] Tasks: arrow keys move between rows, Space ticks one, Enter opens its sheet
+- [ ] Tasks: fold a section and its count is still on the heading; Done starts
+      folded
+- [ ] Tasks: `Cmd+F` searches the tasks without leaving the tab, and says so when
+      nothing matches
+- [ ] Type `ship it @fri 2pm !!!` and the chips under the field say Friday,
+      2:00 pm and High before Enter is pressed
+- [ ] Open the sheet on the last task in a long list: it scrolls into view
+- [ ] Focus: change Session to 50 minutes in Settings while stopped — the clock
+      shows 50:00; change it while running and the current session ends where it
+      was going to
+- [ ] Focus: finish a session, quit the app, reopen it — the tally is still
+      today's
+- [ ] Focus: "Focus on this" in a task's sheet moves to the Focus tab with that
+      task named, and the end notification names it
+- [ ] Focus: with auto-start on, leave a session running past its end with the
+      panel closed — the break starts when you next look, with its full time
+- [ ] Settings: Advanced folds the delays and the panel width away, and the
+      steppers stop at the ends of their ranges
 
 ## M0 acceptance checklist
 

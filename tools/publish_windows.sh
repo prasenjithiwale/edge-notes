@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Add a release's Windows installers to the Edge Notes Pages site.
+# Add a release's Windows installers to the Ledge Pages site.
 #
 #   tools/publish_windows.sh <pages repository checkout> <installer>...
 #

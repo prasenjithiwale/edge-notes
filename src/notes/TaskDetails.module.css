@@ -206,6 +206,29 @@
   color: var(--text-primary);
 }
 
+/* The one door between the two tabs: take this task to the Focus tab and start
+   a session on it. Full width and quiet — it is an action, not the sheet's
+   purpose. */
+.focusOn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  width: 100%;
+  height: 28px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.focusOn:hover {
+  background: var(--surface-sunken);
+  color: var(--text-primary);
+}
+
 .footer {
   display: flex;
   align-items: center;

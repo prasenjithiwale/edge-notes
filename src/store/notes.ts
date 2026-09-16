@@ -403,18 +403,20 @@ export const useNotesStore = create<NotesStore>((set, get) => ({
     if (view === get().view) {
       return;
     }
-    if (view === "todo") {
+    if (view !== "notes") {
       // The editor lives in the Notes list; closing it properly discards an
       // empty note and releases its lock instead of leaving it open, unseen.
       await get().stopEditing();
     }
+    // A search is about the list in front of you, so changing tabs ends it.
     set({ view, expandedId: null, searching: false, query: "" });
   },
 
   openSearch: () => {
-    // Search filters the list, and the list is hidden behind an expanded note
-    // and on the Tasks tab.
-    set({ searching: true, expandedId: null, view: "notes" });
+    // Search filters whichever list is in front — the notes or the tasks — but
+    // never the Focus tab, which is not a list, and never a note opened to read.
+    const view = get().view === "focus" ? "notes" : get().view;
+    set({ searching: true, expandedId: null, view });
   },
 
   /** Brief 6.6: Esc clears the query and returns the header to the title. */

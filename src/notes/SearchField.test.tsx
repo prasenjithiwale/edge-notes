@@ -36,7 +36,7 @@ describe("the search field's hold on the panel", () => {
     // so nothing took it back and the panel closed mid-search.
     render(
       <StrictMode>
-        <SearchField query="" onQueryChange={() => undefined} onAbandon={() => undefined} />
+        <SearchField query="" what="notes" onQueryChange={() => undefined} onAbandon={() => undefined} />
       </StrictMode>,
     );
     await waitFor(() => {
@@ -46,7 +46,7 @@ describe("the search field's hold on the panel", () => {
 
   it("releases the lock on blur", async () => {
     const { getByLabelText } = render(
-      <SearchField query="milk" onQueryChange={() => undefined} onAbandon={() => undefined} />,
+      <SearchField query="milk" what="notes" onQueryChange={() => undefined} onAbandon={() => undefined} />,
     );
     await waitFor(() => {
       expect(locked()).toBe(true);
@@ -60,7 +60,7 @@ describe("the search field's hold on the panel", () => {
 
   it("releases the lock when it unmounts while still focused", async () => {
     const view = render(
-      <SearchField query="milk" onQueryChange={() => undefined} onAbandon={() => undefined} />,
+      <SearchField query="milk" what="notes" onQueryChange={() => undefined} onAbandon={() => undefined} />,
     );
     await waitFor(() => {
       expect(locked()).toBe(true);

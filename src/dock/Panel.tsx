@@ -18,6 +18,7 @@ import {
 } from "../lib/ipc";
 import { facetColors, filterNotes } from "../lib/notes";
 import { openTaskCount, taskReminders } from "../lib/tasks";
+import { isRunning } from "../lib/pomodoro";
 import { useTasksStore } from "../store/tasks";
 import { pomodoroReminder, usePomodoroStore } from "../store/pomodoro";
 import { moveCardFocus } from "../notes/cardFocus";
@@ -100,6 +101,9 @@ export function Panel({ className }: PanelProps) {
   const loadTasks = useTasksStore((state) => state.load);
   const taskUndo = useTasksStore((state) => state.pendingUndo);
   const pomodoro = usePomodoroStore((store) => store.state);
+  const focusTaskId = usePomodoroStore((store) => store.taskId);
+  const hydratePomodoro = usePomodoroStore((store) => store.hydrate);
+  const settlePomodoro = usePomodoroStore((store) => store.settle);
   const undoTaskRemove = useTasksStore((state) => state.undoRemove);
   const searching = useNotesStore((state) => state.searching);
   const query = useNotesStore((state) => state.query);
@@ -116,6 +120,8 @@ export function Panel({ className }: PanelProps) {
 
   const loadSettings = useSettingsStore((state) => state.load);
   const applySettings = useSettingsStore((state) => state.apply);
+  const settings = useSettingsStore((state) => state.settings);
+  const settingsLoaded = useSettingsStore((state) => state.loaded);
 
   useEffect(() => {
     void load();
@@ -127,6 +133,25 @@ export function Panel({ className }: PanelProps) {
     () => subscription(onSettingsChanged(applySettings), "settings:changed"),
     [applySettings],
   );
+
+  // The Focus tab's lengths, its auto-start switch and the day's tally live in
+  // the settings table, so the timer takes them from here rather than reading
+  // storage itself. `hydrate` is idempotent: the tally is read once, the lengths
+  // follow every later change.
+  useEffect(() => {
+    if (settingsLoaded) {
+      hydratePomodoro(settings);
+    }
+  }, [settings, settingsLoaded, hydratePomodoro]);
+
+  // A phase that ran out while the panel was collapsed is over the moment the
+  // panel comes back, whichever tab is in front: the Focus tab's own clock is
+  // only subscribed while that tab is showing.
+  useEffect(() => {
+    if (isExpandedPhase(phase)) {
+      settlePomodoro(Date.now());
+    }
+  }, [phase, settlePomodoro]);
 
   // The tray and the global shortcut both arrive here (brief 6.11, 9.4). The
   // store is read through getState() so the subscription is set up once.
@@ -258,27 +283,78 @@ export function Panel({ className }: PanelProps) {
       }
 
       if (accel && event.key === "f") {
+        // Search works on whichever list is in front; the Focus tab is not one.
+        if (notesStore.view === "focus") {
+          return;
+        }
         event.preventDefault();
         notesStore.openSearch();
         return;
       }
       if (accel && event.key === "n") {
         event.preventDefault();
-        void notesStore.createNote();
+        // "New" means the thing this tab is a list of.
+        if (notesStore.view === "todo") {
+          panelRef.current?.querySelector<HTMLElement>("[data-task-add]")?.focus();
+        } else {
+          void notesStore.createNote();
+        }
         return;
       }
       if (event.key === "ArrowDown" || event.key === "ArrowUp") {
-        // Inside a text field the arrows belong to the caret, and the cards are
-        // only reachable while the Notes tab is showing.
-        if (isTextField(event.target) || notesStore.view !== "notes") {
+        // Inside a text field the arrows belong to the caret.
+        if (isTextField(event.target) || notesStore.view === "focus") {
           return;
         }
+        // Each list tab has its own kind of row; the movement is the same.
+        const rows = notesStore.view === "todo" ? "[data-task-row]" : "[data-card]";
         if (
-          moveCardFocus(panelRef.current, event.key === "ArrowDown" ? 1 : -1)
+          moveCardFocus(panelRef.current, event.key === "ArrowDown" ? 1 : -1, rows)
         ) {
           event.preventDefault();
         }
         return;
+      }
+      // Space ticks the task the keyboard is on. Enter is the button's own job
+      // (it opens the sheet), so the box needs a key of its own, and Space is
+      // the one every list of things to finish uses.
+      if (
+        event.key === " " &&
+        notesStore.view === "todo" &&
+        !isTextField(event.target) &&
+        event.target instanceof HTMLElement
+      ) {
+        const row = event.target.closest<HTMLElement>("[data-task-row]");
+        const id = row?.dataset.id;
+        if (id !== undefined) {
+          event.preventDefault();
+          void tasksStore.tick(id);
+          return;
+        }
+      }
+      // The Focus tab is one control with two more beside it, so it gets the
+      // keys a media player would: space to start or stop, R and S for the rest.
+      if (notesStore.view === "focus" && !accel && !isTextField(event.target)) {
+        const pomodoroStore = usePomodoroStore.getState();
+        if (event.key === " ") {
+          event.preventDefault();
+          if (isRunning(pomodoroStore.state)) {
+            pomodoroStore.pauseTimer();
+          } else {
+            pomodoroStore.startTimer();
+          }
+          return;
+        }
+        if (event.key === "r" || event.key === "R") {
+          event.preventDefault();
+          pomodoroStore.resetTimer();
+          return;
+        }
+        if (event.key === "s" || event.key === "S") {
+          event.preventDefault();
+          pomodoroStore.skip();
+          return;
+        }
       }
       if (event.key === "Escape") {
         // One ordered cascade (brief 6.11): the editor, then an expanded note,
@@ -339,12 +415,13 @@ export function Panel({ className }: PanelProps) {
       return;
     }
     const timer = setTimeout(() => {
-      void remindersSet([...taskReminders(tasks), ...pomodoroReminder(pomodoro)]);
+      const focusTask = tasks.find((task) => task.id === focusTaskId)?.title ?? null;
+      void remindersSet([...taskReminders(tasks), ...pomodoroReminder(pomodoro, focusTask)]);
     }, REMINDERS_DEBOUNCE_MS);
     return () => {
       clearTimeout(timer);
     };
-  }, [tasks, pomodoro, loaded]);
+  }, [tasks, pomodoro, focusTaskId, loaded]);
 
   const isEmpty = loaded && notes.length === 0;
   const openTasks = useMemo(() => openTaskCount(tasks), [tasks]);
@@ -379,6 +456,7 @@ export function Panel({ className }: PanelProps) {
         {searching ? (
           <SearchField
             query={query}
+            what={view === "todo" ? "tasks" : "notes"}
             onQueryChange={setQuery}
             onAbandon={closeSearch}
           />
@@ -386,6 +464,7 @@ export function Panel({ className }: PanelProps) {
           <ViewTabs
             view={view}
             openTasks={openTasks}
+            focusRunning={isRunning(pomodoro)}
             onChange={(next) => {
               setShowSettings(false);
               void setView(next);
@@ -396,17 +475,26 @@ export function Panel({ className }: PanelProps) {
             Settings and Keep open are about the panel itself and live in the
             toolbar at the foot of it. */}
         <div className={styles.actions}>
-          {!searching && !expandedNote && view === "notes" && (
-            <IconButton label="Search notes" onClick={openSearch}>
+          {!searching && !expandedNote && view !== "focus" && (
+            <IconButton
+              label={view === "todo" ? "Search tasks" : "Search notes"}
+              shortcut="⌘F"
+              onClick={openSearch}
+            >
               <Search size={16} strokeWidth={1.75} />
             </IconButton>
           )}
-          {view === "notes" && (
+          {view !== "focus" && (
             <IconButton
-              label="New note"
+              label={view === "todo" ? "New task" : "New note"}
+              shortcut="⌘N"
               outlined
               onClick={() => {
-                void createNote();
+                if (view === "todo") {
+                  panelRef.current?.querySelector<HTMLElement>("[data-task-add]")?.focus();
+                } else {
+                  void createNote();
+                }
               }}
             >
               <Plus size={16} strokeWidth={1.75} />
@@ -492,7 +580,7 @@ export function Panel({ className }: PanelProps) {
               aria-hidden={view !== "todo"}
               inert={view !== "todo"}
             >
-              <TasksView active={view === "todo"} />
+              <TasksView active={view === "todo"} query={query} />
             </div>
             <div
               className={styles.pane}

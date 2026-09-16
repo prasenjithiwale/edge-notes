@@ -4,24 +4,49 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 12px;
-  padding: 16px 12px 12px;
+  gap: 10px;
+  /* 4 px at the top is room for a focus ring inside a pane that clips for the
+     tab slide, as the Tasks tab's add field has. */
+  padding: 4px 12px 12px;
   overflow-y: auto;
   overscroll-behavior: contain;
 }
 
+.head {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding-top: 4px;
+  text-align: center;
+}
+
+/* The phase, as a word rather than a chip: it is the answer to "what am I
+   doing", and a widget this small has no room for a box round it. */
 .phase {
   margin: 0;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
+  color: var(--text-primary);
+}
+
+/* A break is quieter than focus, in weight and in colour, so a glance at the
+   tab says which one is running without reading the word. */
+.phaseBreak {
   color: var(--text-secondary);
+}
+
+.hint {
+  margin: 0;
+  font-size: 11px;
+  color: var(--text-tertiary);
 }
 
 .clock {
   position: relative;
   flex: none;
-  width: 128px;
-  height: 128px;
+  width: 160px;
+  height: 160px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -37,7 +62,7 @@
 .track,
 .progress {
   fill: none;
-  stroke-width: 6;
+  stroke-width: 8;
   stroke-linecap: round;
 }
 
@@ -52,21 +77,40 @@
   transition: stroke-dashoffset 1s linear;
 }
 
+.progressMuted {
+  stroke: var(--text-tertiary);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .progress {
     transition: none;
   }
 }
 
+.readout {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
 /* The one place the type scale is broken, on purpose: a countdown that has to be
    squinted at from across the desk is not doing its job. Tabular figures so the
    digits do not shuffle as they change. */
 .time {
-  position: relative;
-  font-size: 32px;
+  font-size: 34px;
   font-weight: 400;
   line-height: 1;
   color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* When it will be over, rather than how long is left: one is a glance at the
+   same clock the day's meetings are in, the other is arithmetic. */
+.ends {
+  font-size: 11px;
+  color: var(--text-tertiary);
   font-variant-numeric: tabular-nums;
 }
 
@@ -89,10 +133,125 @@
   box-shadow: none;
 }
 
+/* What the session is for. A full-width sunken row, so it reads as a field with
+   a value rather than a sentence with a link in it. */
+.workingOn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+}
+
+.taskRow {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 32px;
+  padding: 0 10px;
+  border: none;
+  border-radius: var(--radius-control);
+  background: var(--surface-sunken);
+  text-align: left;
+}
+
+.taskCaption {
+  flex: none;
+  font-size: 11px;
+  color: var(--text-tertiary);
+}
+
+.taskName {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+  text-align: right;
+}
+
+.taskNone {
+  font-weight: 400;
+  color: var(--text-tertiary);
+}
+
+.chevron {
+  flex: none;
+  color: var(--text-tertiary);
+  transition: transform var(--open-duration) var(--open-easing);
+}
+
+.chevronOpen {
+  transform: rotate(180deg);
+}
+
+.taskActions {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+/* The open tasks, inline rather than in a popover: a menu that opens over a
+   320 px panel has nowhere to go, and a native one would take the keyboard away
+   from a window that has trouble getting it back (see the macOS notes). */
+.picker {
+  list-style: none;
+  margin: 0;
+  padding: 4px;
+  width: 100%;
+  max-height: 156px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  background: var(--surface);
+  box-shadow: var(--shadow-card-raised);
+}
+
+.pick {
+  display: block;
+  width: 100%;
+  padding: 6px 8px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 12px;
+  line-height: 1.4;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pick:hover {
+  background: var(--surface-sunken);
+}
+
+.picked {
+  background: var(--surface-sunken);
+  font-weight: 600;
+}
+
+.pickerEmpty {
+  padding: 6px 8px;
+  font-size: 12px;
+  color: var(--text-tertiary);
+}
+
 .controls {
   display: flex;
   align-items: center;
   gap: 8px;
+  margin-top: 2px;
 }
 
 /* The only filled button in the app, because this tab has exactly one thing to
@@ -102,11 +261,11 @@
   align-items: center;
   justify-content: center;
   gap: 6px;
-  min-width: 96px;
-  height: 32px;
-  padding: 0 16px;
+  min-width: 104px;
+  height: 34px;
+  padding: 0 18px;
   border: none;
-  border-radius: var(--radius-control);
+  border-radius: 999px;
   background: var(--text-primary);
   color: var(--surface);
   font-size: 13px;

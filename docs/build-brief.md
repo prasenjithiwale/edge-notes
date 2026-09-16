@@ -1,6 +1,8 @@
-# Edge Notes: build brief
+# Ledge: build brief
 
-> "Edge Notes" is a working name. Rename freely.
+> The app was called "Edge Notes" until 0.1.0, when it was renamed Ledge. This
+> brief has been rewritten to use the new name; the progress log keeps the old
+> one where it records what actually shipped.
 
 ## 1. What we're building
 
@@ -193,7 +195,7 @@ Dimensions (logical px):
 - New note
 - Dock on left / Dock on right (radio)
 - Launch at login (checkbox)
-- Quit Edge Notes
+- Quit Ledge
 
 ## 7. Visual design system (hard requirements)
 
@@ -393,7 +395,7 @@ Rust positions the window and shows it only after the frontend calls `app_ready`
 ### 8.10 Linux
 
 - X11 is supported directly.
-- Wayland doesn't let apps position their own windows, and GNOME ignores always-on-top requests. For v1, when `XDG_SESSION_TYPE=wayland`, set `GDK_BACKEND=x11` at the very top of `main` before Tauri or GTK start, so the app runs under XWayland. Allow opting out with `EDGE_NOTES_NATIVE_WAYLAND=1`. In the Rust 2024 edition `std::env::set_var` is `unsafe`; call it before any threads are spawned.
+- Wayland doesn't let apps position their own windows, and GNOME ignores always-on-top requests. For v1, when `XDG_SESSION_TYPE=wayland`, set `GDK_BACKEND=x11` at the very top of `main` before Tauri or GTK start, so the app runs under XWayland. Allow opting out with `LEDGE_NATIVE_WAYLAND=1`. In the Rust 2024 edition `std::env::set_var` is `unsafe`; call it before any threads are spawned.
 - Risk to verify: under XWayland the global cursor position can go stale once the pointer is over native Wayland windows, which could keep the panel from closing. Mitigate by feeding webview `pointerleave` and window blur into the controller.
 - Transparency needs a compositing window manager.
 - Some NVIDIA and WebKitGTK combinations render a blank window; document the `WEBKIT_DISABLE_DMABUF_RENDERER=1` workaround in the README.
@@ -475,7 +477,7 @@ The frontend needs only event listening and the custom commands above. Don't gra
 ## 10. Project structure
 
 ```
-edge-notes/
+ledge/
 ├─ src/
 │  ├─ main.tsx
 │  ├─ App.tsx

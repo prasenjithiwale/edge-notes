@@ -227,7 +227,7 @@ pub fn init(app: &AppHandle) -> tauri::Result<()> {
         autostart,
         None::<&str>,
     )?;
-    let quit = MenuItem::with_id(app, ID_QUIT, "Quit Edge Notes", true, None::<&str>)?;
+    let quit = MenuItem::with_id(app, ID_QUIT, "Quit Ledge", true, None::<&str>)?;
 
     let menu = Menu::with_items(
         app,

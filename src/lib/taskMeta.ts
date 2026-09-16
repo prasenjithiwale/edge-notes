@@ -6,10 +6,14 @@
  * so this no longer parses storage — with one exception. `parseTaskText` is kept
  * for quick entry: typing
  *
- *     Call the bank !high @2026-09-20 14:00 repeat:weekly
+ *     Call the bank !high @tomorrow 2pm repeat:weekly
  *
  * into the add field still fills in the details, which is both a real
- * convenience and the muscle memory of everyone who used the old format.
+ * convenience and the muscle memory of everyone who used the old format. The
+ * date may be written as a word (`@today`, `@tomorrow`, `@fri`) as well as a
+ * plain `@2026-09-20`, the time as `14:00`, `2pm` or `2:30 pm`, and priority as
+ * `!!!`/`!!` as well as `!high`/`!medium`/`!low` — a widget's add field is
+ * typed into in a hurry, and nobody in a hurry types a date in ISO.
  *
  * Dates are local `YYYY-MM-DD` and times local `HH:MM`, because "the 20th at
  * 2 pm" means that wherever you are. Rust stores them as written and does none
@@ -55,8 +59,12 @@ function isValidDate(key: string): boolean {
 // Quick entry
 // ---------------------------------------------------------------------------
 
-const PRIORITY_TOKEN = /(^|\s+)!(high|medium|low)$/i;
-const DUE_TOKEN = /(^|\s+)@(\d{4}-\d{2}-\d{2})(?:\s+(\d{1,2}):(\d{2}))?$/;
+const PRIORITY_TOKEN = /(^|\s+)(?:!(high|medium|low)|(!!!|!!))$/i;
+/**
+ * `@<word> [time]`, where the word is a date or a name for one and the time is
+ * `14:00`, `2pm` or `2:30 pm`. Anchored to the end of the text, like the others.
+ */
+const DUE_TOKEN = /(^|\s+)@([A-Za-z0-9-]+)(?:\s+(\d{1,2})(?::(\d{2}))?\s*([ap]m)?)?$/i;
 const REPEAT_TOKEN = /(^|\s+)repeat:(daily|weekly|monthly|yearly)$/i;
 
 export interface QuickTask {
@@ -66,14 +74,91 @@ export interface QuickTask {
   repeat: Repeat | null;
 }
 
+/** Whether quick entry found anything at all, for the preview under the field. */
+export function hasQuickDetails(quick: QuickTask): boolean {
+  return quick.priority !== null || quick.due !== null || quick.repeat !== null;
+}
+
+const WEEKDAYS = [
+  "sunday",
+  "monday",
+  "tuesday",
+  "wednesday",
+  "thursday",
+  "friday",
+  "saturday",
+];
+
+/**
+ * A date written as a word: `today`, `tomorrow`, a weekday name or its first
+ * three letters, or a plain `YYYY-MM-DD`. Anything else is not a date, and stays
+ * part of the title rather than being guessed at.
+ *
+ * A weekday means the *next* one: "@fri" typed on a Friday is the Friday coming,
+ * not the one you are standing in, because a task typed today for today would
+ * have been typed as "@today".
+ */
+function resolveDateWord(word: string, now: Date): string | null {
+  const lower = word.toLowerCase();
+  const today = dateKey(now);
+
+  if (/^\d{4}-\d{2}-\d{2}$/.test(lower)) {
+    return isValidDate(lower) ? lower : null;
+  }
+  if (lower === "today") {
+    return today;
+  }
+  if (lower === "tomorrow" || lower === "tmr") {
+    return addDays(today, 1);
+  }
+
+  const index = WEEKDAYS.findIndex(
+    (day) => day === lower || (lower.length === 3 && day.startsWith(lower)),
+  );
+  if (index === -1) {
+    return null;
+  }
+  const ahead = (index - now.getDay() + 7) % 7;
+  return addDays(today, ahead === 0 ? 7 : ahead);
+}
+
+/** `14:00`, `2pm`, `2:30 pm` — or null when the digits are not a time. */
+function resolveTime(
+  hours: string | undefined,
+  minutes: string | undefined,
+  meridiem: string | undefined,
+): string | null {
+  if (hours === undefined) {
+    return null;
+  }
+  let hour = Number(hours);
+  const minute = minutes === undefined ? 0 : Number(minutes);
+  if (minute > 59) {
+    return null;
+  }
+  if (meridiem === undefined) {
+    if (hour > 23) {
+      return null;
+    }
+  } else {
+    if (hour < 1 || hour > 12) {
+      return null;
+    }
+    const pm = meridiem.toLowerCase() === "pm";
+    hour = pm ? (hour === 12 ? 12 : hour + 12) : hour === 12 ? 0 : hour;
+  }
+  return `${pad(hour)}:${pad(minute)}`;
+}
+
 /**
  * Read the detail tokens off the end of something typed into the add field.
  *
  * Tokens are taken only from the end, so "email @john" or "fix !bug" in the
  * middle of a sentence is never mistaken for one. Anything that does not parse
- * cleanly stays part of the title.
+ * cleanly stays part of the title — which is why an unknown word after `@` is a
+ * miss rather than a guess.
  */
-export function parseTaskText(text: string): QuickTask {
+export function parseTaskText(text: string, now: Date): QuickTask {
   let rest = text.trim();
   let priority: Priority | null = null;
   let due: Due | null = null;
@@ -82,19 +167,24 @@ export function parseTaskText(text: string): QuickTask {
   for (;;) {
     const p: RegExpExecArray | null = priority === null ? PRIORITY_TOKEN.exec(rest) : null;
     if (p) {
-      priority = (p[2] ?? "").toLowerCase() as Priority;
+      const word: string | undefined = p[2];
+      const bangs: string | undefined = p[3];
+      priority =
+        word !== undefined
+          ? (word.toLowerCase() as Priority)
+          : bangs === "!!!"
+            ? "high"
+            : "medium";
       rest = rest.slice(0, p.index).trimEnd();
       continue;
     }
     const d: RegExpExecArray | null = due === null ? DUE_TOKEN.exec(rest) : null;
     if (d) {
-      const date: string = d[2] ?? "";
-      const hours: string | undefined = d[3];
-      const minutes: string | undefined = d[4];
-      const time: string | null =
-        hours === undefined || minutes === undefined ? null : `${pad(Number(hours))}:${minutes}`;
-      const timeValid = time === null || (Number(hours) < 24 && Number(minutes) < 60);
-      if (isValidDate(date) && timeValid) {
+      const date = resolveDateWord(d[2] ?? "", now);
+      const time = resolveTime(d[3], d[4], d[5]);
+      // Digits that are not a time mean the whole token is not one: "@fri 99"
+      // is a title, not Friday.
+      if (date !== null && (d[3] === undefined || time !== null)) {
         due = { date, time };
         rest = rest.slice(0, d.index).trimEnd();
         continue;

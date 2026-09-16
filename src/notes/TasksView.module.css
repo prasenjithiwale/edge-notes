@@ -8,11 +8,17 @@
 /* The add field is the first thing in the tab, because adding is the first thing
    anyone does here. The 4 px on top is room for the focus ring (2 px outline,
    2 px offset): the pane clips at its edges for the tab slide. */
-.add {
+.entry {
   flex: none;
   display: flex;
-  align-items: center;
+  flex-direction: column;
+  gap: 6px;
   margin: 4px 12px 8px;
+}
+
+.add {
+  display: flex;
+  align-items: center;
   border-radius: var(--radius-control);
   background: var(--surface-sunken);
 }
@@ -34,7 +40,7 @@
   box-sizing: border-box;
   flex: 1;
   min-width: 0;
-  height: 28px;
+  height: 30px;
   padding: 0 8px;
   border: none;
   border-radius: var(--radius-control);
@@ -51,32 +57,88 @@
   color: var(--text-tertiary);
 }
 
+/* What quick entry has understood so far, under the field it was typed in.
+   It appears only once something parses, so an ordinary task is typed into an
+   ordinary field and nothing moves. */
+.preview {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  animation: preview-in 120ms var(--open-easing);
+}
+
+@keyframes preview-in {
+  from {
+    opacity: 0;
+    transform: translateY(-2px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .preview {
+    animation: none;
+  }
+}
+
+.previewChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  height: 20px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: var(--surface-sunken);
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
 .list {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
-  /* Top padding: room for a focus ring on the first row inside the scroller. */
-  padding: 4px 12px 12px;
+  /* Side padding of 6 px, not 12: a row is a card of its own now and its
+     background reaches 6 px further out than the text does, which is what makes
+     it read as a row rather than as a hover effect on a paragraph. */
+  padding: 2px 6px 12px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
 }
 
 .group {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 1px;
 }
 
-.heading {
-  display: flex;
-  align-items: baseline;
-  gap: 6px;
+.headingRow {
   margin: 0 0 2px;
   font-size: 12px;
   font-weight: 600;
+}
+
+/* The heading is the disclosure: a section folds away, so the count beside it is
+   still the answer when the rows are not there. */
+.heading {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  align-self: flex-start;
+  height: 22px;
+  padding: 0 6px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
   color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.heading:hover {
+  background: var(--surface-sunken);
+  color: var(--text-primary);
 }
 
 /* Overdue earns emphasis, but in weight: colour belongs to notes (brief 7.1). */
@@ -89,6 +151,16 @@
   font-weight: 400;
   color: var(--text-tertiary);
   font-variant-numeric: tabular-nums;
+}
+
+.chevron {
+  flex: none;
+  color: var(--text-tertiary);
+  transition: transform var(--open-duration) var(--open-easing);
+}
+
+.chevronOpen {
+  transform: rotate(90deg);
 }
 
 .rows {
@@ -104,28 +176,62 @@
   flex-direction: column;
 }
 
+/* A row is a list row, not a line of text: it has its own rounded background,
+   it lights up under the cursor and under the keyboard, and the whole of it is
+   the target. */
 .row {
+  position: relative;
   display: flex;
   align-items: flex-start;
   gap: 8px;
-  padding: 2px 0;
+  padding: 5px 6px;
+  border-radius: 8px;
+  transition: background-color 120ms linear;
 }
 
-/* The box: 16 px painted, 22 px of reach, so it is a target and not a pixel. */
+.row:hover {
+  background: var(--surface-sunken);
+}
+
+/* The row whose sheet is open stays lit, so the sheet under it plainly belongs
+   to it rather than floating between two tasks. */
+.rowOpen {
+  background: var(--surface-sunken);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .row,
+  .chevron,
+  .tick,
+  .disclosure {
+    transition: none;
+  }
+}
+
+/* The box: a circle, as every list of things to finish draws it, 17 px painted
+   inside a reach of 25 so it is a target and not a pixel. */
 .box {
+  position: relative;
   flex: none;
   box-sizing: border-box;
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 16px;
-  height: 16px;
-  margin-top: 3px;
+  width: 17px;
+  height: 17px;
+  margin-top: 2px;
   padding: 0;
   border: 1.5px solid var(--text-tertiary);
-  border-radius: 4px;
+  border-radius: 50%;
   background: transparent;
   color: var(--surface);
+}
+
+.box::after {
+  /* The reach, which is larger than the paint. */
+  content: "";
+  position: absolute;
+  inset: -4px;
 }
 
 .box:hover {
@@ -137,21 +243,45 @@
   background: var(--text-secondary);
 }
 
+/* The tick is drawn at all times and scaled away when it is not wanted, so
+   ticking is a mark appearing rather than a box being swapped. */
+.tick {
+  transform: scale(0);
+  opacity: 0;
+  transition:
+    transform 140ms var(--open-easing),
+    opacity 100ms linear;
+}
+
+.box[aria-checked="true"] .tick {
+  transform: scale(1);
+  opacity: 1;
+}
+
 /* The rest of the row: the title, and what is worth knowing at a glance. One
-   control, so a task has a single keyboard path in and out. */
+   control, so a task has a single keyboard path in and out. Its right padding
+   is the room the chevron sits in, which keeps the chevron inside the target. */
 .body {
   flex: 1;
   min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 1px;
-  padding: 0;
+  padding: 0 16px 0 0;
   border: none;
   background: transparent;
   text-align: left;
 }
 
+.line {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  min-width: 0;
+}
+
 .title {
+  min-width: 0;
   font-size: 13px;
   line-height: 1.4;
   color: var(--text-primary);
@@ -183,11 +313,13 @@
   font-weight: 600;
 }
 
-/* Priority keeps the colours the flags have everywhere else, and its weight
-   still tells the three apart without them. */
+/* Priority sits in front of the title, where it changes how the title reads,
+   rather than at the far edge where it was a second thing to look at. It keeps
+   the colours the flags have everywhere else, and its weight still tells the
+   three apart without them. */
 .flag {
   flex: none;
-  margin-top: 4px;
+  align-self: center;
 }
 
 .priority-high {
@@ -202,37 +334,21 @@
   color: var(--priority-low);
 }
 
-.doneToggle {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  align-self: flex-start;
-  padding: 2px 4px;
-  margin-left: -4px;
-  border: none;
-  border-radius: var(--radius-control);
-  background: transparent;
-  color: var(--text-secondary);
-  font-size: 12px;
-  font-weight: 600;
-}
-
-.doneToggle:hover {
-  background: var(--surface-sunken);
-}
-
-.chevron {
+/* The chevron says the row opens into something. Always drawn, never only on
+   hover (brief 7.1), and inside the button's own padding so a click on it
+   counts. */
+.disclosure {
+  position: absolute;
+  top: 9px;
+  right: 4px;
+  color: var(--text-tertiary);
+  opacity: 0.7;
+  pointer-events: none;
   transition: transform var(--open-duration) var(--open-easing);
 }
 
-.chevronOpen {
+.disclosureOpen {
   transform: rotate(90deg);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .chevron {
-    transition: none;
-  }
 }
 
 /* Near the top, where the field that has just been typed into is, rather than
@@ -243,8 +359,8 @@
   flex-direction: column;
   align-items: center;
   justify-content: flex-start;
-  gap: 4px;
-  padding: 40px 16px 24px;
+  gap: 6px;
+  padding: 36px 20px 24px;
   text-align: center;
 }
 
@@ -258,7 +374,19 @@
 .hint {
   margin: 0;
   font-size: 12px;
+  line-height: 1.5;
   color: var(--text-secondary);
+}
+
+/* The tokens, shown as the tokens: the only way to teach a format is to print
+   it. */
+.hint code {
+  padding: 1px 4px;
+  border-radius: 4px;
+  background: var(--surface-sunken);
+  color: var(--text-primary);
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+  font-size: 11px;
 }
 
 /* Everything is done, but there are still tasks: not the same as having none. */

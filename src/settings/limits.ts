@@ -25,6 +25,15 @@ export const DELAY: { open: Range; close: Range } = {
 };
 
 /**
+ * The Focus tab's phase lengths, in minutes, and the run that earns the long
+ * break. Rust clamps to the same bounds (`FOCUS_MINUTES`, `LONG_BREAK_EVERY`):
+ * a minute is a fair way to test the notification, and past two hours it is not
+ * a pomodoro.
+ */
+export const FOCUS_MINUTES: Range = { min: 1, max: 120, fallback: 25 };
+export const LONG_BREAK_EVERY: Range = { min: 2, max: 8, fallback: 4 };
+
+/**
  * A number input reports "" while it is being cleared, and anything typed can be
  * out of range; both fall back rather than sending nonsense to Rust, which would
  * reject it anyway.

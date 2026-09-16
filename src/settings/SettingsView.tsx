@@ -1,7 +1,8 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, ChevronRight, Minus, Plus } from "lucide-react";
 
 import { IconButton } from "../components/IconButton";
+import { cx } from "../lib/cx";
 import { acceleratorFromEvent, formatAccelerator } from "../lib/accelerator";
 import {
   autostartGet,
@@ -15,7 +16,15 @@ import {
 import { useDockStore } from "../store/dock";
 import { applyPanelTranslucency, useSettingsStore } from "../store/settings";
 import styles from "./SettingsView.module.css";
-import { PANEL_TRANSLUCENCY, PANEL_WIDTH, DELAY, clampSetting, type Range } from "./limits";
+import {
+  PANEL_TRANSLUCENCY,
+  PANEL_WIDTH,
+  DELAY,
+  FOCUS_MINUTES,
+  LONG_BREAK_EVERY,
+  clampSetting,
+  type Range,
+} from "./limits";
 
 interface SettingsViewProps {
   onClose: () => void;
@@ -74,7 +83,7 @@ function NumberSetting({
 
   return (
     <label className={styles.row}>
-      <span className={styles.label}>{label}</span>
+      <Label text={label} />
       <span className={styles.control}>
         <input
           type="number"
@@ -115,6 +124,7 @@ interface Choice<T extends string> {
 
 interface SegmentedSettingProps<T extends string> {
   legend: string;
+  description?: string | undefined;
   choices: Choice<T>[];
   value: T;
   onChange: (value: T) => void;
@@ -131,13 +141,16 @@ interface SegmentedSettingProps<T extends string> {
  */
 function SegmentedSetting<T extends string>({
   legend,
+  description,
   choices,
   value,
   onChange,
 }: SegmentedSettingProps<T>) {
   return (
-    <fieldset className={styles.group}>
-      <legend className={styles.legend}>{legend}</legend>
+    <fieldset className={cx(styles.row, styles.stacked)}>
+      <legend className={styles.legend}>
+        <Label text={legend} description={description} />
+      </legend>
       <div className={styles.segmented}>
         {choices.map((choice) => (
           <button
@@ -159,6 +172,7 @@ function SegmentedSetting<T extends string>({
 
 interface SwitchSettingProps {
   label: string;
+  description?: string | undefined;
   checked: boolean;
   onChange: (checked: boolean) => void;
   onFocus: () => void;
@@ -169,10 +183,17 @@ interface SwitchSettingProps {
  * A boolean, as a switch rather than an On/Off pair of segments: two segments
  * asked the eye to read both labels to find out which way a setting was set.
  */
-function SwitchSetting({ label, checked, onChange, onFocus, onBlur }: SwitchSettingProps) {
+function SwitchSetting({
+  label,
+  description,
+  checked,
+  onChange,
+  onFocus,
+  onBlur,
+}: SwitchSettingProps) {
   return (
     <div className={styles.row}>
-      <span className={styles.label}>{label}</span>
+      <Label text={label} description={description} />
       <button
         type="button"
         role="switch"
@@ -229,7 +250,7 @@ function SliderSetting({ label, value, range, step, onPreview, onCommit }: Slide
 
   return (
     <label className={styles.row}>
-      <span className={styles.label}>{label}</span>
+      <Label text={label} />
       <span className={styles.control}>
         <input
           type="range"
@@ -331,8 +352,8 @@ function ShortcutSetting({
   return (
     <>
       <div className={styles.row}>
-        <span className={styles.label} id="shortcut-label">
-          New note shortcut
+        <span className={styles.labelWrap} id="shortcut-label">
+          <span className={styles.label}>New note shortcut</span>
         </span>
         <button
           type="button"
@@ -367,12 +388,133 @@ function ShortcutSetting({
   );
 }
 
-function Section({ title, children }: { title: string; children: ReactNode }) {
+/**
+ * One group of settings, as an inset card with hairlines between its rows.
+ *
+ * The view used to be four headings over one continuous column of controls, and
+ * at a glance it read as a single list of fourteen things. Boxing each group is
+ * what every system preferences pane does, and for the same reason: the eye
+ * finds a card of three rows without reading any of them.
+ */
+function Group({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <section className={styles.section}>
-      <h3 className={styles.sectionTitle}>{title}</h3>
-      <div className={styles.fields}>{children}</div>
+    <section className={styles.group}>
+      <h3 className={styles.groupTitle}>{title}</h3>
+      <div className={styles.card}>{children}</div>
     </section>
+  );
+}
+
+/**
+ * A row's name, and the sentence that saves having to guess what it does.
+ * The name is primary text: everything here was secondary, which made the whole
+ * pane read as small print.
+ */
+function Label({ text, description }: { text: string; description?: string | undefined }) {
+  return (
+    <span className={styles.labelWrap}>
+      <span className={styles.label}>{text}</span>
+      {description !== undefined && <span className={styles.description}>{description}</span>}
+    </span>
+  );
+}
+
+/**
+ * The settings that are rarely touched, folded away behind one row.
+ *
+ * Two hover delays and a panel width are worth having and are not worth being
+ * the first thing anyone sees; three of the fourteen rows earned their place
+ * here rather than being removed.
+ */
+function Advanced({ children }: { children: ReactNode }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <button
+        type="button"
+        className={cx(styles.row, styles.disclosure)}
+        aria-expanded={open}
+        onClick={() => {
+          setOpen((shown) => !shown);
+        }}
+      >
+        <Label text="Advanced" />
+        <ChevronRight
+          size={13}
+          strokeWidth={2}
+          className={cx(styles.chevron, open && styles.chevronOpen)}
+          aria-hidden="true"
+        />
+      </button>
+      {open && children}
+    </>
+  );
+}
+
+interface StepperSettingProps {
+  label: string;
+  description?: string | undefined;
+  value: number;
+  unit: string;
+  range: Range;
+  step: number;
+  onChange: (value: number) => void;
+}
+
+/**
+ * A number set by pressing rather than typing.
+ *
+ * Every number in this pane used to be a field to type into, which is the right
+ * control for a panel width and the wrong one for "twenty-five minutes": nobody
+ * types a session length, they nudge it. The value is clamped at the ends, so
+ * the buttons simply stop.
+ */
+function StepperSetting({
+  label,
+  description,
+  value,
+  unit,
+  range,
+  step,
+  onChange,
+}: StepperSettingProps) {
+  const set = (next: number) => {
+    const clamped = Math.min(Math.max(next, range.min), range.max);
+    if (clamped !== value) {
+      onChange(clamped);
+    }
+  };
+  return (
+    <div className={styles.row} role="group" aria-label={label}>
+      <Label text={label} description={description} />
+      <span className={styles.stepper}>
+        <button
+          type="button"
+          className={styles.step}
+          aria-label={`${label}: less`}
+          disabled={value <= range.min}
+          onClick={() => {
+            set(value - step);
+          }}
+        >
+          <Minus size={12} strokeWidth={2.5} />
+        </button>
+        <output className={styles.stepValue}>
+          {value} {unit}
+        </output>
+        <button
+          type="button"
+          className={styles.step}
+          aria-label={`${label}: more`}
+          disabled={value >= range.max}
+          onClick={() => {
+            set(value + step);
+          }}
+        >
+          <Plus size={12} strokeWidth={2.5} />
+        </button>
+      </span>
+    </div>
   );
 }
 
@@ -448,7 +590,7 @@ export function SettingsView({ onClose }: SettingsViewProps) {
         <h2 className={styles.heading}>Settings</h2>
       </div>
 
-      <Section title="Appearance">
+      <Group title="Appearance">
         <SegmentedSetting
           legend="Theme"
           choices={THEMES}
@@ -460,6 +602,7 @@ export function SettingsView({ onClose }: SettingsViewProps) {
 
         <SegmentedSetting
           legend="Tab"
+          description="How the tab at the screen edge is painted while the panel is away."
           choices={TAB_APPEARANCE}
           value={settings["tab.appearance"]}
           onChange={(appearance) => {
@@ -477,21 +620,9 @@ export function SettingsView({ onClose }: SettingsViewProps) {
             void patch({ "panel.translucency": value });
           }}
         />
+      </Group>
 
-        <NumberSetting
-          label="Panel width"
-          unit="px"
-          value={settings["panel.width"]}
-          range={PANEL_WIDTH}
-          step={10}
-          onCommit={(value) => {
-            void patch({ "panel.width": value });
-          }}
-          {...fieldProps}
-        />
-      </Section>
-
-      <Section title="Dock">
+      <Group title="Dock">
         <SegmentedSetting
           legend="Screen edge"
           choices={SIDES}
@@ -503,6 +634,7 @@ export function SettingsView({ onClose }: SettingsViewProps) {
 
         <SegmentedSetting
           legend="Open panel"
+          description="Point at the tab and wait, or click it."
           choices={OPEN_ON}
           value={settings["dock.openOn"]}
           onChange={(openOn) => {
@@ -511,7 +643,7 @@ export function SettingsView({ onClose }: SettingsViewProps) {
         />
 
         <label className={styles.row}>
-          <span className={styles.label}>Monitor</span>
+          <Label text="Monitor" />
           <select
             className={styles.select}
             value={settings["dock.monitor"]}
@@ -529,36 +661,108 @@ export function SettingsView({ onClose }: SettingsViewProps) {
           </select>
         </label>
 
-        <NumberSetting
-          label="Open delay"
-          // Hover intent only: a click opens the panel straight away.
-          disabled={settings["dock.openOn"] === "click"}
-          unit="ms"
-          value={settings["dock.openDelayMs"]}
-          range={DELAY.open}
-          step={10}
-          onCommit={(value) => {
-            void patch({ "dock.openDelayMs": value });
+        <Advanced>
+          <NumberSetting
+            label="Open delay"
+            // Hover intent only: a click opens the panel straight away.
+            disabled={settings["dock.openOn"] === "click"}
+            unit="ms"
+            value={settings["dock.openDelayMs"]}
+            range={DELAY.open}
+            step={10}
+            onCommit={(value) => {
+              void patch({ "dock.openDelayMs": value });
+            }}
+            {...fieldProps}
+          />
+
+          <NumberSetting
+            label="Close delay"
+            unit="ms"
+            value={settings["dock.closeDelayMs"]}
+            range={DELAY.close}
+            step={50}
+            onCommit={(value) => {
+              void patch({ "dock.closeDelayMs": value });
+            }}
+            {...fieldProps}
+          />
+
+          <NumberSetting
+            label="Panel width"
+            unit="px"
+            value={settings["panel.width"]}
+            range={PANEL_WIDTH}
+            step={10}
+            onCommit={(value) => {
+              void patch({ "panel.width": value });
+            }}
+            {...fieldProps}
+          />
+        </Advanced>
+      </Group>
+
+      <Group title="Focus">
+        <StepperSetting
+          label="Session"
+          value={settings["focus.focusMinutes"]}
+          unit="min"
+          range={FOCUS_MINUTES}
+          step={5}
+          onChange={(value) => {
+            void patch({ "focus.focusMinutes": value });
+          }}
+        />
+
+        <StepperSetting
+          label="Short break"
+          value={settings["focus.breakMinutes"]}
+          unit="min"
+          range={FOCUS_MINUTES}
+          step={1}
+          onChange={(value) => {
+            void patch({ "focus.breakMinutes": value });
+          }}
+        />
+
+        <StepperSetting
+          label="Long break"
+          value={settings["focus.longBreakMinutes"]}
+          unit="min"
+          range={FOCUS_MINUTES}
+          step={5}
+          onChange={(value) => {
+            void patch({ "focus.longBreakMinutes": value });
+          }}
+        />
+
+        <StepperSetting
+          label="Long break after"
+          description="Sessions before the longer one."
+          value={settings["focus.longBreakEvery"]}
+          unit="sessions"
+          range={LONG_BREAK_EVERY}
+          step={1}
+          onChange={(value) => {
+            void patch({ "focus.longBreakEvery": value });
+          }}
+        />
+
+        <SwitchSetting
+          label="Start the next phase"
+          description="Begin the break, and the session after it, without being asked."
+          checked={settings["focus.autoStart"]}
+          onChange={(checked) => {
+            void patch({ "focus.autoStart": checked });
           }}
           {...fieldProps}
         />
+      </Group>
 
-        <NumberSetting
-          label="Close delay"
-          unit="ms"
-          value={settings["dock.closeDelayMs"]}
-          range={DELAY.close}
-          step={50}
-          onCommit={(value) => {
-            void patch({ "dock.closeDelayMs": value });
-          }}
-          {...fieldProps}
-        />
-      </Section>
-
-      <Section title="General">
+      <Group title="General">
         <SwitchSetting
           label="Task reminders"
+          description="A notification when a task falls due."
           checked={settings["tasks.reminders"]}
           onChange={(checked) => {
             void patch({ "tasks.reminders": checked });
@@ -601,7 +805,7 @@ export function SettingsView({ onClose }: SettingsViewProps) {
         />
 
         <div className={styles.row}>
-          <span className={styles.label}>Notes as text files</span>
+          <Label text="Notes as text files" description={exportedTo ?? undefined} />
           <button
             type="button"
             className={styles.action}
@@ -610,7 +814,7 @@ export function SettingsView({ onClose }: SettingsViewProps) {
               setExporting(true);
               void notesExport()
                 .then((path) => {
-                  setExportedTo(path);
+                  setExportedTo(`Saved to ${path}`);
                 })
                 .catch((error: unknown) => {
                   console.error("settings: export failed", error);
@@ -624,13 +828,7 @@ export function SettingsView({ onClose }: SettingsViewProps) {
             {exporting ? "Exporting…" : "Export"}
           </button>
         </div>
-        {exportedTo !== null && (
-          // Where the notes went, since nothing was asked and no folder opened.
-          <p className={styles.note} role="status">
-            Saved to {exportedTo}
-          </p>
-        )}
-      </Section>
+      </Group>
     </div>
   );
 }

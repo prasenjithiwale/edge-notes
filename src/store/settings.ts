@@ -22,6 +22,15 @@ const DEFAULTS: Settings = {
   "shortcut.newNote": "CmdOrCtrl+Alt+N",
   "tasks.reminders": true,
   "panel.translucency": 0,
+  "focus.focusMinutes": 25,
+  "focus.breakMinutes": 5,
+  "focus.longBreakMinutes": 15,
+  "focus.longBreakEvery": 4,
+  "focus.autoStart": false,
+  "focus.taskId": "",
+  "focus.day": "",
+  "focus.today": 0,
+  "focus.streak": 0,
 };
 
 /**

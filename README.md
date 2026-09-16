@@ -1,4 +1,4 @@
-# Edge Notes
+# Ledge
 
 A notes widget that lives on the edge of your screen. A small tab sits against
 the screen edge above whatever you are working in; point at it and a panel of
@@ -24,6 +24,36 @@ Downloads live at
 a public GitHub Pages site, because this repository is private and its Releases
 page is not a public download.
 
+### macOS, with Homebrew
+
+macOS 12 Monterey or later, Apple silicon and Intel in one build:
+
+```bash
+brew trust --cask prasenjithiwale/tap/edge-notes
+brew install --cask prasenjithiwale/tap/edge-notes
+```
+
+Homebrew will not load a cask from a tap outside its own repositories until you
+say you trust it, which is the first line; the second adds
+[the tap](https://github.com/prasenjithiwale/homebrew-tap) and installs. After
+that the short name works, as in `brew upgrade edge-notes`.
+
+The cask is still called `edge-notes` although the app is Ledge: it is what an
+existing install is upgraded by, and renaming the token would strand anyone who
+installed before 0.1.0 on the last version they got.
+
+The build is not signed with an Apple Developer ID and is not notarised, so macOS
+will not open it while it carries the quarantine attribute that Homebrew puts on
+every cask. The cask therefore strips it after installing, which is what
+`--no-quarantine` did before Homebrew removed that flag in July 2026; the reasons
+are written out in `tools/publish_cask.sh`. It does mean the app is installed
+without a Gatekeeper check. The `.dmg` is on the site too, for installing by
+hand — after which the quarantine attribute has to come off by hand as well:
+
+```bash
+xattr -dr com.apple.quarantine "/Applications/Ledge.app"
+```
+
 ### Windows
 
 The page has the latest `setup.exe` and `.msi` for 64-bit Windows 10 and 11, with
@@ -33,17 +63,38 @@ time: **More info**, then **Run anyway**.
 ### Debian and Ubuntu, with apt
 
 The same site is a signed APT repository, so on x86_64 Ubuntu 22.04+ or Debian
-12+ Edge Notes installs and updates like any other package:
+12+ Ledge installs and updates like any other package:
 
 ```bash
 sudo install -d -m 0755 /etc/apt/keyrings
 curl -fsSL https://prasenjithiwale.github.io/edge-notes-apt/key.gpg \
-  | sudo gpg --dearmor -o /etc/apt/keyrings/edge-notes.gpg
-echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/edge-notes.gpg] https://prasenjithiwale.github.io/edge-notes-apt stable main" \
-  | sudo tee /etc/apt/sources.list.d/edge-notes.list
+  | sudo gpg --dearmor -o /etc/apt/keyrings/ledge.gpg
+echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/ledge.gpg] https://prasenjithiwale.github.io/edge-notes-apt stable main" \
+  | sudo tee /etc/apt/sources.list.d/ledge.list
 sudo apt update
-sudo apt install edge-notes
+sudo apt install ledge
 ```
+
+The app was called Edge Notes until 0.1.0 and its package was `edge-notes`. If
+that one is installed, `sudo apt install ledge` replaces it: the new package
+declares `Replaces`, `Conflicts` and `Provides` on the old name, so apt takes the
+old one out rather than leaving two copies of the same app installed. (A plain
+`apt upgrade` will not do it on its own — nothing depends on either package, so
+apt has no reason to make the swap unasked.) The notes come across on first
+launch; see "Upgrading from Edge Notes" below.
+
+## Upgrading from Edge Notes
+
+0.1.0 renamed the app, and with it the bundle identifier
+(`dev.edgenotes.app` → `dev.ledge.app`). That identifier is what the app-data
+folder is named after, so the first launch of Ledge copies `notes.db` from the
+old folder into the new one — notes, tasks and settings all come across. The old
+folder is left where it is, untouched, so an older build still opens on its own
+data and a failed copy costs nothing. Once you are happy, it can be deleted:
+
+- macOS: `~/Library/Application Support/dev.edgenotes.app`
+- Windows: `%APPDATA%\dev.edgenotes.app`
+- Linux: `~/.local/share/dev.edgenotes.app`
 
 ## Versions and releases
 
@@ -69,8 +120,8 @@ step. A test fails if they ever disagree. Every release has an entry in
 3. Create the release with the `.dmg`. This also creates the tag:
 
    ```bash
-   gh release create v0.0.2 "Edge-Notes_0.0.2_macOS_universal.dmg" \
-     --target master --title "Edge Notes v0.0.2" --notes-file notes.md
+   gh release create v0.0.2 "Ledge_0.0.2_macOS_universal.dmg" \
+     --target master --title "Ledge v0.0.2" --notes-file notes.md
    ```
 
 4. The tag starts the **Release** workflow (`.github/workflows/release.yml`), which
@@ -78,9 +129,13 @@ step. A test fails if they ever disagree. Every release has an entry in
    Windows `setup.exe` and `.msi` on Windows, and attaches them to the same
    release, usually within 20 minutes.
 
-   Its **Pages site** job then publishes both to `edge-notes-apt`: the `.deb`
-   into the APT repository, re-signed, and the Windows installers into
-   `windows/` with a `SHA256SUMS` file. It rewrites the landing page from what
+   Its **Pages site** job then publishes all three to `edge-notes-apt`: the
+   `.deb` into the APT repository, re-signed, the Windows installers into
+   `windows/` and the macOS `.dmg` into `macos/`, each with a `SHA256SUMS` file.
+   It then writes the Homebrew cask into
+   [`prasenjithiwale/homebrew-tap`](https://github.com/prasenjithiwale/homebrew-tap),
+   pinning the sha256 of the `.dmg` it just published — after the site push,
+   never before it, or the cask would advertise a download that is not there. It rewrites the landing page from what
    is in the site, so the versions and sizes it shows are always the published
    ones. Old versions of both are kept. Finally it checks the live site: it
    installs the `.deb` from the repository on Ubuntu 24.04 and downloads the
@@ -91,9 +146,14 @@ step. A test fails if they ever disagree. Every release has an entry in
    platform (`gh workflow run release.yml -f tag=v0.0.2 -f platforms=windows`, or
    `platforms=publish` to publish an existing release's packages).
 
-The Pages job needs two repository secrets: `APT_SIGNING_KEY` (the armored private
-key that signs the APT repository) and `APT_DEPLOY_KEY` (an SSH deploy key with
-write access to `edge-notes-apt`).
+The Pages job needs three repository secrets: `APT_SIGNING_KEY` (the armored
+private key that signs the APT repository), `APT_DEPLOY_KEY` (an SSH deploy key
+with write access to `edge-notes-apt`) and `HOMEBREW_TAP_DEPLOY_KEY` (the same,
+for `homebrew-tap`).
+
+The macOS `.dmg` is the one package built by hand, so a release made without
+step 2 simply has no `.dmg`: the job says so and leaves the site's and the cask's
+existing version alone rather than failing.
 
 Neither Linux nor Windows can be built on a Mac: Tauri bundles only for the
 platform it runs on, so each needs its own machine or a CI runner.
@@ -131,8 +191,15 @@ rather than the PNGs.
 
 ### Signing and notarising on macOS
 
-Unsigned builds run locally but Gatekeeper stops them elsewhere, so a release
-needs an Apple Developer ID. Tauri reads these from the environment:
+`tauri.conf.json` sets `"signingIdentity": "-"`, which ad-hoc signs the bundle.
+That costs nothing and needs no account, and it is worth having: without it only
+the executable carries the linker's own signature, the bundle is unsealed and its
+identity is a generated string rather than `dev.edgenotes.app` — which is the
+identity macOS remembers a notification permission against.
+
+Ad-hoc is not a Developer ID, though: Gatekeeper still rejects the app, which is
+why the Homebrew cask strips the quarantine attribute. Releasing an app that
+passes Gatekeeper needs a real identity. Tauri reads these from the environment:
 
 ```bash
 export APPLE_SIGNING_IDENTITY="Developer ID Application: Your Name (TEAMID)"
@@ -143,11 +210,12 @@ npm run tauri build
 ```
 
 Tauri signs the bundle, submits it to Apple's notary service, waits for the
-ticket and staples it. To check the result:
+ticket and staples it. Doing that would let the cask's `postflight_steps` go.
+To check the result:
 
 ```bash
-spctl -a -vvv -t install "src-tauri/target/release/bundle/macos/Edge Notes.app"
-xcrun stapler validate "src-tauri/target/release/bundle/dmg/Edge Notes_0.1.0_aarch64.dmg"
+spctl -a -vvv -t install "src-tauri/target/release/bundle/macos/Ledge.app"
+xcrun stapler validate "src-tauri/target/release/bundle/dmg/Ledge_0.1.0_aarch64.dmg"
 ```
 
 **The Mac App Store is not an option.** Transparency needs `macOSPrivateApi`,
@@ -177,14 +245,14 @@ because Wayland does not let an application place its own windows and GNOME
 ignores always-on-top. To opt out and run natively:
 
 ```bash
-EDGE_NOTES_NATIVE_WAYLAND=1 edge-notes
+LEDGE_NATIVE_WAYLAND=1 ledge
 ```
 
 Transparency needs a compositing window manager. Some NVIDIA and WebKitGTK
 combinations render a blank window; if that happens:
 
 ```bash
-WEBKIT_DISABLE_DMABUF_RENDERER=1 edge-notes
+WEBKIT_DISABLE_DMABUF_RENDERER=1 ledge
 ```
 
 ## Known limitations

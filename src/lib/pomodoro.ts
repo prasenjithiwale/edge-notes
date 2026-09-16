@@ -7,25 +7,52 @@
  * altogether; anything that decremented a counter on a tick would lose minutes
  * and never know. Reading `endsAt - now` is right however long nothing ran.
  *
+ * The phase lengths travel inside the state rather than sitting in a module
+ * constant, because they are settings now: every function that needs one already
+ * has the state in its hand, and a timer running to a length that is no longer
+ * stored is a legitimate thing to be in the middle of.
+ *
  * Pure, like the rest of `lib/`: every function that needs the time takes it.
  */
 
 export type Phase = "focus" | "short" | "long";
 
-/** The classic lengths. Settable later; this is the whole of "basic" for now. */
-export const DURATIONS: Record<Phase, number> = {
-  focus: 25 * 60_000,
-  short: 5 * 60_000,
-  long: 15 * 60_000,
+/** The phase lengths, in milliseconds, and the run that earns the long break. */
+export interface Durations {
+  focus: number;
+  short: number;
+  long: number;
+  /** How many focus sessions earn the long break. */
+  longEvery: number;
+}
+
+export const MINUTE = 60_000;
+
+/** The classic lengths, and what `Settings::default()` in Rust agrees to. */
+export const DEFAULT_DURATIONS: Durations = {
+  focus: 25 * MINUTE,
+  short: 5 * MINUTE,
+  long: 15 * MINUTE,
+  longEvery: 4,
 };
 
-/** How many focus sessions earn the long break. */
-export const LONG_BREAK_EVERY = 4;
+/** What a phase may be set to, in minutes; mirrored by `FOCUS_MINUTES` in Rust. */
+export const MINUTES_RANGE = { min: 1, max: 120 } as const;
+
+/** Mirrored by `LONG_BREAK_EVERY` in Rust. */
+export const LONG_EVERY_RANGE = { min: 2, max: 8 } as const;
 
 export const PHASE_LABELS: Record<Phase, string> = {
   focus: "Focus",
   short: "Short break",
   long: "Long break",
+};
+
+/** What the phase is *for*, under the clock. */
+export const PHASE_HINTS: Record<Phase, string> = {
+  focus: "One thing, until the time is up.",
+  short: "Look away from the screen.",
+  long: "Leave the desk for this one.",
 };
 
 export interface Pomodoro {
@@ -39,21 +66,29 @@ export interface Pomodoro {
   /** Focus sessions finished on `day`, which is a local `YYYY-MM-DD`. */
   day: string;
   today: number;
+  /** The lengths this timer is running to. */
+  durations: Durations;
 }
 
-export function idle(phase: Phase = "focus"): Pomodoro {
+export function idle(phase: Phase = "focus", durations: Durations = DEFAULT_DURATIONS): Pomodoro {
   return {
     phase,
     endsAt: null,
-    restMs: DURATIONS[phase],
+    restMs: durations[phase],
     streak: 0,
     day: "",
     today: 0,
+    durations,
   };
 }
 
 export function isRunning(state: Pomodoro): boolean {
   return state.endsAt !== null;
+}
+
+/** How long the current phase is, in full. */
+export function phaseLength(state: Pomodoro): number {
+  return state.durations[state.phase];
 }
 
 /** Milliseconds left, never below zero. */
@@ -66,7 +101,7 @@ export function remaining(state: Pomodoro, now: number): number {
 
 /** How much of the phase has gone, 0 to 1, for the ring. */
 export function progress(state: Pomodoro, now: number): number {
-  const total = DURATIONS[state.phase];
+  const total = phaseLength(state);
   if (total <= 0) {
     return 0;
   }
@@ -85,12 +120,31 @@ export function formatRemaining(ms: number): string {
     : `${String(minutes)}:${pad(seconds)}`;
 }
 
+/**
+ * The line under the clock: when this phase will be over, or how long it is
+ * before anything has started.
+ *
+ * Showing the end time is the difference between "twenty-five minutes" and
+ * "quarter past": one has to be added up, and the other is a glance at the same
+ * clock every meeting in the day is already in.
+ */
+export function endsLabel(state: Pomodoro, locale?: string): string {
+  if (state.endsAt === null) {
+    const minutes = Math.round(remaining(state, 0) / MINUTE);
+    return minutes <= 0 ? "Ready" : `${String(minutes)} min`;
+  }
+  const time = new Intl.DateTimeFormat(locale, { hour: "numeric", minute: "2-digit" }).format(
+    new Date(state.endsAt),
+  );
+  return `Ends ${time}`;
+}
+
 export function start(state: Pomodoro, now: number): Pomodoro {
   if (isRunning(state)) {
     return state;
   }
   // A phase that has run out starts again from the top rather than ending at once.
-  const rest = state.restMs > 0 ? state.restMs : DURATIONS[state.phase];
+  const rest = state.restMs > 0 ? state.restMs : phaseLength(state);
   return { ...state, endsAt: now + rest, restMs: rest };
 }
 
@@ -103,28 +157,59 @@ export function pause(state: Pomodoro, now: number): Pomodoro {
 
 /** Back to the start of this phase, stopped. */
 export function reset(state: Pomodoro): Pomodoro {
-  return { ...state, endsAt: null, restMs: DURATIONS[state.phase] };
+  return { ...state, endsAt: null, restMs: phaseLength(state) };
+}
+
+export function sameDurations(a: Durations, b: Durations): boolean {
+  return (
+    a.focus === b.focus && a.short === b.short && a.long === b.long && a.longEvery === b.longEvery
+  );
 }
 
 /**
- * The phase after this one. A focus session earns a break — every fourth one the
- * long break — and a break is followed by focus.
+ * Adopt lengths changed in Settings.
+ *
+ * A running phase keeps the end it was started with and the change applies from
+ * the next one: moving the finish line under someone who is mid-session is the
+ * one thing a timer must never do. A stopped phase takes the new length whole,
+ * which is the only answer that does not need explaining.
+ */
+export function withDurations(state: Pomodoro, durations: Durations): Pomodoro {
+  if (sameDurations(state.durations, durations)) {
+    return state;
+  }
+  return {
+    ...state,
+    durations,
+    restMs: isRunning(state) ? state.restMs : durations[state.phase],
+  };
+}
+
+/**
+ * The phase after this one. A focus session earns a break — every `longEvery`-th
+ * one the long break — and a break is followed by focus.
  *
  * `counted` says whether the focus session that just ended should be added up:
  * finishing one counts, skipping past it does not.
  */
 export function advance(state: Pomodoro, today: string, counted: boolean): Pomodoro {
   if (state.phase !== "focus") {
-    return { ...idle("focus"), streak: state.streak, day: state.day, today: state.today };
+    return {
+      ...idle("focus", state.durations),
+      streak: state.streak,
+      day: state.day,
+      today: state.today,
+    };
   }
 
   const streak = counted ? state.streak + 1 : state.streak;
-  const next: Phase = counted && streak % LONG_BREAK_EVERY === 0 ? "long" : "short";
+  const every = Math.max(1, state.durations.longEvery);
+  const next: Phase = counted && streak % every === 0 ? "long" : "short";
   // The day's tally resets by itself when the day does, so nothing has to run
   // at midnight.
   const sameDay = state.day === today;
   return {
-    ...idle(next),
+    ...idle(next, state.durations),
     streak,
     day: counted ? today : state.day,
     today: counted ? (sameDay ? state.today : 0) + 1 : sameDay ? state.today : 0,
@@ -136,20 +221,34 @@ export function hasElapsed(state: Pomodoro, now: number): boolean {
   return state.endsAt !== null && now >= state.endsAt;
 }
 
-/** The dots under the clock: how far through the run of four this is. */
+/** The dots under the clock: how far through the run to the long break this is. */
 export function dots(state: Pomodoro): boolean[] {
-  const done = state.streak % LONG_BREAK_EVERY;
-  return Array.from({ length: LONG_BREAK_EVERY }, (_, index) => index < done);
+  const every = Math.max(1, state.durations.longEvery);
+  const done = state.streak % every;
+  return Array.from({ length: every }, (_, index) => index < done);
+}
+
+/** The tally, as the sentence under the controls. */
+export function tallyLabel(state: Pomodoro, today: string): string {
+  const count = state.day === today ? state.today : 0;
+  if (count === 0) {
+    return "Nothing finished yet today";
+  }
+  return count === 1 ? "1 session finished today" : `${String(count)} sessions finished today`;
 }
 
 /**
  * What to say when a phase ends. Rust shows it through the same one-shot
  * reminder thread the tasks use, so a session that finishes while the panel is
- * closed still says so.
+ * closed still says so. A session with a task attached says which one.
  */
-export function endNotice(phase: Phase): { title: string; body: string } {
+export function endNotice(phase: Phase, task?: string | null): { title: string; body: string } {
   if (phase === "focus") {
-    return { title: "Focus finished", body: "Time for a break." };
+    const name = task?.trim();
+    return {
+      title: "Focus finished",
+      body: name ? `${name} — time for a break.` : "Time for a break.",
+    };
   }
   return { title: "Break over", body: "Back to it." };
 }

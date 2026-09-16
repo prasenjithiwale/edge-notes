@@ -1,6 +1,6 @@
 # Changelog
 
-Every release of Edge Notes, newest first. Versions follow
+Every release of Ledge, newest first. Versions follow
 [semantic versioning](https://semver.org); while the version is `0.x`, any release
 may change behaviour. Releases are published on
 [GitHub Releases](https://github.com/prasenjithiwale/edge-notes/releases).
@@ -9,9 +9,39 @@ To release, see "Releasing" in the README.
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-09-17
+
 ### Added
 
-- **Edge Notes installs from Homebrew on macOS**, from a tap of its own:
+- **Search searches the tab you are looking at.** `⌘F` on the Tasks tab searches
+  the tasks — titles and the notes under them — instead of throwing you back to
+  the notes, and says so when nothing matches.
+- **The Tasks tab is fully keyboard-operable.** Arrow keys move between tasks,
+  Space ticks the one you are on, Enter opens its details, and `⌘N` puts the
+  caret in the add field.
+- **Quick entry understands ordinary words, and shows what it understood.** Type
+  `ship it @fri 2pm !!!` and the chips under the field say Friday, 2:00 pm and
+  High before you press Enter. `@today`, `@tomorrow`, any weekday, times as
+  `14:00`, `2pm` or `2:30 pm`, and `!!!`/`!!` alongside the older `@2026-09-20`
+  and `!high`. A word after `@` that is not a date stays part of the task.
+- **The Focus tab's lengths are settings.** Session, short break, long break and
+  how many sessions earn the long one, each nudged with a stepper. Changing a
+  length while a session is running leaves that session ending where it was
+  always going to; the new length starts with the next phase.
+- **The Focus tab remembers.** The day's count and the run towards the long break
+  survive quitting the app, and so does the task a session is for.
+- **A focus session can name the task it is for.** Pick one on the Focus tab, or
+  press "Focus on this" in a task's details, and the tab shows what you are
+  working on — the notification at the end names it too. There is a tick beside
+  it for finishing the task without leaving the tab.
+- **Start the next phase automatically**, if you want it: a switch in Settings,
+  off by default. The break starts when the session ends is *noticed*, not when
+  it ran out, so coming back late never hands you a break that is already over.
+- **The clock says when it ends.** "Ends 3:45 pm" under the countdown, and the
+  full length of the phase before it has started.
+- **A dot on the Focus tab while a session is running**, so a timer counting down
+  behind the Notes tab is not invisible.
+- **Ledge installs from Homebrew on macOS**, from a tap of its own:
 
   ```bash
   brew trust --cask prasenjithiwale/tap/edge-notes
@@ -42,6 +72,32 @@ To release, see "Releasing" in the README.
 
 ### Changed
 
+- **Edge Notes is now called Ledge.** The window, the tray, the export folder and
+  every download are named after it, and the bundle identifier moved with it
+  (`dev.edgenotes.app` → `dev.ledge.app`).
+
+  That identifier is what the app-data folder is named after, so **the first
+  launch copies your database across** — notes, tasks and settings all come with
+  it. The old folder is left exactly where it is, so an older build still opens
+  on its own data and nothing is lost if the copy goes wrong. Once you are
+  happy, you can delete `~/Library/Application Support/dev.edgenotes.app`
+  (`%APPDATA%\dev.edgenotes.app` on Windows,
+  `~/.local/share/dev.edgenotes.app` on Linux).
+
+  On Debian and Ubuntu the package is now `ledge`: `sudo apt install ledge`
+  replaces `edge-notes` rather than installing a second copy. The Homebrew cask
+  keeps its old name, `prasenjithiwale/tap/edge-notes`, so `brew upgrade` still
+  works for anyone who installed before this release. The Linux opt-out for
+  native Wayland is now `LEDGE_NATIVE_WAYLAND=1`.
+- **The Tasks tab looks and behaves like a list.** Each task is a row with its
+  own background under the cursor and the keyboard, a round tick box, its
+  priority flag in front of the title rather than off at the edge, and a chevron
+  that says it opens. Sections fold away and keep their counts; Done starts
+  folded.
+- **Settings is four cards instead of one long column.** Each group is boxed,
+  every setting's name is readable rather than small print, and the ones with a
+  name that is not the whole story have a line of explanation. The two hover
+  delays and the panel width moved behind **Advanced**.
 - **Tasks are their own thing, not lines inside notes.** A task now has real
   fields — title, notes, due date and time, priority, repeat — instead of tokens
   at the end of a `- [ ]` line, and it no longer needs a note to live in. The
@@ -81,7 +137,7 @@ To release, see "Releasing" in the README.
   row instead of a stack, which used to set the height of the card.
 - **The macOS app is ad-hoc signed.** The bundle used to ship unsealed, with only
   the executable carrying the linker's signature and an identity of
-  `edge_notes-<hash>` rather than `dev.edgenotes.app`. It is still not signed with
+  `ledge-<hash>` rather than `dev.edgenotes.app`. It is still not signed with
   a Developer ID.
 - **Priority flags are coloured** — red for high, amber for medium, green for
   low, on the card, the Tasks tab and the details picker. The flag is still
@@ -91,6 +147,8 @@ To release, see "Releasing" in the README.
 
 ### Fixed
 
+- **Opening a task's details on the last row scrolls it into view** instead of
+  unfolding it below the fold.
 - **A shortcut the system refuses no longer leaves you with none.** Setting the
   new note shortcut to a combination another application owns used to unbind the
   old one, store the new one, fail to register it, and say nothing. The shortcut
@@ -111,7 +169,7 @@ To release, see "Releasing" in the README.
   rather than None, High, Medium, Low.
 - **Linux: the window is no longer called "Tauri App".** Switching apps with
   Alt+Tab on Ubuntu showed the widget under Tauri's default window title, which
-  had never been set. It is now "Edge Notes".
+  had never been set. It was set to "Edge Notes", the app's name at the time.
 
 ## [0.0.4] - 2026-09-15
 

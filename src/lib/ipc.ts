@@ -115,6 +115,22 @@ export interface Settings {
   "tasks.reminders": boolean;
   /** How see-through the panel is, 0 (solid) to 60 percent. */
   "panel.translucency": number;
+  /** The Focus tab's phase lengths, in minutes. */
+  "focus.focusMinutes": number;
+  "focus.breakMinutes": number;
+  "focus.longBreakMinutes": number;
+  /** How many focus sessions earn the long break. */
+  "focus.longBreakEvery": number;
+  /** Start the next phase by itself when one ends. */
+  "focus.autoStart": boolean;
+  /**
+   * The Focus tab's own state rather than a preference: the task a session is
+   * for (empty for none), and the day's tally, so both survive a restart.
+   */
+  "focus.taskId": string;
+  "focus.day": string;
+  "focus.today": number;
+  "focus.streak": number;
 }
 
 export type SettingsPatch = Partial<Settings>;

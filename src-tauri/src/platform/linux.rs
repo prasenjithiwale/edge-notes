@@ -14,7 +14,7 @@ pub fn prepare_display_backend() {
     let is_wayland = std::env::var("XDG_SESSION_TYPE")
         .map(|value| value.eq_ignore_ascii_case("wayland"))
         .unwrap_or(false);
-    let opted_out = std::env::var("EDGE_NOTES_NATIVE_WAYLAND").is_ok_and(|value| value == "1");
+    let opted_out = std::env::var("LEDGE_NATIVE_WAYLAND").is_ok_and(|value| value == "1");
 
     if is_wayland && !opted_out {
         // SAFETY: called as the first statement in main, before any thread is

@@ -7,6 +7,12 @@ import styles from "./SearchField.module.css";
 interface SearchFieldProps {
   query: string;
   onQueryChange: (query: string) => void;
+  /**
+   * What is being searched — "notes" or "tasks". The field searches whichever
+   * list is in front, so it has to say which one; a field labelled "Search
+   * notes" sitting over a list of tasks is simply wrong.
+   */
+  what: string;
   /** Focus leaving an empty field returns the header to the title. */
   onAbandon: () => void;
 }
@@ -18,7 +24,7 @@ interface SearchFieldProps {
  * walking away would pin the panel open indefinitely. Esc is not handled here: it
  * belongs to the one ordered cascade in the panel (brief 6.11).
  */
-export function SearchField({ query, onQueryChange, onAbandon }: SearchFieldProps) {
+export function SearchField({ query, onQueryChange, what, onAbandon }: SearchFieldProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const setLock = useDockStore((state) => state.setLock);
   const [focused, setFocused] = useState(false);
@@ -48,8 +54,8 @@ export function SearchField({ query, onQueryChange, onAbandon }: SearchFieldProp
         type="text"
         className={styles.field}
         value={query}
-        aria-label="Search notes"
-        placeholder="Search notes"
+        aria-label={`Search ${what}`}
+        placeholder={`Search ${what}`}
         autoComplete="off"
         spellCheck={false}
         onChange={(event) => {

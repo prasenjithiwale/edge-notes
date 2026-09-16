@@ -1,6 +1,7 @@
 //! SQLite, owned entirely by Rust. The webview never sees SQL, a file path or a
 //! connection — only the typed commands in `commands.rs`.
 
+pub mod adopt;
 pub mod migrations;
 pub mod notes;
 pub mod settings;
@@ -102,7 +103,7 @@ mod tests {
 
     #[test]
     fn a_file_backed_database_persists_across_opens() {
-        let dir = std::env::temp_dir().join(format!("edge-notes-test-{}", uuid::Uuid::now_v7()));
+        let dir = std::env::temp_dir().join(format!("ledge-test-{}", uuid::Uuid::now_v7()));
         std::fs::create_dir_all(&dir).expect("temp dir");
         let path = dir.join("notes.db");
 

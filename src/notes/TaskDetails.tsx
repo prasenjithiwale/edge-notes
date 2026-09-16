@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from "react";
-import { CalendarDays, Flag, Repeat as RepeatIcon, Text, Trash2, X } from "lucide-react";
+import { CalendarDays, Flag, Repeat as RepeatIcon, Target, Text, Trash2, X } from "lucide-react";
 
 import { cx } from "../lib/cx";
 import type { Task, TaskPatch } from "../lib/ipc";
@@ -8,6 +8,7 @@ import {
   dateKey,
   dueLabel,
   dueOf,
+  isDone,
   priorityLabel,
   REPEATS,
   repeatLabel,
@@ -15,6 +16,8 @@ import {
   type Repeat,
 } from "../lib/taskMeta";
 import { useNow } from "../lib/useNow";
+import { usePomodoroStore } from "../store/pomodoro";
+import { useNotesStore } from "../store/notes";
 import { useTasksStore } from "../store/tasks";
 import styles from "./TaskDetails.module.css";
 
@@ -82,6 +85,8 @@ export function TaskDetails({ task, onClose, onFocusChange }: TaskDetailsProps) 
   const patch = useTasksStore((state) => state.patch);
   const setTitle = useTasksStore((state) => state.setTitle);
   const remove = useTasksStore((state) => state.remove);
+  const setFocusTask = usePomodoroStore((state) => state.setTask);
+  const setView = useNotesStore((state) => state.setView);
   const now = useNow();
 
   const [title, setTitleDraft] = useState(task.title);
@@ -111,6 +116,17 @@ export function TaskDetails({ task, onClose, onFocusChange }: TaskDetailsProps) 
     { label: "Next week", date: addDays(today, 7) },
   ];
 
+  /**
+   * Take this task to the Focus tab. The two tabs meet in exactly one place, and
+   * this is it: a pomodoro with a name on it is a session, and one without is a
+   * kitchen timer.
+   */
+  const focusOnThis = () => {
+    setFocusTask(task.id);
+    onClose();
+    void setView("focus");
+  };
+
   const summary = [
     task.priority === null ? "" : `${priorityLabel(task.priority)} priority`,
     due === null ? "" : dueLabel(due, new Date(now)),
@@ -129,7 +145,8 @@ export function TaskDetails({ task, onClose, onFocusChange }: TaskDetailsProps) 
   };
 
   return (
-    <div className={styles.sheet}>
+    // Named so the list can scroll a sheet opened on the last row into view.
+    <div className={styles.sheet} data-sheet={task.id}>
       <input
         type="text"
         className={styles.title}
@@ -268,6 +285,13 @@ export function TaskDetails({ task, onClose, onFocusChange }: TaskDetailsProps) 
           }}
         />
       </Section>
+
+      {!isDone(task) && (
+        <button type="button" className={styles.focusOn} onClick={focusOnThis}>
+          <Target size={12} strokeWidth={2} aria-hidden="true" />
+          Focus on this
+        </button>
+      )}
 
       <div className={styles.footer}>
         <button

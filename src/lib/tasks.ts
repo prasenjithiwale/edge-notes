@@ -67,6 +67,24 @@ export function groupTasks(tasks: Task[], now: Date): TaskSection[] {
   });
 }
 
+/**
+ * The tasks a search matches: the title, and the free-text notes under it,
+ * because something worth writing down there is worth finding.
+ *
+ * Plain case-insensitive substring matching, as the notes' search is (brief
+ * 6.6); ranking and highlighting are a job for FTS5, not for this.
+ */
+export function filterTasks(tasks: Task[], query: string): Task[] {
+  const needle = query.trim().toLowerCase();
+  if (needle === "") {
+    return tasks;
+  }
+  return tasks.filter(
+    (task) =>
+      task.title.toLowerCase().includes(needle) || task.notes.toLowerCase().includes(needle),
+  );
+}
+
 /** How many tasks are still open, for the tab's count. */
 export function openTaskCount(tasks: Task[]): number {
   return tasks.filter((task) => !isDone(task)).length;

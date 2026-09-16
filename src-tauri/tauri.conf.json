@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Edge Notes",
+  "productName": "Ledge",
   "version": "../package.json",
-  "identifier": "dev.edgenotes.app",
+  "identifier": "dev.ledge.app",
   "build": {
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://localhost:1420",
@@ -16,6 +16,7 @@
       {
         "label": "dock",
         "url": "index.html",
+        "title": "Ledge",
         "decorations": false,
         "transparent": true,
         "alwaysOnTop": true,
@@ -44,13 +45,21 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
-    "publisher": "Edge Notes",
+    "publisher": "Ledge",
     "category": "Productivity",
-    "copyright": "Copyright © 2026 Edge Notes",
+    "copyright": "Copyright © 2026 Ledge",
     "shortDescription": "Notes on the edge of your screen",
     "longDescription": "A notes widget docked to the edge of your screen. Point at the tab and a panel of colour-coded notes slides out; move away and it slides back. Notes are stored locally in SQLite.",
     "macOS": {
-      "minimumSystemVersion": "12.0"
+      "minimumSystemVersion": "12.0",
+      "signingIdentity": "-"
+    },
+    "linux": {
+      "deb": {
+        "provides": ["edge-notes"],
+        "conflicts": ["edge-notes"],
+        "replaces": ["edge-notes"]
+      }
     }
   }
 }

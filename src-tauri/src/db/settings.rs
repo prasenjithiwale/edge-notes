@@ -59,7 +59,42 @@ pub struct Settings {
     /// from 0 (solid, the brief's default) to `MAX_PANEL_TRANSLUCENCY`.
     #[serde(rename = "panel.translucency")]
     pub panel_translucency: u8,
+    /// The Focus tab's phase lengths, in minutes, and how many focus sessions
+    /// earn the long break. Not in brief 9.2: the Focus tab came later, and its
+    /// lengths were fixed constants until now.
+    #[serde(rename = "focus.focusMinutes")]
+    pub focus_focus_minutes: u16,
+    #[serde(rename = "focus.breakMinutes")]
+    pub focus_break_minutes: u16,
+    #[serde(rename = "focus.longBreakMinutes")]
+    pub focus_long_break_minutes: u16,
+    #[serde(rename = "focus.longBreakEvery")]
+    pub focus_long_break_every: u8,
+    /// Start the next phase by itself when one ends. Off by default: a widget
+    /// that starts counting at you without being asked is a nag.
+    #[serde(rename = "focus.autoStart")]
+    pub focus_auto_start: bool,
+    /// The Focus tab's own state rather than a preference, kept here because the
+    /// settings table is the app's key/value store and a counter that survives a
+    /// restart does not deserve a table of its own. Empty means none.
+    #[serde(rename = "focus.taskId")]
+    pub focus_task_id: String,
+    /// Local `YYYY-MM-DD` the tally below belongs to; it resets when the day does.
+    #[serde(rename = "focus.day")]
+    pub focus_day: String,
+    #[serde(rename = "focus.today")]
+    pub focus_today: u32,
+    /// Focus sessions finished since the last long break.
+    #[serde(rename = "focus.streak")]
+    pub focus_streak: u32,
 }
+
+/// What a phase length may be set to, in minutes. One minute is a legitimate
+/// test of the notification; past two hours it is not a pomodoro.
+pub const FOCUS_MINUTES: std::ops::RangeInclusive<u16> = 1..=120;
+
+/// How many focus sessions may be asked for before the long break.
+pub const LONG_BREAK_EVERY: std::ops::RangeInclusive<u8> = 2..=8;
 
 /// Past this the notes on a busy desktop stop being readable: the panel has no
 /// blur behind it, only transparency.
@@ -108,6 +143,16 @@ impl Default for Settings {
             // Both asked for by the owner.
             tasks_reminders: true,
             panel_translucency: 0,
+            // The classic lengths, which is what the Focus tab shipped with.
+            focus_focus_minutes: 25,
+            focus_break_minutes: 5,
+            focus_long_break_minutes: 15,
+            focus_long_break_every: 4,
+            focus_auto_start: false,
+            focus_task_id: String::new(),
+            focus_day: String::new(),
+            focus_today: 0,
+            focus_streak: 0,
         }
     }
 }
@@ -141,6 +186,24 @@ pub struct SettingsPatch {
     pub tasks_reminders: Option<bool>,
     #[serde(rename = "panel.translucency")]
     pub panel_translucency: Option<u8>,
+    #[serde(rename = "focus.focusMinutes")]
+    pub focus_focus_minutes: Option<u16>,
+    #[serde(rename = "focus.breakMinutes")]
+    pub focus_break_minutes: Option<u16>,
+    #[serde(rename = "focus.longBreakMinutes")]
+    pub focus_long_break_minutes: Option<u16>,
+    #[serde(rename = "focus.longBreakEvery")]
+    pub focus_long_break_every: Option<u8>,
+    #[serde(rename = "focus.autoStart")]
+    pub focus_auto_start: Option<bool>,
+    #[serde(rename = "focus.taskId")]
+    pub focus_task_id: Option<String>,
+    #[serde(rename = "focus.day")]
+    pub focus_day: Option<String>,
+    #[serde(rename = "focus.today")]
+    pub focus_today: Option<u32>,
+    #[serde(rename = "focus.streak")]
+    pub focus_streak: Option<u32>,
 }
 
 fn read<T: for<'de> Deserialize<'de>>(
@@ -199,6 +262,35 @@ pub fn get(connection: &Connection) -> AppResult<Settings> {
             defaults.panel_translucency,
         )?
         .min(MAX_PANEL_TRANSLUCENCY),
+        focus_focus_minutes: read(
+            connection,
+            "focus.focusMinutes",
+            defaults.focus_focus_minutes,
+        )?
+        .clamp(*FOCUS_MINUTES.start(), *FOCUS_MINUTES.end()),
+        focus_break_minutes: read(
+            connection,
+            "focus.breakMinutes",
+            defaults.focus_break_minutes,
+        )?
+        .clamp(*FOCUS_MINUTES.start(), *FOCUS_MINUTES.end()),
+        focus_long_break_minutes: read(
+            connection,
+            "focus.longBreakMinutes",
+            defaults.focus_long_break_minutes,
+        )?
+        .clamp(*FOCUS_MINUTES.start(), *FOCUS_MINUTES.end()),
+        focus_long_break_every: read(
+            connection,
+            "focus.longBreakEvery",
+            defaults.focus_long_break_every,
+        )?
+        .clamp(*LONG_BREAK_EVERY.start(), *LONG_BREAK_EVERY.end()),
+        focus_auto_start: read(connection, "focus.autoStart", defaults.focus_auto_start)?,
+        focus_task_id: read(connection, "focus.taskId", defaults.focus_task_id)?,
+        focus_day: read(connection, "focus.day", defaults.focus_day)?,
+        focus_today: read(connection, "focus.today", defaults.focus_today)?,
+        focus_streak: read(connection, "focus.streak", defaults.focus_streak)?,
     })
 }
 
@@ -248,6 +340,41 @@ pub fn update(connection: &Connection, patch: &SettingsPatch) -> AppResult<Setti
             &value.min(MAX_PANEL_TRANSLUCENCY),
         )?;
     }
+    for (key, minutes) in [
+        ("focus.focusMinutes", patch.focus_focus_minutes),
+        ("focus.breakMinutes", patch.focus_break_minutes),
+        ("focus.longBreakMinutes", patch.focus_long_break_minutes),
+    ] {
+        if let Some(value) = minutes {
+            write(
+                connection,
+                key,
+                &value.clamp(*FOCUS_MINUTES.start(), *FOCUS_MINUTES.end()),
+            )?;
+        }
+    }
+    if let Some(value) = patch.focus_long_break_every {
+        write(
+            connection,
+            "focus.longBreakEvery",
+            &value.clamp(*LONG_BREAK_EVERY.start(), *LONG_BREAK_EVERY.end()),
+        )?;
+    }
+    if let Some(value) = patch.focus_auto_start {
+        write(connection, "focus.autoStart", &value)?;
+    }
+    if let Some(value) = &patch.focus_task_id {
+        write(connection, "focus.taskId", value)?;
+    }
+    if let Some(value) = &patch.focus_day {
+        write(connection, "focus.day", value)?;
+    }
+    if let Some(value) = patch.focus_today {
+        write(connection, "focus.today", &value)?;
+    }
+    if let Some(value) = patch.focus_streak {
+        write(connection, "focus.streak", &value)?;
+    }
     get(connection)
 }
 
@@ -276,6 +403,60 @@ mod tests {
         assert!(settings.tasks_reminders);
         assert_eq!(settings.panel_translucency, 0);
         assert_eq!(settings.tab_appearance, TabAppearance::Translucent);
+        assert_eq!(settings.focus_focus_minutes, 25);
+        assert_eq!(settings.focus_break_minutes, 5);
+        assert_eq!(settings.focus_long_break_minutes, 15);
+        assert_eq!(settings.focus_long_break_every, 4);
+        assert!(!settings.focus_auto_start);
+        assert_eq!(settings.focus_today, 0);
+    }
+
+    #[test]
+    fn focus_lengths_round_trip_and_are_clamped() {
+        let connection = db();
+        let settings = update(
+            &connection,
+            &SettingsPatch {
+                focus_focus_minutes: Some(50),
+                focus_break_minutes: Some(0),
+                focus_long_break_minutes: Some(999),
+                focus_long_break_every: Some(1),
+                focus_auto_start: Some(true),
+                ..SettingsPatch::default()
+            },
+        )
+        .expect("update");
+
+        assert_eq!(settings.focus_focus_minutes, 50);
+        assert_eq!(settings.focus_break_minutes, *FOCUS_MINUTES.start());
+        assert_eq!(settings.focus_long_break_minutes, *FOCUS_MINUTES.end());
+        assert_eq!(settings.focus_long_break_every, *LONG_BREAK_EVERY.start());
+        assert!(settings.focus_auto_start);
+        assert_eq!(get(&connection).expect("get"), settings);
+    }
+
+    /// The day's tally is state rather than a preference, and it has to survive a
+    /// restart, which is the whole reason it is stored at all.
+    #[test]
+    fn the_focus_tally_and_its_task_persist() {
+        let connection = db();
+        let settings = update(
+            &connection,
+            &SettingsPatch {
+                focus_day: Some("2026-09-17".to_owned()),
+                focus_today: Some(3),
+                focus_streak: Some(3),
+                focus_task_id: Some("0192-abc".to_owned()),
+                ..SettingsPatch::default()
+            },
+        )
+        .expect("update");
+
+        assert_eq!(settings.focus_day, "2026-09-17");
+        assert_eq!(settings.focus_today, 3);
+        assert_eq!(settings.focus_streak, 3);
+        assert_eq!(settings.focus_task_id, "0192-abc");
+        assert_eq!(get(&connection).expect("get"), settings);
     }
 
     #[test]

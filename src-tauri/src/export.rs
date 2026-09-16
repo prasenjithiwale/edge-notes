@@ -88,7 +88,7 @@ pub fn timestamp_name(unix_ms: i64) -> String {
 ///
 /// Returns the folder, so the UI can tell the user where their notes went.
 pub fn write_all(parent: &Path, notes: &[Note], now_ms: i64) -> AppResult<PathBuf> {
-    let directory = parent.join(format!("Edge Notes {}", timestamp_name(now_ms)));
+    let directory = parent.join(format!("Ledge {}", timestamp_name(now_ms)));
     std::fs::create_dir_all(&directory)?;
 
     for note in notes {

@@ -10,7 +10,7 @@ import {
   type Task,
   type TaskPatch,
 } from "../lib/ipc";
-import { isDone, nextOccurrence, parseTaskText, dueOf } from "../lib/taskMeta";
+import { isDone, nextOccurrence, parseTaskText, dueOf, type DueSection } from "../lib/taskMeta";
 
 /** Brief 6.9's undo window, shared with notes: long enough to change your mind. */
 const UNDO_MS = 5_000;
@@ -30,6 +30,12 @@ interface TasksStore {
   editingId: string | null;
   /** The task whose details sheet is open. */
   detailsId: string | null;
+  /**
+   * Sections the reader has folded away. Kept for the session rather than
+   * stored: which part of a list you are looking at is where you are, not a
+   * preference, and it should not follow you into next week.
+   */
+  collapsed: ReadonlySet<DueSection>;
   pendingUndo: PendingUndo | null;
 
   load: () => Promise<void>;
@@ -40,6 +46,7 @@ interface TasksStore {
   setTitle: (id: string, title: string) => Promise<void>;
   startEditing: (id: string | null) => void;
   openDetails: (id: string | null) => void;
+  toggleSection: (kind: DueSection) => void;
   remove: (id: string) => Promise<void>;
   undoRemove: () => Promise<void>;
 }
@@ -55,6 +62,8 @@ export const useTasksStore = create<TasksStore>((set, get) => ({
   draft: "",
   editingId: null,
   detailsId: null,
+  // Done starts folded: a list of what is left should not open on what is not.
+  collapsed: new Set<DueSection>(["done"]),
   pendingUndo: null,
 
   load: async () => {
@@ -73,12 +82,12 @@ export const useTasksStore = create<TasksStore>((set, get) => ({
 
   /**
    * Add what is typed. The tokens the old format used still work here — typing
-   * "Call the bank !high @2026-09-20" sets the details — but they are read once,
-   * on the way in, and stored as fields rather than kept in the text.
+   * "Call the bank !high @tomorrow 2pm" sets the details — but they are read
+   * once, on the way in, and stored as fields rather than kept in the text.
    */
   add: async () => {
     const text = get().draft;
-    const quick = parseTaskText(text);
+    const quick = parseTaskText(text, new Date());
     if (quick.title === "") {
       return;
     }
@@ -158,6 +167,16 @@ export const useTasksStore = create<TasksStore>((set, get) => ({
 
   openDetails: (id) => {
     set({ detailsId: id });
+  },
+
+  toggleSection: (kind) => {
+    set((state) => {
+      const next = new Set(state.collapsed);
+      if (!next.delete(kind)) {
+        next.add(kind);
+      }
+      return { collapsed: next };
+    });
   },
 
   /**

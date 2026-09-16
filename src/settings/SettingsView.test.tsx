@@ -81,6 +81,10 @@ describe("open panel setting", () => {
     useSettingsStore.setState({ settings: { ...BASE, "dock.openOn": "click" } });
     render(<SettingsView onClose={() => undefined} />);
 
+    // The two delays and the panel width live under Advanced now: they are worth
+    // having and not worth being among the first things anyone sees.
+    fireEvent.click(screen.getByRole("button", { name: "Advanced" }));
+
     expect(screen.getByLabelText(/^Open delay/)).toHaveProperty("disabled", true);
     expect(screen.getByLabelText(/^Close delay/)).toHaveProperty("disabled", false);
   });
@@ -143,6 +147,41 @@ describe("task reminders setting", () => {
       expect(
         screen.getByRole("switch", { name: "Task reminders" }).getAttribute("aria-checked"),
       ).toBe("false");
+    });
+  });
+});
+
+describe("the Focus settings", () => {
+  it("nudges a phase length rather than asking for it to be typed", async () => {
+    render(<SettingsView onClose={() => undefined} />);
+
+    expect(screen.getByText("25 min")).toBeTruthy();
+    screen.getByRole("button", { name: "Session: more" }).click();
+
+    await waitFor(() => {
+      expect(updates()).toEqual([{ patch: { "focus.focusMinutes": 30 } }]);
+    });
+  });
+
+  it("stops at the ends of the range instead of going past them", () => {
+    useSettingsStore.setState({ settings: { ...BASE, "focus.longBreakEvery": 2 } });
+    render(<SettingsView onClose={() => undefined} />);
+
+    const fewer = screen.getByRole("button", { name: "Long break after: less" });
+    expect(fewer).toHaveProperty("disabled", true);
+    fewer.click();
+    expect(updates()).toEqual([]);
+  });
+
+  it("offers auto-start, off by default", async () => {
+    render(<SettingsView onClose={() => undefined} />);
+
+    const toggle = screen.getByRole("switch", { name: "Start the next phase" });
+    expect(toggle.getAttribute("aria-checked")).toBe("false");
+
+    fireEvent.click(toggle);
+    await waitFor(() => {
+      expect(updates()).toEqual([{ patch: { "focus.autoStart": true } }]);
     });
   });
 });

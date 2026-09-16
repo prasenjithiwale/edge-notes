@@ -1,6 +1,6 @@
 # Builds the Linux and Windows packages for a release and attaches them to it,
 # then publishes both to the public Pages site
-# (github.com/prasenjithiwale/edge-notes-apt): the .deb into the signed APT
+# (github.com/prasenjithiwale/edge-notes-apt, named before the app was): the .deb into the signed APT
 # repository, the Windows installers as direct downloads. This repository is
 # private, so its Releases page is not a public download — the Pages site is.
 #
@@ -51,7 +51,7 @@ jobs:
         run: |
           gh release view "$TAG" >/dev/null 2>&1 ||
             gh release create "$TAG" --draft --verify-tag \
-              --title "Edge Notes $TAG" --notes "Draft: builds in progress."
+              --title "Ledge $TAG" --notes "Draft: builds in progress."
 
   linux:
     name: Linux x86_64
@@ -107,8 +107,8 @@ jobs:
           version="${TAG#v}"
           bundle=src-tauri/target/release/bundle
           mkdir -p out
-          cp "$bundle"/deb/*.deb "out/Edge-Notes_${version}_linux_amd64.deb"
-          cp "$bundle"/appimage/*.AppImage "out/Edge-Notes_${version}_linux_x86_64.AppImage"
+          cp "$bundle"/deb/*.deb "out/Ledge_${version}_linux_amd64.deb"
+          cp "$bundle"/appimage/*.AppImage "out/Ledge_${version}_linux_x86_64.AppImage"
           gh release upload "$TAG" out/* --clobber
 
   windows:
@@ -169,8 +169,8 @@ jobs:
           version="${TAG#v}"
           bundle=src-tauri/target/release/bundle
           mkdir -p out
-          cp "$bundle"/nsis/*-setup.exe "out/Edge-Notes_${version}_windows_x64-setup.exe"
-          cp "$bundle"/msi/*.msi "out/Edge-Notes_${version}_windows_x64.msi"
+          cp "$bundle"/nsis/*-setup.exe "out/Ledge_${version}_windows_x64-setup.exe"
+          cp "$bundle"/msi/*.msi "out/Ledge_${version}_windows_x64.msi"
           gh release upload "$TAG" out/* --clobber
   publish:
     name: Pages site
@@ -203,6 +203,7 @@ jobs:
         run: |
           gh release download "$TAG" --dir incoming \
             --pattern "*.deb" \
+            --pattern "*macOS_universal.dmg" \
             --pattern "*windows_x64-setup.exe" \
             --pattern "*windows_x64.msi"
           ls -l incoming
@@ -241,6 +242,18 @@ jobs:
           fi
           source/tools/publish_windows.sh apt "${installers[@]}"
 
+      # The macOS build is made by hand on a Mac and attached to the release, so a
+      # run may legitimately find none — the same as for Windows.
+      - name: Add the macOS disk image
+        run: |
+          shopt -s nullglob
+          images=(incoming/*macOS_universal.dmg)
+          if [ ${#images[@]} -eq 0 ]; then
+            echo "$TAG has no macOS disk image; leaving the site's as it is."
+            exit 0
+          fi
+          source/tools/publish_macos.sh apt "${images[@]}"
+
       - name: Write the landing page
         run: source/tools/render_site.sh apt
 
@@ -257,6 +270,63 @@ jobs:
             commit -m "edge-notes ${TAG#v}"
           git push
 
+      # After the site push, never before it: the cask pins a sha256 for a url on
+      # that site, so publishing the cask first would advertise a download that
+      # is not there yet.
+      - uses: actions/checkout@v4
+        with:
+          repository: prasenjithiwale/homebrew-tap
+          ssh-key: ${{ secrets.HOMEBREW_TAP_DEPLOY_KEY }}
+          path: tap
+
+      - name: Update the Homebrew cask
+        run: |
+          shopt -s nullglob
+          images=(incoming/*macOS_universal.dmg)
+          if [ ${#images[@]} -eq 0 ]; then
+            echo "$TAG has no macOS disk image; leaving the cask as it is."
+            exit 0
+          fi
+          source/tools/publish_cask.sh tap "${images[0]}"
+          # Homebrew is not on this runner, so this is the cheap half of `brew
+          # audit`: a cask that does not parse breaks `brew tap` for everyone.
+          ruby -c tap/Casks/edge-notes.rb
+          cd tap
+          git add -A
+          if git diff --cached --quiet; then
+            echo "The tap already has this release."
+            exit 0
+          fi
+          git -c user.name="github-actions[bot]" \
+            -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+            commit -m "edge-notes ${TAG#v}"
+          git push
+
+      # The cask's own two claims, checked against the live site: that the file
+      # it points at is downloadable by anyone, and that the sha256 it pins is
+      # that file's. `brew install` would fail on either, and this repository has
+      # no macOS runner to find that out the expensive way.
+      - name: Check the cask against the live site
+        run: |
+          if [ ! -f tap/Casks/edge-notes.rb ]; then
+            echo "No cask to check."
+            exit 0
+          fi
+          version=$(sed -n 's/^  version "\(.*\)"$/\1/p' tap/Casks/edge-notes.rb)
+          want=$(sed -n 's/^  sha256 "\(.*\)"$/\1/p' tap/Casks/edge-notes.rb)
+          name="Ledge_${version}_macOS_universal.dmg"
+          # Pages can take a couple of minutes to serve a push, and this step is
+          # the first thing to touch the new deploy, so it waits like the APT
+          # check below rather than relying on curl's own retries.
+          for attempt in $(seq 1 40); do
+            if curl -fsSL -o live.dmg "$SITE_URL/macos/$name"; then
+              break
+            fi
+            echo "Waiting for GitHub Pages to serve $name ($attempt)"
+            sleep 15
+          done
+          echo "$want  live.dmg" | sha256sum -c -
+
       # The real proof: install from the live repository, as a user would, on
       # the Ubuntu release current Kubuntu is built on.
       - name: Install from the published repository
@@ -270,16 +340,16 @@ jobs:
             sleep 15
           done
           sudo install -d -m 0755 /etc/apt/keyrings
-          curl -fsSL "$SITE_URL/key.gpg" | sudo gpg --batch --dearmor -o /etc/apt/keyrings/edge-notes.gpg
-          echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/edge-notes.gpg] $SITE_URL stable main" \
-            | sudo tee /etc/apt/sources.list.d/edge-notes.list
+          curl -fsSL "$SITE_URL/key.gpg" | sudo gpg --batch --dearmor -o /etc/apt/keyrings/ledge.gpg
+          echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/ledge.gpg] $SITE_URL stable main" \
+            | sudo tee /etc/apt/sources.list.d/ledge.list
           sudo apt-get update
-          apt-cache policy edge-notes
-          sudo apt-get install -y "edge-notes=$version"
-          installed="$(dpkg-query --show --showformat='${Version}' edge-notes)"
-          echo "installed edge-notes $installed"
+          apt-cache policy ledge
+          sudo apt-get install -y "ledge=$version"
+          installed="$(dpkg-query --show --showformat='${Version}' ledge)"
+          echo "installed ledge $installed"
           test "$installed" = "$version"
-          test -x /usr/bin/edge-notes
+          test -x /usr/bin/ledge
 
       # And the same proof for Windows: everything the page offers, plus anything
       # this release added, is downloaded from the live site and checked against

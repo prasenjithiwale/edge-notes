@@ -23,6 +23,7 @@ const { useDockStore } = await import("../store/dock");
 const { useNotesStore } = await import("../store/notes");
 const { useTasksStore } = await import("../store/tasks");
 const { usePomodoroStore } = await import("../store/pomodoro");
+const { useSettingsStore } = await import("../store/settings");
 
 function note(overrides: Partial<Note> & { id: string }): Note {
   return {
@@ -73,6 +74,15 @@ const SETTINGS: Settings = {
   "shortcut.newNote": "CmdOrCtrl+Alt+N",
   "tasks.reminders": true,
   "panel.translucency": 0,
+  "focus.focusMinutes": 25,
+  "focus.breakMinutes": 5,
+  "focus.longBreakMinutes": 15,
+  "focus.longBreakEvery": 4,
+  "focus.autoStart": false,
+  "focus.taskId": "",
+  "focus.day": "",
+  "focus.today": 0,
+  "focus.streak": 0,
 };
 
 /** What `tasks_list` answers with, and what the write commands change. */
@@ -91,14 +101,27 @@ function press(key: string, init: KeyboardEventInit = {}) {
   window.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true, ...init }));
 }
 
+/** What Rust would hand back, so a test can store a setting before the render. */
+let settingsInDb: Settings = SETTINGS;
+
 beforeEach(() => {
+  settingsInDb = SETTINGS;
+  // The settings store is a module singleton: left loaded from the last test, the
+  // panel would hydrate the Focus tab from that test's values before this one's
+  // settings_get resolved.
+  useSettingsStore.setState({ settings: SETTINGS, loaded: false });
   invoke.mockReset();
   invoke.mockImplementation((command: string, args?: unknown) => {
     if (command === "notes_list") {
       return Promise.resolve(NOTES);
     }
-    if (command === "settings_get" || command === "settings_update") {
-      return Promise.resolve(SETTINGS);
+    if (command === "settings_get") {
+      return Promise.resolve(settingsInDb);
+    }
+    if (command === "settings_update") {
+      const { patch } = args as { patch: Partial<Settings> };
+      settingsInDb = { ...settingsInDb, ...patch };
+      return Promise.resolve(settingsInDb);
     }
     if (command === "notes_create") {
       return Promise.resolve(note({ id: "new", color: "yellow", updatedAt: 40 }));
@@ -132,13 +155,19 @@ beforeEach(() => {
   });
   useDockStore.setState({ locks: new Set(), large: false, panelWidth: 320 });
   tasksInDb = [];
-  usePomodoroStore.setState({ state: pomodoroIdle(), announced: null });
+  usePomodoroStore.setState({
+    state: pomodoroIdle(),
+    autoStart: false,
+    taskId: null,
+    hydrated: false,
+  });
   useTasksStore.setState({
     tasks: [],
     loaded: false,
     draft: "",
     editingId: null,
     detailsId: null,
+    collapsed: new Set(["done"]),
     pendingUndo: null,
   });
   useNotesStore.setState({
@@ -744,14 +773,50 @@ describe("the Tasks tab", () => {
     expect(useNotesStore.getState().editingId).toBeNull();
   });
 
-  it("goes back to Notes for Cmd+F", async () => {
-    await withTasks();
+  /**
+   * Search used to mean "search the notes", and pressing Cmd+F on the Tasks tab
+   * threw you back to a list you were not looking at. It searches whatever is in
+   * front of you now.
+   */
+  it("searches the tasks with Cmd+F, without leaving the tab", async () => {
+    await withTasks(task({ id: "milk", title: "buy milk" }), task({ id: "tax", title: "file tax" }));
     await useNotesStore.getState().setView("todo");
 
     press("f", { metaKey: true });
 
-    await screen.findByLabelText("Search notes");
-    expect(useNotesStore.getState().view).toBe("notes");
+    // By role, not by label: the header's search *button* carries the same name
+    // until React has swapped it for the field.
+    const field = await screen.findByRole("textbox", { name: "Search tasks" });
+    expect(useNotesStore.getState().view).toBe("todo");
+
+    fireEvent.change(field, { target: { value: "milk" } });
+    await screen.findByRole("checkbox", { name: "buy milk" });
+    await waitFor(() => {
+      expect(screen.queryByRole("checkbox", { name: "file tax" })).toBeNull();
+    });
+  });
+
+  it("says so when a search matches no task", async () => {
+    await withTasks(task({ id: "milk", title: "buy milk" }));
+    await useNotesStore.getState().setView("todo");
+
+    press("f", { metaKey: true });
+    fireEvent.change(await screen.findByRole("textbox", { name: "Search tasks" }), {
+      target: { value: "zebra" },
+    });
+
+    await screen.findByText(/No tasks match/);
+  });
+
+  /** The Focus tab is not a list, so there is nothing there to search. */
+  it("leaves Cmd+F alone on the Focus tab", async () => {
+    await withTasks();
+    await useNotesStore.getState().setView("focus");
+
+    press("f", { metaKey: true });
+
+    expect(useNotesStore.getState().searching).toBe(false);
+    expect(useNotesStore.getState().view).toBe("focus");
   });
 
   it("offers an undo after a task is deleted", async () => {
@@ -987,7 +1052,7 @@ describe("task details", () => {
     const row = within(panel).getByRole("checkbox", { name: "water plants" }).closest("li");
     expect(row?.textContent).toContain("Tomorrow");
     expect(within(row as HTMLElement).getByLabelText("high priority")).toBeTruthy();
-    expect(within(row as HTMLElement).getByLabelText("Repeats")).toBeTruthy();
+    expect(within(row as HTMLElement).getByLabelText("Repeats Daily")).toBeTruthy();
     expect(within(row as HTMLElement).getByLabelText("Has notes")).toBeTruthy();
     expect(row?.textContent).not.toContain("repeat:");
   });
@@ -1096,6 +1161,93 @@ describe("the Focus tab", () => {
     });
     expect(usePomodoroStore.getState().state.today).toBe(0);
     expect(screen.getByRole("timer").textContent).toBe("5:00");
+  });
+
+  /** One control with two beside it, so it gets the keys a media player would. */
+  it("starts and pauses on the space bar", async () => {
+    await renderPanel();
+    await useNotesStore.getState().setView("focus");
+    await screen.findByRole("button", { name: "Start" });
+
+    press(" ");
+    await screen.findByRole("button", { name: "Pause" });
+
+    press(" ");
+    await screen.findByRole("button", { name: "Start" });
+  });
+
+  it("runs to the length that is stored, not to twenty-five minutes", async () => {
+    settingsInDb = { ...SETTINGS, "focus.focusMinutes": 50 };
+    await renderPanel();
+    await useNotesStore.getState().setView("focus");
+
+    await waitFor(() => {
+      expect(screen.getByRole("timer").textContent).toBe("50:00");
+    });
+  });
+
+  it("reads the day's tally back from storage", async () => {
+    settingsInDb = { ...SETTINGS, "focus.day": "2026-09-16", "focus.today": 3 };
+    await renderPanel();
+    await useNotesStore.getState().setView("focus");
+
+    await screen.findByText("3 sessions finished today");
+  });
+
+  /**
+   * The one door between the two tabs. A pomodoro with a name on it is a
+   * session; one without is a kitchen timer.
+   */
+  it("takes a task from its details sheet and names the session after it", async () => {
+    tasksInDb = [task({ id: "intro", title: "rewrite the intro" })];
+    await renderPanel();
+    await useNotesStore.getState().setView("todo");
+
+    (await screen.findByRole("button", { name: /rewrite the intro/ })).click();
+    (await screen.findByRole("button", { name: "Focus on this" })).click();
+
+    await waitFor(() => {
+      expect(useNotesStore.getState().view).toBe("focus");
+    });
+    expect(usePomodoroStore.getState().taskId).toBe("intro");
+    // Scoped to the tab: the Tasks pane stays mounted behind it, with a row of
+    // the same name in it.
+    const focus = await screen.findByRole("tabpanel", { name: "Focus" });
+    await within(focus).findByText("rewrite the intro");
+
+    // And the notification at the end says which task it was.
+    (await screen.findByRole("button", { name: "Start" })).click();
+    await waitFor(
+      () => {
+        const sent = commandCalls("reminders_set").at(-1) as
+          | { list: { body: string }[] }
+          | undefined;
+        expect(sent?.list.some((reminder) => reminder.body.includes("rewrite the intro"))).toBe(
+          true,
+        );
+      },
+      { timeout: 3_000 },
+    );
+  });
+
+  /** A task id read back from storage must outlive an empty list at startup. */
+  it("keeps the stored task while the task list is still loading", async () => {
+    settingsInDb = { ...SETTINGS, "focus.taskId": "intro" };
+    tasksInDb = [task({ id: "intro", title: "rewrite the intro" })];
+    await renderPanel();
+    await useNotesStore.getState().setView("focus");
+
+    const focus = await screen.findByRole("tabpanel", { name: "Focus" });
+    await within(focus).findByText("rewrite the intro");
+    expect(usePomodoroStore.getState().taskId).toBe("intro");
+  });
+
+  it("marks the tab while a session is running", async () => {
+    await renderPanel();
+    await useNotesStore.getState().setView("focus");
+    (await screen.findByRole("button", { name: "Start" })).click();
+
+    await screen.findByRole("tab", { name: "Focus, running" });
   });
 });
 
