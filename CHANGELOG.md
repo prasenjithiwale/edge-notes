@@ -9,16 +9,7 @@ To release, see "Releasing" in the README.
 
 ## [Unreleased]
 
-### Added
-
-- **An About section in Settings**, with the version, the system it is running
-  on, and where your notes are kept on disk. There is a button that copies all
-  three, for when something goes wrong and you need to say what you are running,
-  and a link to the downloads page.
-- **The tab shows a red light while a focus session is running**, pulsing gently
-  at the screen edge, so a session counting down behind whatever you are working
-  in is visible without opening anything. It goes out by itself when the phase
-  ends, and it stops pulsing if you have asked your system for less motion.
+## [0.2.0] - 2026-09-17
 
 ### Changed
 
@@ -30,30 +21,32 @@ To release, see "Releasing" in the README.
 
   Notes are still stored as Markdown, exactly as before, so nothing needed
   converting and an export is unchanged.
-- **A code block is a box with a language dropdown**, rather than a list of every
-  language shown before you have written anything. Pick the language on the block
-  itself, change it whenever, and type into a real text box — with the colours
-  arriving as you type. Tab indents inside it, and the block has its own copy and
-  remove buttons.
 
 ### Added
 
 - **Code blocks in notes, with syntax highlighting.** The editor has a **Code
-  block** button that opens a list of languages — JSON, JavaScript, TypeScript,
-  Python, Java, Kotlin, C, C++, C#, Go, Rust, Swift, SQL, Shell, YAML, HTML and
-  CSS — and wraps what you have selected, or opens an empty block where the caret
-  is. `⌘⇧C` does the same in the language you picked last.
+  block** button, and `⌘⇧C`, that drops a code box into the note. Pick the
+  language from the dropdown on the box itself — JSON, JavaScript, TypeScript,
+  Python, Java, Kotlin, C, C++, C#, Go, Rust, Swift, SQL, Shell, YAML, HTML or
+  CSS — and type; the colours arrive as you go.
 
   Comments, strings, numbers, keywords and keys each get their own colour, on the
-  block's own neutral panel so the note keeps its colour. The block carries its
-  language and a button to copy the code, its text is selectable, and long lines
-  scroll sideways inside it rather than being broken in the middle.
+  box's own neutral panel so the note keeps its colour. Tab indents inside it,
+  long lines scroll sideways rather than being broken in the middle, and the box
+  has its own buttons to copy the code or remove it.
 
   A block is an ordinary Markdown fence, so a note with code in it is still clean
-  Markdown when exported. Formatting shortcuts do nothing inside one: the point
-  of a code block is that its text is exactly what you typed.
+  Markdown when exported.
 - **Inline code**, with `⌘E` or a pair of backticks. What is between them is
   taken literally, so `**` inside it stays `**`.
+- **An About section in Settings**, with the version, the system it is running
+  on, and where your notes are kept on disk. There is a button that copies all
+  three, for when something goes wrong and you need to say what you are running,
+  and a link to the downloads page.
+- **The tab shows a red light while a focus session is running**, pulsing gently
+  at the screen edge, so a session counting down behind whatever you are working
+  in is visible without opening anything. It goes out by itself when the phase
+  ends, and it stops pulsing if you have asked your system for less motion.
 
 ## [0.1.0] - 2026-09-17
 
