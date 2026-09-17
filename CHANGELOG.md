@@ -9,6 +9,8 @@ To release, see "Releasing" in the README.
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-09-17
+
 ### Added
 
 - **Type `/` in a note to change what the line is.** A menu opens with Text,
