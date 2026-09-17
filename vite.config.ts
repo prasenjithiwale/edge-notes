@@ -18,6 +18,9 @@ export default defineConfig({
     // Pure logic runs in node; component tests opt into jsdom with a
     // `@vitest-environment jsdom` docblock, so the fast majority stay fast.
     environment: "node",
+    // Fills in the measuring jsdom does not do. See the file for why the editor
+    // cannot manage without it.
+    setupFiles: ["./src/test-setup.ts"],
     include: ["src/**/*.test.ts", "src/**/*.test.tsx"],
     // Vitest blanks CSS by default, which also empties `?raw` imports. The
     // contrast test reads the palette straight from tokens.css, so that one
