@@ -24,12 +24,6 @@ import { pomodoroReminder, usePomodoroStore } from "../store/pomodoro";
 import { moveCardFocus } from "../notes/cardFocus";
 import { ColorFilter } from "../notes/ColorFilter";
 import { EmptyState } from "../notes/EmptyState";
-import {
-  applyFormat,
-  applyListContinuation,
-  formatCommandForKey,
-  noteEditorField,
-} from "../notes/formatting";
 import { NoteEditor } from "../notes/NoteEditor";
 import { NoteList } from "../notes/NoteList";
 import { NoteReader } from "../notes/NoteReader";
@@ -70,10 +64,16 @@ function subscription(pending: Promise<UnlistenFn>, event: string): () => void {
   };
 }
 
-/** True for a field where arrow keys and Cmd+F belong to the text, not the list. */
+/**
+ * True for somewhere text is being written, where the arrows belong to the caret
+ * and Space is a space. The note editor is a rich-text surface rather than a
+ * field, so `isContentEditable` counts too.
+ */
 function isTextField(target: EventTarget | null): boolean {
   return (
-    target instanceof HTMLTextAreaElement || target instanceof HTMLInputElement
+    target instanceof HTMLTextAreaElement ||
+    target instanceof HTMLInputElement ||
+    (target instanceof HTMLElement && target.isContentEditable)
   );
 }
 
@@ -252,41 +252,6 @@ export function Panel({ className }: PanelProps) {
       const notesStore = useNotesStore.getState();
       const tasksStore = useTasksStore.getState();
       const accel = event.metaKey || event.ctrlKey;
-
-      // Formatting belongs to the note editor's textarea, and only to it.
-      const field = noteEditorField(event.target);
-      if (field) {
-        const command = formatCommandForKey(event);
-        if (command !== null) {
-          event.preventDefault();
-          // The code-block shortcut opens a fence in the language the picker
-          // last used, so the keyboard and the button agree.
-          applyFormat(
-            field,
-            command,
-            useSettingsStore.getState().settings["notes.lastCodeLang"],
-          );
-          return;
-        }
-        // Enter continues a list. Not while an input method is composing — that
-        // Enter commits the composition (WebKit reports it as key code 229) — and
-        // not with a modifier, so Shift+Enter still gives a plain line break.
-        if (
-          event.key === "Enter" &&
-          !event.shiftKey &&
-          !event.altKey &&
-          !accel &&
-          !event.isComposing &&
-          // Safari fires the committing keydown after compositionend, with
-          // isComposing already false; 229 is the only thing that marks it.
-          // eslint-disable-next-line @typescript-eslint/no-deprecated
-          event.keyCode !== 229 &&
-          applyListContinuation(field)
-        ) {
-          event.preventDefault();
-          return;
-        }
-      }
 
       if (accel && event.key === "f") {
         // Search works on whichever list is in front; the Focus tab is not one.

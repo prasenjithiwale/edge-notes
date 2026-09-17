@@ -1,4 +1,15 @@
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
+import { LexicalComposer } from "@lexical/react/LexicalComposer";
+import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
+import { RichTextPlugin } from "@lexical/react/LexicalRichTextPlugin";
+import { ContentEditable } from "@lexical/react/LexicalContentEditable";
+import { LexicalErrorBoundary } from "@lexical/react/LexicalErrorBoundary";
+import { HistoryPlugin } from "@lexical/react/LexicalHistoryPlugin";
+import { ListPlugin } from "@lexical/react/LexicalListPlugin";
+import { CheckListPlugin } from "@lexical/react/LexicalCheckListPlugin";
+import { LinkPlugin } from "@lexical/react/LexicalLinkPlugin";
+import { AutoLinkPlugin } from "@lexical/react/LexicalAutoLinkPlugin";
+import { MarkdownShortcutPlugin } from "@lexical/react/LexicalMarkdownShortcutPlugin";
 import {
   Bold,
   Braces,
@@ -18,7 +29,6 @@ import {
 } from "lucide-react";
 
 import { IconButton } from "../components/IconButton";
-import { LANGUAGES } from "../lib/code";
 import { cx } from "../lib/cx";
 import { CLASSIC_COLORS, NOTE_COLORS, type Note, type NoteColor } from "../lib/ipc";
 import { prefersReducedMotion } from "../lib/motion";
@@ -28,13 +38,12 @@ import { useDockStore } from "../store/dock";
 import { useNotesStore } from "../store/notes";
 import { useSettingsStore } from "../store/settings";
 import { noteColorStyle } from "./NoteCard";
-import {
-  applyFormat,
-  EDITOR_FIELD_ATTRIBUTE,
-  FORMAT_SHORTCUTS,
-  shortcutLabel,
-  type FormatCommand,
-} from "./formatting";
+import { FORMAT_SHORTCUTS, shortcutLabel } from "./formatting";
+import { EDITOR_NODES, EDITOR_THEME } from "./editor/config";
+import { ChangePlugin, FocusPlugin, LoadPlugin, ShortcutPlugin } from "./editor/plugins";
+import { LINK_MATCHERS, NOTE_TRANSFORMERS } from "./editor/shortcuts";
+import { isActive, runCommand, useToolbarState, type FormatCommand } from "./editor/toolbar";
+import editorStyles from "./editor/RichEditor.module.css";
 import styles from "./NoteEditor.module.css";
 
 interface NoteEditorProps {
@@ -64,9 +73,6 @@ const FORMAT_GROUPS: readonly (readonly FormatCommand[])[] = [
   ["bullet", "ordered", "task"],
 ];
 
-/** Brief 6.9: the textarea grows to about 60% of the panel, then scrolls. */
-const MAX_HEIGHT_RATIO = 0.6;
-
 /** Brief 6.9: the card expands in place over this long. */
 const EXPAND_MS = 160;
 
@@ -78,18 +84,29 @@ const EXPAND_MS = 160;
  */
 const CARD_HEIGHT_GUESS = 64;
 
-/**
- * Where the caret was when an editor last unmounted. Expanding or shrinking a
- * note swaps one editor for another, and without this the caret would jump to
- * the end of a long note at the moment the user wanted a better look at it.
- */
-const caretMemory = { id: "", selectionStart: 0, selectionEnd: 0, at: 0 };
-
-/** Long enough to span the swap; short enough that reopening a note later does not count. */
-const CARET_MEMORY_MS = 1_000;
-
 export function NoteEditor({ note, large = false }: NoteEditorProps) {
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  return (
+    <LexicalComposer
+      key={note.id}
+      initialConfig={{
+        namespace: "note",
+        nodes: [...EDITOR_NODES],
+        theme: EDITOR_THEME,
+        // A note is never worth losing to a render error: the editor reports it
+        // and carries on with the text it has.
+        onError: (error: Error) => {
+          console.error("editor:", error);
+        },
+      }}
+    >
+      <NoteEditorBody note={note} large={large} />
+    </LexicalComposer>
+  );
+}
+
+function NoteEditorBody({ note, large = false }: NoteEditorProps) {
+  const [editor] = useLexicalComposerContext();
+  const toolbar = useToolbarState(editor);
   const rootRef = useRef<HTMLElement>(null);
   const setContent = useNotesStore((state) => state.setContent);
   const setColor = useNotesStore((state) => state.setColor);
@@ -101,9 +118,7 @@ export function NoteEditor({ note, large = false }: NoteEditorProps) {
   const setLock = useDockStore((state) => state.setLock);
   const now = useNow();
   const [paletteOpen, setPaletteOpen] = useState(false);
-  const [languagesOpen, setLanguagesOpen] = useState(false);
   const lastLang = useSettingsStore((state) => state.settings["notes.lastCodeLang"]);
-  const patchSettings = useSettingsStore((state) => state.patch);
   // Chosen once, when the editor opens: picking a colour must not reshuffle the
   // row under the cursor. A colour picked from the full palette joins it.
   const [quick] = useState(() =>
@@ -113,30 +128,10 @@ export function NoteEditor({ note, large = false }: NoteEditorProps) {
     (color) => quick.includes(color) || color === note.color,
   );
 
-  const resize = useCallback(() => {
-    const textarea = textareaRef.current;
-    if (!textarea) {
-      return;
-    }
-    if (large) {
-      // The large panel lays the textarea out to fill it and scroll; an inline
-      // height from the normal editor would fight that.
-      textarea.style.height = "";
-      return;
-    }
-    const panel = textarea.closest("[data-panel]");
-    const max =
-      panel instanceof HTMLElement
-        ? panel.clientHeight * MAX_HEIGHT_RATIO
-        : Number.POSITIVE_INFINITY;
-    textarea.style.height = "auto";
-    textarea.style.height = `${String(Math.min(textarea.scrollHeight, max))}px`;
-  }, [large]);
-
   // Brief 6.9: the card expands in place rather than being swapped for a taller
   // box. Animating `max-height` from roughly the card's height to the editor's
   // own, then letting go of the constraint — it has to be released, or the
-  // textarea could not grow as you type.
+  // editor could not grow as you type.
   useEffect(() => {
     const root = rootRef.current;
     if (!root || large || prefersReducedMotion()) {
@@ -170,54 +165,9 @@ export function NoteEditor({ note, large = false }: NoteEditorProps) {
     };
   }, [large]);
 
-  useEffect(() => {
-    const textarea = textareaRef.current;
-    if (!textarea) {
-      return;
-    }
-    // Switching between the list and the large panel remounts the editor; the
-    // caret should stay where it was rather than jump to the end.
-    const { selectionStart, selectionEnd } = caretMemory;
-    textarea.focus();
-    if (caretMemory.id === note.id && Date.now() - caretMemory.at < CARET_MEMORY_MS) {
-      textarea.setSelectionRange(selectionStart, selectionEnd);
-    } else {
-      // Caret at the end, so typing continues rather than overwrites.
-      textarea.setSelectionRange(textarea.value.length, textarea.value.length);
-    }
-    resize();
-    return () => {
-      caretMemory.id = note.id;
-      caretMemory.selectionStart = textarea.selectionStart;
-      caretMemory.selectionEnd = textarea.selectionEnd;
-      caretMemory.at = Date.now();
-    };
-  }, [note.id, resize]);
-
-  // The editor can mount before the window has the keyboard — the shortcut opens
-  // the panel and asks for a new note in the same breath, and `focus()` on an
-  // element in a window that is not yet key does not stick. Re-focus when the
-  // window actually gains focus, so the caret is where the typing will go.
-  useEffect(() => {
-    const refocus = () => {
-      const textarea = textareaRef.current;
-      if (textarea && document.activeElement !== textarea) {
-        textarea.focus();
-        textarea.setSelectionRange(
-          textarea.value.length,
-          textarea.value.length,
-        );
-      }
-    };
-    window.addEventListener("focus", refocus);
-    return () => {
-      window.removeEventListener("focus", refocus);
-    };
-  }, []);
-
   // A click outside the note leaves the editor when nothing was typed (owner's
   // request). Judged by where the press *started*: a text selection dragged from
-  // inside the textarea and released outside is not a click outside. Capture
+  // inside the note and released outside is not a click outside. Capture
   // phase, so it runs before whatever was clicked reacts — a card's click then
   // opens that card cleanly after this editor has closed.
   useEffect(() => {
@@ -251,24 +201,17 @@ export function NoteEditor({ note, large = false }: NoteEditorProps) {
   }, [setLock]);
 
   const format = (command: FormatCommand, lang?: string) => {
-    const textarea = textareaRef.current;
-    if (textarea) {
-      applyFormat(textarea, command, lang ?? lastLang);
-    }
+    runCommand(editor, command, toolbar, lang ?? lastLang);
   };
 
-  /**
-   * A code block, in the language picked. The choice is remembered the way the
-   * note colour is, so the keyboard shortcut and the next block start where the
-   * last one did rather than at "no language" every time.
-   */
-  const insertCodeBlock = (lang: string) => {
-    setLanguagesOpen(false);
-    format("codeblock", lang);
-    if (lang !== lastLang) {
-      void patchSettings({ "notes.lastCodeLang": lang });
-    }
-  };
+  // Every change is written to the store as Markdown, which is what the card
+  // renders and what the autosave debounce eventually writes to the database.
+  const onChangeContent = useCallback(
+    (markdown: string) => {
+      setContent(note.id, markdown);
+    },
+    [setContent, note.id],
+  );
 
   const codeShortcut = FORMAT_SHORTCUTS.find((item) => item.command === "codeblock");
 
@@ -285,12 +228,17 @@ export function NoteEditor({ note, large = false }: NoteEditorProps) {
               {group.map((command) => {
                 const shortcut = FORMAT_SHORTCUTS.find((item) => item.command === command);
                 const Icon = FORMAT_ICONS[command];
+                const on = isActive(command, toolbar);
                 return (
                   <IconButton
                     key={command}
                     label={shortcut?.label ?? command}
                     shortcut={shortcut ? shortcutLabel(shortcut) : undefined}
                     className={styles.footerButton}
+                    // A rich editor's toolbar is a readout as well as a set of
+                    // buttons: lit means the caret is already in it.
+                    active={on}
+                    pressed={on}
                     keepFocus
                     onClick={() => {
                       format(command);
@@ -302,17 +250,16 @@ export function NoteEditor({ note, large = false }: NoteEditorProps) {
               })}
             </div>
           ))}
-          {/* Not in either group: it opens a picker rather than toggling
-              something, and what it inserts depends on what is picked. */}
+          {/* Its own group: it inserts a block rather than marking up what is
+              already there, and the language is a dropdown on the block. */}
           <div className={styles.group}>
             <IconButton
               label="Code block"
               shortcut={codeShortcut ? shortcutLabel(codeShortcut) : undefined}
               className={styles.footerButton}
-              pressed={languagesOpen}
               keepFocus
               onClick={() => {
-                setLanguagesOpen((open) => !open);
+                format("codeblock");
               }}
             >
               <Braces size={16} strokeWidth={1.75} />
@@ -338,44 +285,29 @@ export function NoteEditor({ note, large = false }: NoteEditorProps) {
           )}
         </IconButton>
       </div>
-      {languagesOpen && (
-        <div className={styles.languages} role="group" aria-label="Code language">
-          {[{ id: "", label: "Plain text" }, ...LANGUAGES].map((language) => (
-            <button
-              key={language.id === "" ? "plain" : language.id}
-              type="button"
-              className={cx(styles.language, language.id === lastLang && styles.languagePicked)}
-              aria-pressed={language.id === lastLang}
-              // Keep the caret in the note: the block goes where it was.
-              onMouseDown={(event) => {
-                event.preventDefault();
-              }}
-              onClick={() => {
-                insertCodeBlock(language.id);
-              }}
-            >
-              {language.label}
-            </button>
-          ))}
-        </div>
-      )}
-      <textarea
-        ref={textareaRef}
-        className={styles.textarea}
-        value={note.content}
-        rows={1}
-        aria-label="Note content"
-        placeholder="Write a note"
-        {...{ [EDITOR_FIELD_ATTRIBUTE]: "" }}
-        onChange={(event) => {
-          setContent(note.id, event.target.value);
-          resize();
-        }}
-        onBlur={() => {
-          // Save on blur as well as on the debounce (brief 6.9).
-          void useNotesStore.getState().flush(note.id);
-        }}
-      />
+      <div className={styles.body}>
+        <RichTextPlugin
+          contentEditable={
+            <ContentEditable
+              className={editorStyles.editable}
+              aria-label="Note content"
+              aria-placeholder="Write a note"
+              placeholder={<div className={styles.placeholder}>Write a note</div>}
+            />
+          }
+          ErrorBoundary={LexicalErrorBoundary}
+        />
+        <LoadPlugin noteId={note.id} content={note.content} />
+        <ChangePlugin content={note.content} onChange={onChangeContent} />
+        <FocusPlugin />
+        <ShortcutPlugin lang={lastLang} />
+        <HistoryPlugin />
+        <ListPlugin />
+        <CheckListPlugin />
+        <LinkPlugin />
+        <AutoLinkPlugin matchers={[...LINK_MATCHERS]} />
+        <MarkdownShortcutPlugin transformers={[...NOTE_TRANSFORMERS]} />
+      </div>
       <div className={styles.swatches} role="group" aria-label="Note colour">
         {shownColors.map((color) => (
           <Swatch

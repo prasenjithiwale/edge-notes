@@ -1,0 +1,141 @@
+/* The editable area. It carries the note's own text colour, so what is typed
+   looks exactly like what the card and the reader show. */
+.editable {
+  outline: none;
+  min-height: 1.5em;
+  /* Inherited, so the large panel can raise it from one place. */
+  font-size: inherit;
+  line-height: 1.5;
+  /* Text in a note is written, selected and copied; the chrome's
+     `user-select: none` must not reach in here. */
+  user-select: text;
+  cursor: text;
+  overflow-wrap: anywhere;
+  /* The caret is the note's text colour, not the system's. */
+  caret-color: currentcolor;
+}
+
+.paragraph {
+  margin: 0;
+}
+
+/* A paragraph with nothing in it is a blank line, and a blank line is a
+   paragraph break: it has to hold its height or the note would close up as
+   things are deleted. */
+.paragraph:empty::before {
+  content: "";
+  display: inline-block;
+}
+
+/* Two weights only (brief 7.1): bold is the 600 the titles already use. */
+.bold {
+  font-weight: 600;
+}
+
+.italic {
+  font-style: italic;
+}
+
+.strike {
+  text-decoration: line-through;
+}
+
+.inlineCode {
+  padding: 1px 4px;
+  border-radius: 4px;
+  background: var(--code-inline-bg);
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+}
+
+/* A link is not accent-coloured — accent is reserved for focus rings and Keep
+   open (brief 7.1). The note's own text colour, underlined, reads as a link. */
+.link {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.bulletList,
+.orderedList {
+  margin: 0;
+  padding: 0;
+  list-style-position: outside;
+}
+
+.bulletList {
+  list-style-type: disc;
+}
+
+.orderedList {
+  list-style-type: decimal;
+}
+
+/* The marker sits in the gutter, so wrapped lines line up under their text
+   rather than under the bullet. */
+.listItem {
+  margin: 0 0 0 18px;
+  padding: 0;
+}
+
+.nestedItem {
+  /* An item that only holds a nested list has no marker of its own. */
+  list-style-type: none;
+  margin-left: 0;
+}
+
+.nestedItem::before,
+.nestedItem::after {
+  display: none;
+}
+
+/* A checklist item draws its own box, because `list-style` has none and the
+   check list plugin toggles on a click inside this padding. */
+.checked,
+.unchecked {
+  position: relative;
+  margin-left: 0;
+  padding-left: 22px;
+  list-style-type: none;
+  outline: none;
+}
+
+.checked::before,
+.unchecked::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0.25em;
+  width: 14px;
+  height: 14px;
+  border: 1.5px solid currentcolor;
+  border-radius: 4px;
+  opacity: 0.6;
+  cursor: default;
+}
+
+.checked::before {
+  background: currentcolor;
+  opacity: 0.75;
+}
+
+/* The tick, drawn rather than typed: a rotated corner, which needs no font. */
+.checked::after {
+  content: "";
+  position: absolute;
+  left: 5px;
+  top: calc(0.25em + 2px);
+  width: 3px;
+  height: 7px;
+  border: solid var(--note-bg, #fff);
+  border-width: 0 1.5px 1.5px 0;
+  transform: rotate(45deg);
+  cursor: default;
+}
+
+/* A ticked item steps back without dropping below AA: the same reduced emphasis
+   the card preview uses. */
+.checked {
+  text-decoration: line-through;
+  opacity: var(--note-secondary-opacity);
+}

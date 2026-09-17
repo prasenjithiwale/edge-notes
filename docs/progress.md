@@ -2792,6 +2792,121 @@ one new Rust test for the stored language (161 in all).
       stays literal
 - [ ] Export the notes: the fences are in the Markdown exactly as typed
 
+## A rich-text editor, and a code block you can type in (17 Sep 2026)
+
+Two requests. "Using markdown is a little harder for a non-technical person —
+keep markdown as optional and make the notes editor standard", and "the code
+editor should be a textbox with a dropdown to select a language instead of
+showing all the languages before making changes". They turn out to be the same
+milestone: a code block is a node in the new editor, and the dropdown belongs on
+the node.
+
+### The editor
+
+The owner was asked which of three readings was meant — a rich editor built on a
+library, a rich editor written by hand, or a switch that turns Markdown off — and
+chose the library, with the dependency that implies.
+
+- **Lexical 0.50.0**, pinned exactly, `lexical` and `@lexical/react`. The
+  hand-written alternative was offered and argued against in the same breath:
+  undo, paste from another app, and CJK input methods are each their own project,
+  the bugs are subtle and per-platform, and this widget runs on three of them.
+  It costs about 90 kB gzipped — the estimate given at the time was 70 kB, and
+  the bundle went from 102 kB to 192 kB gzipped. It is loaded from disk, not over
+  a network.
+- **Storage did not change.** A note is still the Markdown it always was, and
+  there is no migration. `notes/editor/markdown.ts` converts both ways: in
+  through `lib/markdown.ts`'s parser, which is the one the cards already use, and
+  out through a serialiser that writes this dialect and no other.
+- **`@lexical/markdown` is deliberately not used for storage.** Its dialect is
+  not ours — `*italic*` for our `_italic_`, `*` bullets for our `-`, no opinion
+  about a bare URL — so round-tripping through it would have quietly rewritten
+  every note the first time it was opened. Its *typing* transformers are used,
+  picked one by one: the whole `TRANSFORMERS` list brings headings, quotes and
+  its own code block, none of which this dialect can store, and a node that
+  cannot be written back is lost on the next save.
+- **The round trip is the contract.** `editor/markdown.test.ts` reads sixteen
+  shapes of note in and writes them straight back out, asserting the bytes are
+  identical: marks inside marks, a bare link, each kind of list, an indented
+  item, a code block between paragraphs, an empty note. Two real bugs were caught
+  by it before anything shipped — adjacent runs sharing a mark were closing and
+  reopening it (`**a ****_b_**** c**`), and list indentation was being dropped
+  because Lexical nests an indented item rather than flagging it.
+- **Markdown is optional, not gone.** Typing `**bold**`, `- `, `1. ` or `- [ ] `
+  still does what it always did. Nobody has to know that, which is the point.
+- **The toolbar is a readout.** A button is lit when the caret is already inside
+  what it applies, which is what anyone who has used a word processor expects.
+  The old toolbar was write-only.
+
+### The code block
+
+- **A node with a dropdown and a textbox**, as asked. The language is a `select`
+  holding all sixteen languages; the code is a real `<textarea>`.
+- **Highlighted while you type.** The textarea's text is transparent and a `<pre>`
+  behind it holds the same text in colour. Every metric that could move a glyph —
+  font, size, line height, padding, border, tab size, whitespace — is set once in
+  one class and shared by both layers, neither wraps, and the paint is scrolled to
+  match the field. The alternative, a read-only block that becomes a field when
+  clicked, loses the place you clicked.
+- **The block swallows its own events.** It sits inside the editor's root
+  element, so a keystroke in the textarea would otherwise bubble to Lexical's
+  input handling and be reconciled into a node that holds no text. Keydown,
+  beforeinput, input, paste, cut, copy and composition all stop at the wrapper;
+  Escape is let through, because the panel's one ordered cascade owns it.
+- **The language is remembered** (`notes.lastCodeLang`, as the note colour is),
+  so the next block opens where the last one ended.
+
+### What went with it
+
+The textarea's edit transforms — `toggleInline`, `toggleList`, `continueList`,
+`toggleCodeBlock`, `isInsideCode`, `codeBlockAt` — and the `execCommand`
+machinery in `notes/formatting.ts` are deleted. They existed to fake formatting
+inside a plain text field; there is no plain text field any more. `lib/markdown.ts`
+is now parsing and nothing else. What is left of `formatting.ts` is the table of
+which key runs which command, which the toolbar and the keyboard both read so a
+tooltip and its key cannot drift apart.
+
+### What was decided against
+
+- **Highlighting the editor as a whole.** Only code is highlighted, and only
+  inside its own block. Colouring prose is not what a note is for.
+- **Nested lists by Tab.** `TabIndentationPlugin` is not registered, so nothing
+  creates nesting that was not already in the note — but indentation that *is*
+  in a note is read, kept and written back, so nothing is lost.
+- **Keeping a "Markdown source" view.** Two ways to edit the same note is two
+  things to keep in step, and the round-trip test is what makes one way safe.
+- **`@lexical/code`.** It brings Prism and its own code node, and we already have
+  a highlighter that knows the sixteen languages the picker offers.
+
+Thirty-four new tests — nineteen for the round trip, fifteen for the commands,
+driven through a headless editor where a selection can actually be made — and the
+panel's editor tests rewritten around what is on screen rather than what was in a
+textarea. 641 frontend tests, 161 Rust tests.
+
+### Checklist
+
+- [ ] Open a note with `**bold**` in it: it reads as bold, and the asterisks are
+      nowhere on screen
+- [ ] Select a word, press ⌘B: it goes bold, and the Bold button lights while the
+      caret is in it
+- [ ] Put the caret in a bullet: the Bulleted list button is lit; press it again
+      and the bullet goes
+- [ ] Type `- ` at the start of a line: it becomes a bullet
+- [ ] Close the note and open it again: nothing has changed, and the card looks
+      the same as before
+- [ ] Press ⌘Z repeatedly: the edits come back one at a time
+- [ ] Paste from a browser or a document: the text arrives, and the note still
+      saves
+- [ ] Insert a code block: a box appears with a dropdown reading Plain text
+- [ ] Choose Python from the dropdown, type some Python: it colours as you type,
+      and the caret stays where you put it
+- [ ] A long line in the block scrolls sideways inside the block, and the colour
+      stays on the characters
+- [ ] Tab inside the block indents by two spaces rather than leaving the block
+- [ ] Copy and Remove on the block do what they say
+- [ ] Insert a second block: it opens in the language the last one ended in
+- [ ] Export the notes: the Markdown is exactly what it was before this release
+
 ## M0 acceptance checklist
 
 From brief section 12. Run `npm run tauri dev`, then work through these with

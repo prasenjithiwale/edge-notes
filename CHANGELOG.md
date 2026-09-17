@@ -9,6 +9,22 @@ To release, see "Releasing" in the README.
 
 ## [Unreleased]
 
+### Changed
+
+- **The note editor is a normal editor now.** Bold looks bold while you type;
+  there are no `**` to read or to learn. The toolbar and its shortcuts do the
+  formatting, and a button lights up when the caret is already inside what it
+  does. Typing Markdown still works if that is your habit — `**bold**`, `- `,
+  `1. `, `- [ ] ` — it is just no longer the only way in.
+
+  Notes are still stored as Markdown, exactly as before, so nothing needed
+  converting and an export is unchanged.
+- **A code block is a box with a language dropdown**, rather than a list of every
+  language shown before you have written anything. Pick the language on the block
+  itself, change it whenever, and type into a real text box — with the colours
+  arriving as you type. Tab indents inside it, and the block has its own copy and
+  remove buttons.
+
 ### Added
 
 - **Code blocks in notes, with syntax highlighting.** The editor has a **Code

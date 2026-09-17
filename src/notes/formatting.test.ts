@@ -1,13 +1,6 @@
-// @vitest-environment jsdom
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 
-import {
-  applyTextEdit,
-  FORMAT_SHORTCUTS,
-  formatCommandForKey,
-  noteEditorField,
-  shortcutLabel,
-} from "./formatting";
+import { FORMAT_SHORTCUTS, formatCommandForKey, shortcutLabel } from "./formatting";
 
 function key(init: Partial<KeyboardEvent>) {
   return { metaKey: false, ctrlKey: false, shiftKey: false, altKey: false, code: "", ...init };
@@ -39,6 +32,28 @@ describe("formatCommandForKey", () => {
   });
 });
 
+describe("the table itself", () => {
+  it("gives every command exactly one key, and no two the same", () => {
+    const seen = new Set<string>();
+    for (const shortcut of FORMAT_SHORTCUTS) {
+      const key = `${shortcut.code}${shortcut.shift ? "+shift" : ""}`;
+      expect(seen.has(key), `${key} is bound twice`).toBe(false);
+      seen.add(key);
+    }
+    // Every command the toolbar can run is reachable from the keyboard.
+    expect(FORMAT_SHORTCUTS.map((shortcut) => shortcut.command)).toEqual([
+      "bold",
+      "italic",
+      "strike",
+      "code",
+      "bullet",
+      "ordered",
+      "task",
+      "codeblock",
+    ]);
+  });
+});
+
 describe("shortcutLabel", () => {
   const strike = FORMAT_SHORTCUTS.find((shortcut) => shortcut.command === "strike");
 
@@ -48,50 +63,5 @@ describe("shortcutLabel", () => {
     }
     expect(shortcutLabel(strike, true)).toBe("⌘⇧X");
     expect(shortcutLabel(strike, false)).toBe("Ctrl+Shift+X");
-  });
-});
-
-describe("noteEditorField", () => {
-  it("recognises only the marked textarea", () => {
-    const marked = document.createElement("textarea");
-    marked.setAttribute("data-note-editor", "");
-    expect(noteEditorField(marked)).toBe(marked);
-    expect(noteEditorField(document.createElement("textarea"))).toBeNull();
-    expect(noteEditorField(document.createElement("input"))).toBeNull();
-    expect(noteEditorField(null)).toBeNull();
-  });
-});
-
-describe("applyTextEdit without execCommand", () => {
-  it("replaces the range, announces the input, and sets the selection", () => {
-    const field = document.createElement("textarea");
-    document.body.append(field);
-    field.value = "say hello";
-    const onInput = vi.fn();
-    field.addEventListener("input", onInput);
-
-    applyTextEdit(field, {
-      start: 4,
-      end: 9,
-      text: "**hello**",
-      selectionStart: 6,
-      selectionEnd: 11,
-    });
-
-    expect(field.value).toBe("say **hello**");
-    expect(onInput).toHaveBeenCalledTimes(1);
-    expect([field.selectionStart, field.selectionEnd]).toEqual([6, 11]);
-    expect(document.activeElement).toBe(field);
-    field.remove();
-  });
-
-  it("does nothing to the text for an empty edit", () => {
-    const field = document.createElement("textarea");
-    field.value = "abc";
-    const onInput = vi.fn();
-    field.addEventListener("input", onInput);
-    applyTextEdit(field, { start: 1, end: 1, text: "", selectionStart: 1, selectionEnd: 1 });
-    expect(field.value).toBe("abc");
-    expect(onInput).not.toHaveBeenCalled();
   });
 });

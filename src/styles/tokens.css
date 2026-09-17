@@ -126,6 +126,9 @@
   /* Behind inline `code`, which keeps the note's own text colour. Checked
      against all sixteen note backgrounds by `contrast.test.ts`. */
   --code-inline-bg: rgba(0, 0, 0, 0.07);
+  /* Behind selected code in the editor, where the text itself is transparent
+     over the painted copy: a tint, so the syntax colours still read through. */
+  --code-selection: rgba(47, 111, 235, 0.24);
   --code-border: rgba(0, 0, 0, 0.08);
   --code-text: #1d1d1f;
   --code-comment: #5c6b78;
@@ -209,6 +212,7 @@
     --priority-low: #81c784;
     --code-bg: #232326;
     --code-inline-bg: rgba(255, 255, 255, 0.11);
+    --code-selection: rgba(90, 141, 240, 0.34);
     --code-border: rgba(255, 255, 255, 0.1);
     --code-text: #f2f2f3;
     --code-comment: #8d9aa6;
@@ -279,6 +283,7 @@
   --priority-low: #81c784;
   --code-bg: #232326;
   --code-inline-bg: rgba(255, 255, 255, 0.11);
+  --code-selection: rgba(90, 141, 240, 0.34);
   --code-border: rgba(255, 255, 255, 0.1);
   --code-text: #f2f2f3;
   --code-comment: #8d9aa6;

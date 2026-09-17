@@ -370,121 +370,108 @@ function contentOf(id: string): string | undefined {
   return useNotesStore.getState().notes.find((candidate) => candidate.id === id)?.content;
 }
 
-async function openEditorWith(content: string, selection: [number, number]) {
+/** Open the editor on note 1 with some text already in it. */
+async function openEditorWith(content: string) {
   await renderPanel();
   useNotesStore.getState().setContent("1", content);
   useNotesStore.getState().startEditing("1");
-  const field = await screen.findByLabelText<HTMLTextAreaElement>("Note content");
-  field.setSelectionRange(selection[0], selection[1]);
-  return field;
+  return screen.findByLabelText("Note content");
 }
 
-describe("formatting in the editor", () => {
-  it("bolds the selection with Cmd+B and keeps the text selected", async () => {
-    const field = await openEditorWith("Standup notes", [0, 7]);
+/**
+ * The editor is rich text now, so what is checked here is what is on screen and
+ * what reaches the store. The commands themselves — what ⌘B does to a selection,
+ * what each list button produces — are in `notes/editor/toolbar.test.ts`, where
+ * a headless editor can be given a real selection.
+ */
+describe("the note editor", () => {
+  it("shows the formatting rather than the markers", async () => {
+    const field = await openEditorWith("**Standup** and _soft_ and `x`");
 
-    fireEvent.keyDown(field, { key: "b", code: "KeyB", metaKey: true });
-
-    await waitFor(() => {
-      expect(contentOf("1")).toBe("**Standup** notes");
-    });
-    expect([field.selectionStart, field.selectionEnd]).toEqual([2, 9]);
+    // The point of the whole change: nobody has to read or type `**`.
+    expect(field.textContent).toBe("Standup and soft and x");
+    expect(field.querySelector("strong")?.textContent).toBe("Standup");
+    expect(field.querySelector("em")?.textContent).toBe("soft");
+    expect(field.querySelector("code")?.textContent).toBe("x");
   });
 
-  it("turns the line into a checklist item with Cmd+Shift+9", async () => {
-    const field = await openEditorWith("Groceries\nmilk", [12, 12]);
+  it("draws a list as a list", async () => {
+    const field = await openEditorWith("Shopping\n- milk\n- eggs");
 
-    fireEvent.keyDown(field, { key: "(", code: "Digit9", metaKey: true, shiftKey: true });
+    expect(field.querySelectorAll("ul li")).toHaveLength(2);
+    expect(field.textContent).not.toContain("- milk");
+  });
+
+  it("offers every formatting control, each with its key", async () => {
+    await openEditorWith("Standup notes");
+
+    for (const name of [
+      "Bold",
+      "Italic",
+      "Strikethrough",
+      "Inline code",
+      "Bulleted list",
+      "Numbered list",
+      "Checklist",
+      "Code block",
+    ]) {
+      expect(screen.getByRole("button", { name }).getAttribute("title")).toContain(name);
+    }
+  });
+});
+
+describe("a code block in the editor", () => {
+  it("is a text box with a language dropdown, not a wall of choices", async () => {
+    await openEditorWith("```python\nname = 1\n```");
+
+    const chooser = await screen.findByLabelText<HTMLSelectElement>("Code language");
+    expect(chooser.value).toBe("python");
+    // Every language is in the one control rather than laid out beforehand.
+    expect(chooser.querySelectorAll("option").length).toBeGreaterThan(10);
+
+    const code = screen.getByLabelText<HTMLTextAreaElement>("Code, Python");
+    expect(code.value).toBe("name = 1");
+  });
+
+  it("writes what is typed in the box back to the note", async () => {
+    await openEditorWith("```python\nname = 1\n```");
+    const code = await screen.findByLabelText("Code, Python");
+
+    fireEvent.change(code, { target: { value: "name = 2" } });
 
     await waitFor(() => {
-      expect(contentOf("1")).toBe("Groceries\n- [ ] milk");
+      expect(contentOf("1")).toBe("```python\nname = 2\n```");
     });
   });
 
-  it("continues a list on Enter, and leaves a plain Enter alone", async () => {
-    const field = await openEditorWith("Groceries\n- milk", [16, 16]);
+  it("changes the language from the dropdown, and remembers it", async () => {
+    await openEditorWith("```python\nname = 1\n```");
 
-    const handled = !fireEvent.keyDown(field, { key: "Enter", code: "Enter" });
-    expect(handled).toBe(true);
-    await waitFor(() => {
-      expect(contentOf("1")).toBe("Groceries\n- milk\n- ");
+    fireEvent.change(await screen.findByLabelText("Code language"), {
+      target: { value: "json" },
     });
 
-    field.setSelectionRange(9, 9);
-    // Not a list line: the browser inserts the newline itself.
-    expect(fireEvent.keyDown(field, { key: "Enter", code: "Enter" })).toBe(true);
-    // Shift+Enter is always a plain line break.
-    field.setSelectionRange(16, 16);
-    expect(fireEvent.keyDown(field, { key: "Enter", code: "Enter", shiftKey: true })).toBe(true);
-  });
-
-  it("does not continue a list while an input method is composing", async () => {
-    const field = await openEditorWith("- milk", [6, 6]);
-    expect(fireEvent.keyDown(field, { key: "Enter", code: "Enter", isComposing: true })).toBe(
-      true,
-    );
-    expect(contentOf("1")).toBe("- milk");
-  });
-
-  it("formats from the toolbar", async () => {
-    const field = await openEditorWith("Standup notes", [8, 13]);
-
-    screen.getByRole("button", { name: "Strikethrough" }).click();
-
     await waitFor(() => {
-      expect(contentOf("1")).toBe("Standup ~~notes~~");
+      expect(contentOf("1")).toBe("```json\nname = 1\n```");
     });
-    expect(field.selectionStart).toBe(10);
-  });
-
-  it("wraps the selection in a code fence from the language picker", async () => {
-    const field = await openEditorWith("const a = 1", [0, 11]);
-
-    fireEvent.click(screen.getByRole("button", { name: "Code block" }));
-    fireEvent.click(await screen.findByRole("button", { name: "Python" }));
-
-    await waitFor(() => {
-      expect(contentOf("1")).toBe("```python\nconst a = 1\n```");
-    });
-    expect(field.value).toContain("```python");
-    // Remembered the way the note colour is, so the next block starts there.
     await waitFor(() => {
       const patches = commandCalls("settings_update") as { patch: Record<string, unknown> }[];
-      expect(patches.some((call) => call.patch["notes.lastCodeLang"] === "python")).toBe(true);
+      expect(patches.some((call) => call.patch["notes.lastCodeLang"] === "json")).toBe(true);
     });
   });
 
-  it("opens a block at the caret with Cmd+Shift+C, in the language last used", async () => {
-    settingsInDb = { ...SETTINGS, "notes.lastCodeLang": "json" };
-    const field = await openEditorWith("", [0, 0]);
+  it("can be removed from the block itself", async () => {
+    await openEditorWith("before\n```js\nconst a = 1\n```");
 
-    fireEvent.keyDown(field, { key: "C", code: "KeyC", metaKey: true, shiftKey: true });
+    fireEvent.click(await screen.findByRole("button", { name: "Remove code block" }));
 
     await waitFor(() => {
-      expect(contentOf("1")).toBe("```json\n\n```");
+      expect(contentOf("1")).toBe("before");
     });
   });
+});
 
-  /** The one part of a note whose text has to survive exactly as typed. */
-  it("refuses to format inside a code block", async () => {
-    const field = await openEditorWith("```js\nconst a = 1\n```", [6, 11]);
-
-    fireEvent.keyDown(field, { key: "b", code: "KeyB", metaKey: true });
-    fireEvent.keyDown(field, { key: "(", code: "Digit9", metaKey: true, shiftKey: true });
-
-    expect(contentOf("1")).toBe("```js\nconst a = 1\n```");
-  });
-
-  it("wraps text in backticks for inline code with Cmd+E", async () => {
-    const field = await openEditorWith("set x to 2", [4, 5]);
-
-    fireEvent.keyDown(field, { key: "e", code: "KeyE", metaKey: true });
-
-    await waitFor(() => {
-      expect(contentOf("1")).toBe("set `x` to 2");
-    });
-  });
-
+describe("checkboxes on a card", () => {
   it("ticks a checklist item from its card", async () => {
     await renderPanel();
     useNotesStore.getState().setContent("2", "Groceries\n- [ ] milk");
@@ -603,8 +590,11 @@ describe("clicking outside the editor", () => {
   it("stays in edit mode once something was typed", async () => {
     await renderPanel();
     useNotesStore.getState().startEditing("1");
-    const field = await screen.findByLabelText("Note content");
-    fireEvent.change(field, { target: { value: "Standup notes\nDeploy the fix today" } });
+    await screen.findByLabelText("Note content");
+    // What typing does: the editor serialises itself into the store on every
+    // change. Driving a contenteditable keystroke by keystroke in jsdom tests
+    // the test harness, not the panel.
+    useNotesStore.getState().setContent("1", "Standup notes\nDeploy the fix today");
 
     clickOn(screen.getByRole("button", { name: "Keep open" }));
 

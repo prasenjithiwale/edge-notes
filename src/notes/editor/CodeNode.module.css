@@ -1,0 +1,163 @@
+/* The block, on its own neutral surface inside a coloured note — the same
+   surface the reader draws, so a note looks the same whether it is being read or
+   written. */
+.block {
+  margin: 6px 0;
+  border: 1px solid var(--code-border);
+  border-radius: var(--radius-control);
+  background: var(--code-bg);
+  color: var(--code-text);
+  overflow: hidden;
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 3px 4px 3px 6px;
+  border-bottom: 1px solid var(--code-border);
+}
+
+/* The dropdown: one control holding the whole list, rather than a row of chips
+   shown before anything has been typed. The chevron is drawn by the wrapper,
+   because a styled `select` loses its own. */
+.select {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.select::after {
+  content: "";
+  position: absolute;
+  right: 8px;
+  width: 5px;
+  height: 5px;
+  border-right: 1.5px solid var(--text-secondary);
+  border-bottom: 1.5px solid var(--text-secondary);
+  transform: translateY(-2px) rotate(45deg);
+  pointer-events: none;
+}
+
+.language {
+  appearance: none;
+  height: 22px;
+  padding: 0 22px 0 6px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 11px;
+}
+
+.language:hover {
+  border-color: var(--code-border);
+  color: var(--code-text);
+}
+
+.actions {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.action {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-secondary);
+}
+
+.action:hover {
+  background: var(--code-inline-bg);
+  color: var(--code-text);
+}
+
+/* The field and the paint, one on top of the other. */
+.stack {
+  position: relative;
+}
+
+/* Every metric that could move a glyph is set here, once, and both layers get
+   it: if these two ever disagree the colour would slide off the characters. */
+.surface {
+  box-sizing: border-box;
+  display: block;
+  width: 100%;
+  margin: 0;
+  padding: 8px 10px;
+  border: 0;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.5;
+  letter-spacing: normal;
+  tab-size: 2;
+  /* Code does not wrap: a line broken in the middle is no longer the line that
+     was written. */
+  white-space: pre;
+  overflow-wrap: normal;
+  word-break: normal;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.paint {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  /* The field scrolls; the paint is moved to match, so it must not scroll on
+     its own or a trackpad over the block would slide the two apart. */
+  overflow: hidden;
+}
+
+.field {
+  position: relative;
+  resize: none;
+  background: transparent;
+  /* Transparent text over the painted copy, with a caret that is still visible. */
+  color: transparent;
+  caret-color: var(--code-text);
+  overscroll-behavior-x: contain;
+}
+
+.field:focus {
+  outline: none;
+}
+
+.field::selection {
+  /* The text under the selection is transparent, so the highlight has to carry
+     it: a tint rather than a fill, so the painted colours still read through. */
+  background: var(--code-selection);
+}
+
+.plain {
+  color: var(--code-text);
+}
+
+.comment {
+  color: var(--code-comment);
+}
+
+.string {
+  color: var(--code-string);
+}
+
+.number {
+  color: var(--code-number);
+}
+
+.keyword {
+  color: var(--code-keyword);
+}
+
+.property {
+  color: var(--code-property);
+}

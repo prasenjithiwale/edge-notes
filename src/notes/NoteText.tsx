@@ -1,6 +1,7 @@
 import { Fragment, useMemo, useState, type MouseEvent, type ReactNode } from "react";
 import { Check, Copy, Square, SquareCheck } from "lucide-react";
 
+import { copyText } from "../lib/clipboard";
 import { highlight, languageLabel } from "../lib/code";
 import { cx } from "../lib/cx";
 import { openUrl } from "../lib/ipc";
@@ -84,37 +85,6 @@ export function FlowText({ lines }: { lines: string[] }) {
       ))}
     </>
   );
-}
-
-/**
- * Put the code on the clipboard.
- *
- * The Clipboard API is the right one and works in a Tauri webview, which is a
- * secure context; the textarea fallback is for the engines and the test
- * environment where it is missing, and costs four lines.
- */
-async function copyText(text: string): Promise<boolean> {
-  try {
-    await navigator.clipboard.writeText(text);
-    return true;
-  } catch {
-    /* falls through */
-  }
-  try {
-    const carrier = document.createElement("textarea");
-    carrier.value = text;
-    carrier.setAttribute("readonly", "");
-    carrier.style.position = "fixed";
-    carrier.style.opacity = "0";
-    document.body.appendChild(carrier);
-    carrier.select();
-    // eslint-disable-next-line @typescript-eslint/no-deprecated -- the fallback.
-    const copied = document.execCommand("copy");
-    document.body.removeChild(carrier);
-    return copied;
-  } catch {
-    return false;
-  }
 }
 
 /** How long the copy button stays ticked before going back to its icon. */
