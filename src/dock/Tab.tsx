@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, type CSSProperties } from "react";
 import { ChevronLeft } from "lucide-react";
 
+import { useSessionRunning } from "../focus/session";
 import { cx } from "../lib/cx";
 import { isClosedPhase, isOpenPhase } from "../lib/dock";
 import { dockBeginTabDrag, dockEndTabDrag } from "../lib/ipc";
@@ -17,7 +18,7 @@ interface TabProps {
 /**
  * The always-visible handle: a chevron pointing toward the screen centre, plus
  * up to three dots carrying the colours of the most recently edited notes
- * (brief 6.5).
+ * (brief 6.5), and a red light while a focus session is running.
  *
  * Drawn as a small floating pill inside a larger transparent box. The box is the
  * window and the hit area, and it reaches the screen edge, so a cursor thrown
@@ -32,6 +33,7 @@ export function Tab({ className }: TabProps) {
   // tab is attached to it, and a see-through tab on a solid panel looks broken.
   const translucent = appearance === "translucent" && isClosedPhase(phase);
   const dots = recentColors(notes);
+  const running = useSessionRunning();
   const dragging = useRef(false);
 
   const endDrag = useCallback(() => {
@@ -66,6 +68,17 @@ export function Tab({ className }: TabProps) {
       }}
     >
       <div className={cx(styles.pill, translucent && styles.translucent)}>
+        {/* A session counting down behind whatever you are working in is worth
+            knowing about without opening anything, which is the one thing a
+            collapsed widget is for (owner's request, 17 Sep 2026). */}
+        {running && (
+          <span
+            className={styles.running}
+            role="img"
+            aria-label="Focus session running"
+            title="Focus session running"
+          />
+        )}
         {/* 10 px rather than brief 7.1's 16: the pill is 12 px wide. */}
         <ChevronLeft className={styles.chevron} size={10} strokeWidth={2} />
         {dots.length > 0 && (

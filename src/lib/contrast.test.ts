@@ -27,7 +27,7 @@ function tokenBlock(selector: RegExp): Map<string, string> {
   return new Map(
     [
       ...block.matchAll(
-        /--(note-[a-z]+-(?:bg|text)|priority-[a-z]+|code-[a-z]+|surface|surface-sunken):\s*(#[0-9a-f]{6});/g,
+        /--(note-[a-z]+-(?:bg|text)|priority-[a-z]+|code-[a-z]+|focus-running|surface|surface-sunken):\s*(#[0-9a-f]{6});/g,
       ),
     ].map(([, name = "", hex = ""]) => [name, hex]),
   );
@@ -213,6 +213,35 @@ describe("inline code contrast", () => {
         );
       });
     }
+  }
+});
+
+/**
+ * The light on the collapsed tab. It is drawn on the tab's own surface, which is
+ * `--surface` in both themes, and it is the one thing on screen while the panel
+ * is away — so it is held to the same non-text bar as the priority flags.
+ */
+describe("the running-session light", () => {
+  for (const theme of ["light", "dark"] as const) {
+    const tokenSet = theme === "light" ? LIGHT : DARK;
+
+    it(`is defined in ${theme}, identically in both dark blocks`, () => {
+      expect(tokenSet.get("focus-running")).toMatch(/^#[0-9a-f]{6}$/);
+      expect(DARK.get("focus-running")).toBe(SYSTEM_DARK.get("focus-running"));
+    });
+
+    it(`is visible on the tab in ${theme}`, () => {
+      const surface = tokenSet.get("surface") ?? "";
+      expect(contrastRatio(surface, tokenSet.get("focus-running") ?? "")).toBeGreaterThanOrEqual(
+        NON_TEXT,
+      );
+    });
+
+    it(`does not read as a priority flag in ${theme}`, () => {
+      // Red already means "high priority" on a task. The two are never on screen
+      // together, but they should not be the same red either.
+      expect(tokenSet.get("focus-running")).not.toBe(tokenSet.get("priority-high"));
+    });
   }
 });
 

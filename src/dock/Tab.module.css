@@ -107,3 +107,37 @@
   border-radius: 50%;
   background: var(--dot-bg);
 }
+
+/* The running-session light.
+ *
+ * Red, and blinking, at the owner's request. Both are departures: brief 7.1
+ * keeps the chrome neutral, and nothing else in the app animates on its own.
+ * The case for them is that this is a status light on a 12 px pill at the screen
+ * edge, read at a glance while you are working in something else — a grey dot
+ * that did not move would say nothing, and there is no room for a word.
+ *
+ * It pulses rather than flicking on and off: about 0.6 Hz, far below the three
+ * flashes a second that WCAG 2.3.1 draws the line at, and it never goes fully
+ * out, so the state is still readable in any single frame — a screenshot, or a
+ * reader who has asked for less motion.
+ */
+.running {
+  flex: none;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--focus-running);
+  animation: tab-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes tab-pulse {
+  50% {
+    opacity: 0.3;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .running {
+    animation: none;
+  }
+}

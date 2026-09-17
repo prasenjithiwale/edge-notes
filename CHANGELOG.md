@@ -9,6 +9,13 @@ To release, see "Releasing" in the README.
 
 ## [Unreleased]
 
+### Added
+
+- **The tab shows a red light while a focus session is running**, pulsing gently
+  at the screen edge, so a session counting down behind whatever you are working
+  in is visible without opening anything. It goes out by itself when the phase
+  ends, and it stops pulsing if you have asked your system for less motion.
+
 ### Changed
 
 - **The note editor is a normal editor now.** Bold looks bold while you type;

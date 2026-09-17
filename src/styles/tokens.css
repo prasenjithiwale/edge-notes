@@ -137,6 +137,14 @@
   --code-keyword: #8b1a86;
   --code-property: #14663f;
 
+  /* The running-session light on the collapsed tab (owner's request, 17 Sep
+     2026). A third deliberate exception to brief 7.1's "the note colours are the
+     only colour", after the priority flags and the code palette, and for the
+     same kind of reason: a status light that is not red is not a status light,
+     and this one has to be read at 5 px from across a desk. Held above 3:1
+     against the tab's surface by `contrast.test.ts`. */
+  --focus-running: #d70015;
+
   /* No bundled fonts (brief 7.4): the platform's own monospace, which is SF Mono
      on macOS, Consolas on Windows and whatever the desktop has on Linux. */
   --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
@@ -213,6 +221,7 @@
     --code-bg: #232326;
     --code-inline-bg: rgba(255, 255, 255, 0.11);
     --code-selection: rgba(90, 141, 240, 0.34);
+    --focus-running: #ff453a;
     --code-border: rgba(255, 255, 255, 0.1);
     --code-text: #f2f2f3;
     --code-comment: #8d9aa6;
@@ -284,6 +293,7 @@
   --code-bg: #232326;
   --code-inline-bg: rgba(255, 255, 255, 0.11);
   --code-selection: rgba(90, 141, 240, 0.34);
+  --focus-running: #ff453a;
   --code-border: rgba(255, 255, 255, 0.1);
   --code-text: #f2f2f3;
   --code-comment: #8d9aa6;

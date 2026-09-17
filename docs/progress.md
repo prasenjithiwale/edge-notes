@@ -2907,6 +2907,49 @@ textarea. 641 frontend tests, 161 Rust tests.
 - [ ] Insert a second block: it opens in the language the last one ended in
 - [ ] Export the notes: the Markdown is exactly what it was before this release
 
+## A running-session light on the tab (17 Sep 2026)
+
+The owner asked for "a blinking red dot on the slider button if the focus timer
+is started" — the slider button being the collapsed tab, the only part of the app
+on screen while you are working in something else.
+
+- **Red and blinking, both departures, both argued for.** Brief 7.1 keeps the
+  chrome neutral and nothing else in the app animates on its own. The case: this
+  is a 5 px light on a 12 px pill at the screen edge, read at a glance from
+  across a desk, with no room for a word. A grey dot that did not move would say
+  nothing. It is the third agreed colour exception after the priority flags and
+  the code palette, and `contrast.test.ts` holds it above 3:1 on the tab's
+  surface in both themes and checks it is not the same red as a high-priority
+  flag.
+- **It pulses rather than flicks**, at about 0.6 Hz — far below the three flashes
+  a second WCAG 2.3.1 draws the line at — and never goes fully out, so the state
+  is readable in any single frame, including a screenshot.
+  `prefers-reduced-motion` stops it dead and leaves the dot steady.
+- **The end is watched for, not just the start.** `focus/session.ts` exists
+  because `isRunning` alone would have been wrong here: the timer's state only
+  advances when something asks it to, and while the panel is collapsed nothing
+  does, so a session that ran out an hour ago would still have been lit. One
+  timer, set for the known end, through `useSyncExternalStore` as the rest of
+  the app's clocks are — no polling, and a boolean snapshot that cannot drive a
+  render loop. It reads the state and leaves settling to whoever is watching the
+  clock.
+- **Any running phase lights it**, a break included: the light means "a timer is
+  counting", and two shades of a 5 px dot would not be readable anyway.
+
+Six new tests (652 in all), including the one that matters: with the panel still
+closed, the light goes out by itself when the phase ends.
+
+### Checklist
+
+- [ ] Start a focus session, collapse the panel: a red dot pulses on the tab
+- [ ] Pause it: the dot goes
+- [ ] Start a session, leave the panel closed past the end: the dot goes out on
+      its own, about when the notification arrives
+- [ ] Start a break: the dot is lit for that too
+- [ ] System Settings › Accessibility › Reduce motion: the dot is steady, not
+      pulsing, and still red
+- [ ] The dot is legible on the translucent tab in both light and dark
+
 ## M0 acceptance checklist
 
 From brief section 12. Run `npm run tauri dev`, then work through these with
