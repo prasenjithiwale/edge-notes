@@ -156,3 +156,38 @@
   max-width: var(--reading-measure);
   align-self: center;
 }
+
+/* The languages a code block can be in. Chips that wrap, like the quick dates in
+   a task's sheet, rather than a menu: a native pop-up takes the keyboard away
+   from a window that has trouble getting it back (see the macOS notes), and at
+   320 px a menu has nowhere to open. */
+.languages {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 4px 0 2px;
+  max-height: 124px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.language {
+  height: 22px;
+  padding: 0 8px;
+  border: 1px solid var(--code-border);
+  border-radius: 999px;
+  background: var(--code-inline-bg);
+  color: inherit;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.language:hover {
+  border-color: currentcolor;
+}
+
+/* The one last used, which is what the button and its shortcut insert. */
+.languagePicked {
+  font-weight: 600;
+  border-color: currentcolor;
+}

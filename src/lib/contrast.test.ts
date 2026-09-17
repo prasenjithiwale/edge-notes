@@ -27,7 +27,7 @@ function tokenBlock(selector: RegExp): Map<string, string> {
   return new Map(
     [
       ...block.matchAll(
-        /--(note-[a-z]+-(?:bg|text)|priority-[a-z]+|surface|surface-sunken):\s*(#[0-9a-f]{6});/g,
+        /--(note-[a-z]+-(?:bg|text)|priority-[a-z]+|code-[a-z]+|surface|surface-sunken):\s*(#[0-9a-f]{6});/g,
       ),
     ].map(([, name = "", hex = ""]) => [name, hex]),
   );
@@ -146,6 +146,74 @@ describe("priority flag contrast", () => {
       }
     }
   });
+});
+
+/**
+ * Syntax highlighting is the second agreed exception to brief 7.1, after the
+ * priority flags. It is kept honest by the same rule: the block has its own
+ * neutral surface, so there are two backgrounds rather than sixteen, and every
+ * role has to be readable body text on both.
+ */
+describe("code block palette", () => {
+  const ROLES = ["text", "comment", "string", "number", "keyword", "property"] as const;
+
+  for (const theme of ["light", "dark"] as const) {
+    const tokenSet = theme === "light" ? LIGHT : DARK;
+    const background = tokenSet.get("code-bg");
+
+    it(`has a code surface in ${theme}, identical in both dark blocks`, () => {
+      expect(background).toMatch(/^#[0-9a-f]{6}$/);
+      expect(DARK.get("code-bg")).toBe(SYSTEM_DARK.get("code-bg"));
+    });
+
+    for (const role of ROLES) {
+      it(`${role} meets AA on the code surface in ${theme}`, () => {
+        const colour = tokenSet.get(`code-${role}`);
+        expect(colour).toMatch(/^#[0-9a-f]{6}$/);
+        expect(DARK.get(`code-${role}`)).toBe(SYSTEM_DARK.get(`code-${role}`));
+        expect(contrastRatio(background ?? "", colour ?? "")).toBeGreaterThanOrEqual(AA);
+      });
+    }
+  }
+
+  it("gives the roles separable hues, not just shades", () => {
+    // Two roles that read as the same colour would make the exception pointless.
+    for (const theme of [LIGHT, DARK]) {
+      const coloured = ["comment", "string", "number", "keyword", "property"] as const;
+      const hues = coloured.map((role) => hue(theme.get(`code-${role}`) ?? ""));
+      for (let i = 0; i < hues.length; i += 1) {
+        for (let j = i + 1; j < hues.length; j += 1) {
+          const apart = Math.abs((hues[i] ?? 0) - (hues[j] ?? 0));
+          expect(Math.min(apart, 360 - apart)).toBeGreaterThanOrEqual(25);
+        }
+      }
+    }
+  });
+});
+
+/**
+ * Inline code keeps the note's own text colour and puts a wash behind it, so the
+ * contrast that matters is of that text on the washed background — on every note
+ * colour, in both themes.
+ */
+describe("inline code contrast", () => {
+  const WASH: Record<"light" | "dark", { colour: string; alpha: number }> = {
+    // `--code-inline-bg` in tokens.css. Keep the two in step.
+    light: { colour: "#000000", alpha: 0.07 },
+    dark: { colour: "#ffffff", alpha: 0.11 },
+  };
+
+  for (const name of NOTE_COLORS) {
+    for (const theme of ["light", "dark"] as const) {
+      it(`${name} inline code meets AA in ${theme}`, () => {
+        const [background, text] = pair(theme === "light" ? LIGHT : DARK, name);
+        const { colour, alpha } = WASH[theme];
+        expect(contrastRatio(blend(colour, background, alpha), text)).toBeGreaterThanOrEqual(
+          AA,
+        );
+      });
+    }
+  }
 });
 
 describe("contrastRatio", () => {

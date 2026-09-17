@@ -259,7 +259,13 @@ export function Panel({ className }: PanelProps) {
         const command = formatCommandForKey(event);
         if (command !== null) {
           event.preventDefault();
-          applyFormat(field, command);
+          // The code-block shortcut opens a fence in the language the picker
+          // last used, so the keyboard and the button agree.
+          applyFormat(
+            field,
+            command,
+            useSettingsStore.getState().settings["notes.lastCodeLang"],
+          );
           return;
         }
         // Enter continues a list. Not while an input method is composing — that

@@ -5,6 +5,7 @@
  */
 import {
   continueList,
+  toggleCodeBlock,
   toggleInline,
   toggleList,
   type InlineMarker,
@@ -13,7 +14,15 @@ import {
   type TextState,
 } from "../lib/markdown";
 
-export type FormatCommand = "bold" | "italic" | "strike" | "bullet" | "ordered" | "task";
+export type FormatCommand =
+  | "bold"
+  | "italic"
+  | "strike"
+  | "code"
+  | "bullet"
+  | "ordered"
+  | "task"
+  | "codeblock";
 
 export interface FormatShortcut {
   command: FormatCommand;
@@ -29,15 +38,18 @@ export const FORMAT_SHORTCUTS: readonly FormatShortcut[] = [
   { command: "bold", label: "Bold", code: "KeyB", shift: false, keyLabel: "B" },
   { command: "italic", label: "Italic", code: "KeyI", shift: false, keyLabel: "I" },
   { command: "strike", label: "Strikethrough", code: "KeyX", shift: true, keyLabel: "X" },
+  { command: "code", label: "Inline code", code: "KeyE", shift: false, keyLabel: "E" },
   { command: "bullet", label: "Bulleted list", code: "Digit8", shift: true, keyLabel: "8" },
   { command: "ordered", label: "Numbered list", code: "Digit7", shift: true, keyLabel: "7" },
   { command: "task", label: "Checklist", code: "Digit9", shift: true, keyLabel: "9" },
+  { command: "codeblock", label: "Code block", code: "KeyC", shift: true, keyLabel: "C" },
 ];
 
 const INLINE: Partial<Record<FormatCommand, InlineMarker>> = {
   bold: "**",
   italic: "_",
   strike: "~~",
+  code: "`",
 };
 
 type KeyInput = Pick<
@@ -126,13 +138,27 @@ function insertNatively(text: string): boolean {
   /* eslint-enable @typescript-eslint/no-deprecated */
 }
 
-export function applyFormat(textarea: HTMLTextAreaElement, command: FormatCommand): void {
+/**
+ * Apply a formatting command. Every transform returns null when it declines —
+ * which is what all of them do inside a fenced code block, where the text is
+ * meant to be exact and a stray `**` would be part of the code.
+ *
+ * `lang` is only read by the code-block command: it is what goes after the
+ * opening fence.
+ */
+export function applyFormat(
+  textarea: HTMLTextAreaElement,
+  command: FormatCommand,
+  lang = "",
+): void {
   const state = stateOf(textarea);
   const marker = INLINE[command];
   const edit =
-    marker !== undefined
-      ? toggleInline(state, marker)
-      : toggleList(state, command as ListKind);
+    command === "codeblock"
+      ? toggleCodeBlock(state, lang)
+      : marker !== undefined
+        ? toggleInline(state, marker)
+        : toggleList(state, command as ListKind);
   if (edit !== null) {
     applyTextEdit(textarea, edit);
   }

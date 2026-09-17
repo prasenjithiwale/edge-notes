@@ -36,13 +36,14 @@ function Body({ note, onToggleTask }: Pick<NoteCardProps, "note" | "onToggleTask
     <>
       {title === null ? (
         <div className={cx(styles.title, styles.untitled)}>New note</div>
-      ) : title.kind === "paragraph" ? (
+      ) : title.kind === "paragraph" && !title.code ? (
         <div className={styles.title}>
           <InlineText text={title.text} />
         </div>
       ) : (
         <LineRow
           line={title}
+          code={title.code}
           className={styles.title}
           onToggle={() => {
             onToggleTask(title.index);
@@ -60,6 +61,7 @@ function Body({ note, onToggleTask }: Pick<NoteCardProps, "note" | "onToggleTask
               <LineRow
                 key={line.index}
                 line={line}
+                code={line.code}
                 className={styles.row}
                 onToggle={() => {
                   onToggleTask(line.index);

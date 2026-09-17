@@ -71,6 +71,7 @@ const SETTINGS: Settings = {
   "panel.width": 320,
   theme: "system",
   "notes.lastColor": "yellow",
+  "notes.lastCodeLang": "",
   "shortcut.newNote": "CmdOrCtrl+Alt+N",
   "tasks.reminders": true,
   "panel.translucency": 0,
@@ -434,6 +435,54 @@ describe("formatting in the editor", () => {
       expect(contentOf("1")).toBe("Standup ~~notes~~");
     });
     expect(field.selectionStart).toBe(10);
+  });
+
+  it("wraps the selection in a code fence from the language picker", async () => {
+    const field = await openEditorWith("const a = 1", [0, 11]);
+
+    fireEvent.click(screen.getByRole("button", { name: "Code block" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Python" }));
+
+    await waitFor(() => {
+      expect(contentOf("1")).toBe("```python\nconst a = 1\n```");
+    });
+    expect(field.value).toContain("```python");
+    // Remembered the way the note colour is, so the next block starts there.
+    await waitFor(() => {
+      const patches = commandCalls("settings_update") as { patch: Record<string, unknown> }[];
+      expect(patches.some((call) => call.patch["notes.lastCodeLang"] === "python")).toBe(true);
+    });
+  });
+
+  it("opens a block at the caret with Cmd+Shift+C, in the language last used", async () => {
+    settingsInDb = { ...SETTINGS, "notes.lastCodeLang": "json" };
+    const field = await openEditorWith("", [0, 0]);
+
+    fireEvent.keyDown(field, { key: "C", code: "KeyC", metaKey: true, shiftKey: true });
+
+    await waitFor(() => {
+      expect(contentOf("1")).toBe("```json\n\n```");
+    });
+  });
+
+  /** The one part of a note whose text has to survive exactly as typed. */
+  it("refuses to format inside a code block", async () => {
+    const field = await openEditorWith("```js\nconst a = 1\n```", [6, 11]);
+
+    fireEvent.keyDown(field, { key: "b", code: "KeyB", metaKey: true });
+    fireEvent.keyDown(field, { key: "(", code: "Digit9", metaKey: true, shiftKey: true });
+
+    expect(contentOf("1")).toBe("```js\nconst a = 1\n```");
+  });
+
+  it("wraps text in backticks for inline code with Cmd+E", async () => {
+    const field = await openEditorWith("set x to 2", [4, 5]);
+
+    fireEvent.keyDown(field, { key: "e", code: "KeyE", metaKey: true });
+
+    await waitFor(() => {
+      expect(contentOf("1")).toBe("set `x` to 2");
+    });
   });
 
   it("ticks a checklist item from its card", async () => {

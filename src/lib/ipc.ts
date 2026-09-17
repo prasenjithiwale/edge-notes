@@ -110,6 +110,8 @@ export interface Settings {
   "panel.width": number;
   theme: "system" | "light" | "dark";
   "notes.lastColor": NoteColor;
+  /** The language the editor writes after a new code fence; "" for none. */
+  "notes.lastCodeLang": string;
   "shortcut.newNote": string;
   /** A system notification when a task is due. */
   "tasks.reminders": boolean;

@@ -9,6 +9,25 @@ To release, see "Releasing" in the README.
 
 ## [Unreleased]
 
+### Added
+
+- **Code blocks in notes, with syntax highlighting.** The editor has a **Code
+  block** button that opens a list of languages — JSON, JavaScript, TypeScript,
+  Python, Java, Kotlin, C, C++, C#, Go, Rust, Swift, SQL, Shell, YAML, HTML and
+  CSS — and wraps what you have selected, or opens an empty block where the caret
+  is. `⌘⇧C` does the same in the language you picked last.
+
+  Comments, strings, numbers, keywords and keys each get their own colour, on the
+  block's own neutral panel so the note keeps its colour. The block carries its
+  language and a button to copy the code, its text is selectable, and long lines
+  scroll sideways inside it rather than being broken in the middle.
+
+  A block is an ordinary Markdown fence, so a note with code in it is still clean
+  Markdown when exported. Formatting shortcuts do nothing inside one: the point
+  of a code block is that its text is exactly what you typed.
+- **Inline code**, with `⌘E` or a pair of backticks. What is between them is
+  taken literally, so `**` inside it stays `**`.
+
 ## [0.1.0] - 2026-09-17
 
 ### Added

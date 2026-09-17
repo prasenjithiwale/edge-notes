@@ -114,6 +114,31 @@
      it rather than over it. */
   --toolbar-height: 36px;
 
+  /* Code blocks. A fenced block is its own inset surface rather than the note's
+     colour, and inside it syntax has colour — the second agreed exception to
+     brief 7.1's "the note colours are the only colour", after the priority
+     flags, and for the same reason: telling a comment from a string from a
+     keyword is the whole of what makes a snippet readable, and nothing but
+     colour does it. Because the surface is neutral and the same on every note,
+     there are two backgrounds to check rather than sixteen, and
+     `contrast.test.ts` holds every role above AA on both. */
+  --code-bg: #f3f3f4;
+  /* Behind inline `code`, which keeps the note's own text colour. Checked
+     against all sixteen note backgrounds by `contrast.test.ts`. */
+  --code-inline-bg: rgba(0, 0, 0, 0.07);
+  --code-border: rgba(0, 0, 0, 0.08);
+  --code-text: #1d1d1f;
+  --code-comment: #5c6b78;
+  --code-string: #a3201a;
+  --code-number: #1c00cf;
+  --code-keyword: #8b1a86;
+  --code-property: #14663f;
+
+  /* No bundled fonts (brief 7.4): the platform's own monospace, which is SF Mono
+     on macOS, Consolas on Windows and whatever the desktop has on Linux. */
+  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
+    "Liberation Mono", monospace;
+
   /* Radii follow hierarchy: panel 14, cards 10, controls 8. */
   --radius-panel: 14px;
   --radius-card: 10px;
@@ -182,6 +207,15 @@
     --priority-high: #ff8a80;
     --priority-medium: #ffb74d;
     --priority-low: #81c784;
+    --code-bg: #232326;
+    --code-inline-bg: rgba(255, 255, 255, 0.11);
+    --code-border: rgba(255, 255, 255, 0.1);
+    --code-text: #f2f2f3;
+    --code-comment: #8d9aa6;
+    --code-string: #ff8170;
+    --code-number: #d0bf69;
+    --code-keyword: #ff7ab2;
+    --code-property: #78c2b3;
   }
 }
 
@@ -243,4 +277,13 @@
   --priority-high: #ff8a80;
   --priority-medium: #ffb74d;
   --priority-low: #81c784;
+  --code-bg: #232326;
+  --code-inline-bg: rgba(255, 255, 255, 0.11);
+  --code-border: rgba(255, 255, 255, 0.1);
+  --code-text: #f2f2f3;
+  --code-comment: #8d9aa6;
+  --code-string: #ff8170;
+  --code-number: #d0bf69;
+  --code-keyword: #ff7ab2;
+  --code-property: #78c2b3;
 }

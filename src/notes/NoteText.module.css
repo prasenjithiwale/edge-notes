@@ -131,3 +131,113 @@
 .blank {
   height: 0.75em;
 }
+
+/* ---------------------------------------------------------------------------
+   Code
+   ------------------------------------------------------------------------ */
+
+/* Between backticks: the note's own text colour over a wash of it, so it reads
+   as code on every note colour without introducing one of its own. */
+.inlineCode {
+  padding: 1px 4px;
+  border-radius: 4px;
+  background: var(--code-inline-bg);
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+}
+
+/* A fenced block is its own inset surface, neutral whatever colour the note is:
+   syntax colours have to be legible against one known background, not sixteen,
+   and a snippet reads as a quotation rather than as part of the note's prose. */
+.code {
+  margin: 4px 0;
+  border: 1px solid var(--code-border);
+  border-radius: var(--radius-control);
+  background: var(--code-bg);
+  color: var(--code-text);
+  overflow: hidden;
+}
+
+.codeHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 3px 4px 3px 10px;
+  border-bottom: 1px solid var(--code-border);
+}
+
+.codeLang {
+  font-size: 11px;
+  color: var(--text-secondary);
+  /* The chrome's own font, not the block's: this is a label, not code. */
+  font-family: inherit;
+}
+
+.codeCopy {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-secondary);
+}
+
+.codeCopy:hover {
+  background: var(--code-inline-bg);
+  color: var(--code-text);
+}
+
+/* Code does not wrap: a line broken in the middle is no longer the line that was
+   written. It scrolls sideways instead, inside the block rather than the panel. */
+.codePre {
+  margin: 0;
+  padding: 8px 10px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  white-space: pre;
+  tab-size: 2;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.5;
+  /* Text in a note is not selectable (chrome is `user-select: none`); code is
+     read and copied out, so this is. */
+  user-select: text;
+  cursor: text;
+}
+
+.plain {
+  color: inherit;
+}
+
+.comment {
+  color: var(--code-comment);
+}
+
+.string {
+  color: var(--code-string);
+}
+
+.number {
+  color: var(--code-number);
+}
+
+.keyword {
+  color: var(--code-keyword);
+}
+
+.property {
+  color: var(--code-property);
+}
+
+/* A code line lifted into a card preview. No block, no highlighting: at two
+   clipped lines those would be noise, and monospace already says what it is. */
+.codeLine {
+  font-family: var(--font-mono);
+  font-size: 0.92em;
+  opacity: var(--note-secondary-opacity);
+}

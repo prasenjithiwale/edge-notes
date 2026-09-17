@@ -2684,6 +2684,114 @@ run as a command while generating the cask. The published cask is correct in
 every field that matters; only the comment lost a word. The script now says in
 as many words that nothing in that heredoc may be backticked.
 
+## Code blocks in notes, with syntax highlighting (17 Sep 2026)
+
+The owner asked for code in notes, "with formatting for specific languages like
+JSON, Java, Python, JS". Fenced blocks, a language picker, and a highlighter
+written for this app.
+
+### Storage stays plain text
+
+A block is a Markdown fence — ```` ```python ```` to ```` ``` ```` — so a note
+with code in it is still a clean Markdown file when exported and still plain text
+in the database. Nothing about the storage format changed, and there is no
+migration.
+
+`parseBlocks` is a block pass over the content: every line is its own entry
+except a fenced run, which collapses into one `code` block. Each entry keeps the
+index it has in the note, so ticking a checkbox below a code block still rewrites
+its own line. `cardPreview` uses it too, which is how a card previews the code
+without previewing the fences, and keeps the indentation, because code that has
+been left-trimmed is no longer the code that was written.
+
+### The highlighter is a lexer, and it is ours
+
+`lib/code.ts` is a table of sixteen languages — JSON, JavaScript, TypeScript,
+Python, Java, Kotlin, C, C++, C#, Go, Rust, Swift, SQL, Shell, YAML, HTML, CSS —
+driving one loop. A language is its comment markers, its quote characters, a
+keyword list, and four flags: `property` (a name before a colon: JSON keys, CSS
+declarations, YAML), `markup` (tags and attributes rather than keywords),
+`ignoreCase` (SQL) and triple quotes (Python docstrings).
+
+- **Why not highlight.js.** It is built to be right about every construct in a
+  hundred grammars and costs about a hundred kilobytes and a dependency outside
+  brief section 4 to do it. What a 320 px panel shows is ten lines, where the
+  whole of the value is telling a comment from a string from a keyword. That is a
+  lexer. The one here is one file, no dependency, and adds 4.6 kB gzipped to the
+  bundle for all sixteen languages.
+- **It is deliberately lexical.** It knows nothing about scope or grammar, it
+  will call a keyword used as a variable name a keyword, and it does not colour
+  function names. It never throws and never drops a character — a test rejoins
+  the tokens of every sample in every language and asserts the identity — and
+  anything it does not recognise stays plain, which is how it degrades on a
+  language it does not have.
+- **An unterminated string stops at its line.** Without that, one stray quote
+  paints the rest of the block.
+
+### Colour, and where it is allowed
+
+This is the second agreed exception to brief 7.1's "the note colours are the only
+colour", after the priority flags, and it is kept honest the same way. The block
+has its **own neutral surface**, the same on every note, so the note palette is
+still the only colour in the note and there are two backgrounds to check rather
+than sixteen. Five roles — comment, string, number, keyword, property — and
+`contrast.test.ts` holds each above AA on that surface in both themes and checks
+their hues are far enough apart to be told apart. Inline `` `code` `` takes no
+colour of its own: it keeps the note's text colour over a wash, which is checked
+against all sixteen note backgrounds.
+
+### In the editor
+
+- **A Code block button** beside the formatting groups opens a row of language
+  chips; picking one wraps the selection, or opens an empty block at the caret.
+- **`⌘⇧C`** does the same in the language last picked, which is stored as
+  `notes.lastCodeLang` — the same way the note colour is remembered.
+- **`⌘E`** wraps a selection in backticks for inline code.
+- **Every transform refuses inside a fence.** Bold, the lists and
+  Enter-continues-a-list all return null there. The point of a code block is that
+  its text is exact, and a stray `**` from a mis-hit `⌘B` is part of the code from
+  then on.
+- **The block has a copy button**, and its text is selectable — code is read and
+  copied out.
+
+### What was decided against
+
+- **Highlighting inside the editor.** The editor is a plain textarea, and it has
+  to stay one: formatting is applied through `execCommand("insertText")` so
+  `⌘Z` still works, and an overlay-highlighted editor fights that. While editing
+  you see the fences, which is what the rest of the formatting already does.
+- **A syntax theme setting.** One light palette and one dark one, both
+  contrast-checked. A widget with a theme picker for its code blocks has lost the
+  plot.
+- **Wrapping long lines.** A line broken in the middle is no longer the line that
+  was written; the block scrolls sideways instead, inside itself.
+- **Highlighting in card previews.** At two clipped lines it is noise; monospace
+  already says what the line is.
+
+Seventeen new tests for the lexer, ten for the fences and the transforms, four
+for the rendered block and five in the panel (642 frontend tests in all), plus
+one new Rust test for the stored language (161 in all).
+
+### Checklist
+
+- [ ] Open a note, press the Code block button, pick Python: an empty block opens
+      with the caret inside it
+- [ ] Type some Python in it, press Done: the card shows the code in monospace
+      with no fences, and locking the note shows the full block, highlighted
+- [ ] Select three lines and press the button: they are wrapped, still selected
+- [ ] Press `⌘⇧C` in a new note: the block opens in the language last picked
+- [ ] Inside a block, `⌘B` and `⌘⇧8` do nothing, and Enter after a line starting
+      `-` does not start a list
+- [ ] The copy button copies the code and ticks for a moment
+- [ ] A long line scrolls sideways inside the block, not the panel
+- [ ] Try JSON, Java, JS and SQL: keys, strings, comments and keywords are each a
+      different colour, in light and dark
+- [ ] A fence with a language we do not have (```` ```brainfuck ````) still shows
+      the block, labelled brainfuck, with no highlighting
+- [ ] `` `inline code` `` shows as code on every note colour, and `**` inside it
+      stays literal
+- [ ] Export the notes: the fences are in the Markdown exactly as typed
+
 ## M0 acceptance checklist
 
 From brief section 12. Run `npm run tauri dev`, then work through these with

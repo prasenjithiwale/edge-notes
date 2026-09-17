@@ -129,6 +129,77 @@ describe("formatting on a card", () => {
   });
 });
 
+describe("code in a note", () => {
+  const CODE = ["Snippet", "```python", "# count", 'name = "ledge"', "```"].join("\n");
+
+  it("previews a code line without its fences", () => {
+    const { container } = render(
+      <NoteCard note={note({ content: CODE })} onOpen={() => undefined} onUnpin={() => undefined} {...noop} />,
+    );
+
+    expect(screen.getByText("Snippet")).toBeTruthy();
+    expect(container.textContent).toContain("# count");
+    expect(container.textContent).not.toContain("```");
+  });
+
+  /**
+   * A locked card shows the note in full, so this is where the block itself is
+   * drawn: its language, its copy button, and the syntax roles that are the
+   * whole reason the feature has colour.
+   */
+  it("draws a full block on a locked card, highlighted and copyable", () => {
+    const { container } = render(
+      <NoteCard
+        note={note({ content: CODE, pinned: true })}
+        onOpen={() => undefined}
+        onUnpin={() => undefined}
+        {...noop}
+      />,
+    );
+
+    expect(screen.getByText("Python")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Copy code" })).toBeTruthy();
+    expect(container.querySelector("pre")?.textContent).toBe('# count\nname = "ledge"');
+    // The fences are the marker, not the content.
+    expect(container.textContent).not.toContain("```");
+
+    const classOf = (text: string) =>
+      [...container.querySelectorAll("pre span")].find((span) => span.textContent === text)
+        ?.className ?? "";
+    expect(classOf("# count")).toContain("comment");
+    expect(classOf('"ledge"')).toContain("string");
+  });
+
+  it("calls a block by the author's own word when the language is not one we have", () => {
+    render(
+      <NoteCard
+        note={note({ content: "```brainfuck\n+++\n```", pinned: true })}
+        onOpen={() => undefined}
+        onUnpin={() => undefined}
+        {...noop}
+      />,
+    );
+
+    expect(screen.getByText("brainfuck")).toBeTruthy();
+  });
+
+  it("renders inline code as code, markers and all", () => {
+    const { container } = render(
+      <NoteCard
+        note={note({ content: "Set `a ** b` now" })}
+        onOpen={() => undefined}
+        onUnpin={() => undefined}
+        {...noop}
+      />,
+    );
+
+    const inline = container.querySelector("code");
+    expect(inline?.textContent).toBe("a ** b");
+    // Not bolded: inside backticks the markers are text.
+    expect(container.querySelector("strong")).toBeNull();
+  });
+});
+
 describe("expanding from a card", () => {
   it("expands without also opening the editor", () => {
     const onOpen = vi.fn();

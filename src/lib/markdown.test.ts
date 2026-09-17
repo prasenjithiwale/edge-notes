@@ -3,10 +3,13 @@ import { describe, expect, it } from "vitest";
 import {
   CHECKLIST_LINES,
   cardPreview,
+  codeBlockAt,
   continueList,
+  parseBlocks,
   parseInline,
   parseLine,
   plainText,
+  toggleCodeBlock,
   toggleInline,
   toggleList,
   toggleTaskLine,
@@ -167,6 +170,26 @@ describe("parseInline", () => {
   });
 });
 
+describe("inline code", () => {
+  it("takes its contents literally, markers and all", () => {
+    const nodes = parseInline("run `a ** b` now");
+    expect(nodes).toEqual([
+      { kind: "text", text: "run " },
+      { kind: "code", text: "a ** b" },
+      { kind: "text", text: " now" },
+    ]);
+  });
+
+  it("is text when the backtick never closes, or closes on itself", () => {
+    expect(parseInline("a ` b")).toEqual([{ kind: "text", text: "a ` b" }]);
+    expect(parseInline("a `` b")).toEqual([{ kind: "text", text: "a `` b" }]);
+  });
+
+  it("reads as its own text in an accessible name", () => {
+    expect(plainText(parseInline("set `x` to **2**"))).toBe("set x to 2");
+  });
+});
+
 describe("cardPreview", () => {
   it("titles the card with the first non-empty line, trimmed", () => {
     const preview = cardPreview("\n\n   Groceries   \nMilk");
@@ -204,6 +227,29 @@ describe("cardPreview", () => {
   });
 });
 
+describe("a card with code in it", () => {
+  const note = ["Snippet", "```js", "const a = 1;", "```", "after"].join("\n");
+
+  it("previews the code without its fences, and says the line is code", () => {
+    const preview = cardPreview(note);
+    expect(preview.title?.text).toBe("Snippet");
+    expect(preview.layout).toBe("rows");
+    expect(preview.body.map((line) => [line.text, line.code])).toEqual([
+      ["const a = 1;", true],
+      ["after", false],
+    ]);
+  });
+
+  it("keeps the indentation of a code line, which is part of the code", () => {
+    const indented = ["```py", "def f():", "    return 1", "```"].join("\n");
+    expect(cardPreview(indented).body.map((line) => line.text)).toEqual(["    return 1"]);
+  });
+
+  it("gives every line the index it has in the note, fences counted", () => {
+    expect(cardPreview(note).body.map((line) => line.index)).toEqual([2, 4]);
+  });
+});
+
 describe("toggleTaskLine", () => {
   it("ticks and unticks the named line only", () => {
     const content = "Groceries\n- [ ] milk\n- [x] eggs";
@@ -214,6 +260,110 @@ describe("toggleTaskLine", () => {
   it("refuses a line that is not a task", () => {
     expect(toggleTaskLine("Groceries\n- milk", 1)).toBeNull();
     expect(toggleTaskLine("Groceries", 5)).toBeNull();
+  });
+});
+
+describe("fenced code blocks", () => {
+  const note = ["Setup", "```python", "x = 1", "", "print(x)", "```", "done"].join("\n");
+
+  it("collapses a fenced run into one block, and keeps the line numbers", () => {
+    const blocks = parseBlocks(note);
+    expect(blocks.map((block) => block.kind)).toEqual(["line", "code", "line"]);
+
+    const [, code] = blocks;
+    expect(code).toMatchObject({
+      kind: "code",
+      lang: "python",
+      code: "x = 1\n\nprint(x)",
+      from: 1,
+      to: 6,
+      closed: true,
+    });
+    // The line after it is still line 6 of the note, so a tick finds its own row.
+    expect(blocks[2]).toMatchObject({ kind: "line", index: 6 });
+  });
+
+  it("treats a fence with no closer as a block that runs to the end", () => {
+    const blocks = parseBlocks("```js\nconst a = 1");
+    expect(blocks).toHaveLength(1);
+    expect(blocks[0]).toMatchObject({ kind: "code", code: "const a = 1", closed: false });
+  });
+
+  it("takes the language exactly as it was written", () => {
+    expect(parseBlocks("```JSON\n{}\n```")[0]).toMatchObject({ lang: "JSON" });
+    expect(parseBlocks("```\nplain\n```")[0]).toMatchObject({ lang: "" });
+  });
+
+  it("does not see a fence in the middle of a line", () => {
+    expect(parseBlocks("see ```js here").map((block) => block.kind)).toEqual(["line"]);
+  });
+
+  it("says which block an offset is in, fences included", () => {
+    expect(codeBlockAt(note, 0)).toBeNull();
+    // Inside the opening fence line, and inside the code.
+    expect(codeBlockAt(note, note.indexOf("python"))).not.toBeNull();
+    expect(codeBlockAt(note, note.indexOf("print"))).not.toBeNull();
+    expect(codeBlockAt(note, note.indexOf("done"))).toBeNull();
+  });
+});
+
+describe("formatting inside a code block", () => {
+  const state = field("```js\nconst a = «1»\n```");
+
+  /**
+   * The point of a code block is that its text is exact. A stray `**` from a
+   * mis-hit Cmd+B is part of the code from then on.
+   */
+  it("is refused by every transform", () => {
+    expect(toggleInline(state, "**")).toBeNull();
+    expect(toggleList(state, "bullet")).toBeNull();
+    expect(continueList(field("```js\n- not a list|\n```"))).toBeNull();
+  });
+
+  it("still works outside one", () => {
+    const outside = field("«hi»\n```js\nconst a = 1\n```");
+    expect(after(outside, toggleInline(outside, "**"))).toBe(
+      "**«hi»**\n```js\nconst a = 1\n```",
+    );
+  });
+});
+
+describe("toggleCodeBlock", () => {
+  it("opens an empty block at a caret on a blank line", () => {
+    const state = field("|");
+    expect(after(state, toggleCodeBlock(state, "python"))).toBe("```python\n|\n```");
+  });
+
+  it("opens one below the line the caret is on, keeping what is typed there", () => {
+    const state = field("notes|");
+    expect(after(state, toggleCodeBlock(state, "js"))).toBe("notes\n```js\n|\n```");
+  });
+
+  it("wraps the selected lines and leaves them selected", () => {
+    const state = field("«const a = 1\nconst b = 2»");
+    expect(after(state, toggleCodeBlock(state, "js"))).toBe(
+      "```js\n«const a = 1\nconst b = 2»\n```",
+    );
+  });
+
+  it("wraps whole lines, however much of them was selected", () => {
+    const state = field("const «a» = 1");
+    expect(after(state, toggleCodeBlock(state, ""))).toBe("```\n«const a = 1»\n```");
+  });
+
+  it("takes the fences off again from inside the block", () => {
+    const state = field("```js\nconst a = |1\n```");
+    expect(after(state, toggleCodeBlock(state, "js"))).toBe("«const a = 1»");
+  });
+
+  it("takes the fences off a block that was never closed", () => {
+    const state = field("```js\nconst a = |1");
+    expect(after(state, toggleCodeBlock(state, "js"))).toBe("«const a = 1»");
+  });
+
+  it("leaves the rest of the note alone when it unwraps", () => {
+    const state = field("before\n```js\na|\n```\nafter");
+    expect(after(state, toggleCodeBlock(state, "js"))).toBe("before\n«a»\nafter");
   });
 });
 

@@ -6,12 +6,15 @@
  *
  * Pure: parsing for the cards, and the edit transforms the editor applies.
  * Deliberately a small subset, not CommonMark — bold, italic, strikethrough,
- * bare links, and one level of bulleted, numbered and task lists.
+ * inline code, bare links, one level of bulleted, numbered and task lists, and
+ * fenced code blocks.
  */
 
 export type Inline =
   | { kind: "text"; text: string }
   | { kind: "bold" | "italic" | "strike"; children: Inline[] }
+  /** Between single backticks. Its contents are never parsed further. */
+  | { kind: "code"; text: string }
   | { kind: "link"; url: string };
 
 export type LineKind = "paragraph" | "bullet" | "ordered" | "task";
@@ -33,7 +36,7 @@ export interface Line {
 }
 
 export type ListKind = Exclude<LineKind, "paragraph">;
-export type InlineMarker = "**" | "_" | "~~";
+export type InlineMarker = "**" | "_" | "~~" | "`";
 
 /** A selection in a text field. */
 export interface TextState {
@@ -207,6 +210,18 @@ function parseRange(text: string, start: number, end: number, depth: number): In
 
   let i = start;
   while (i < end) {
+    // Code first, and its contents are taken literally: a backtick pair is the
+    // one place markers are text, which is most of why anyone reaches for it.
+    if (text[i] === "`") {
+      const close = text.indexOf("`", i + 1);
+      if (close !== -1 && close < end && close > i + 1) {
+        flushPlain();
+        nodes.push({ kind: "code", text: text.slice(i + 1, close) });
+        i = close + 1;
+        continue;
+      }
+    }
+
     const url = linkAt(text, i, end);
     if (url !== null) {
       flushPlain();
@@ -254,13 +269,195 @@ export function parseInline(text: string): Inline[] {
 export function plainText(nodes: Inline[]): string {
   return nodes
     .map((node) =>
-      node.kind === "text"
+      node.kind === "text" || node.kind === "code"
         ? node.text
         : node.kind === "link"
           ? node.url
           : plainText(node.children),
     )
     .join("");
+}
+
+// ---------------------------------------------------------------------------
+// Fenced code blocks
+// ---------------------------------------------------------------------------
+
+/**
+ * ```` ```python ```` opens a block and ```` ``` ```` closes it, which is
+ * Markdown's own fence, so a note with code in it is still a Markdown file when
+ * it is exported and still plain text in the database.
+ *
+ * The language is whatever word follows the fence. It is kept as written rather
+ * than normalised: an unknown one is still the author's word for it, and it is
+ * shown as the block's label even when there is no highlighting to go with it.
+ */
+const FENCE_OPEN = /^[ \t]*(`{3,})[ \t]*([^`\s]*)[ \t]*$/;
+const FENCE_CLOSE = /^[ \t]*`{3,}[ \t]*$/;
+
+export interface CodeBlock {
+  /** The word after the opening fence; empty for a block with no language. */
+  lang: string;
+  /** Everything between the fences, with no trailing newline. */
+  code: string;
+  /** Line index of the opening fence. */
+  from: number;
+  /** Line index just past the closing fence, or past the end without one. */
+  to: number;
+  /** False while the fence is still being typed and has no closer yet. */
+  closed: boolean;
+}
+
+/**
+ * A note as an ordered list of blocks: one entry per line, except that a fenced
+ * run collapses into a single `code` block.
+ *
+ * `index` is always the line's index in the content, so ticking a checkbox still
+ * finds the line it came from however many code blocks are above it.
+ */
+export type Block =
+  | { kind: "line"; index: number; line: Line }
+  | ({ kind: "code" } & CodeBlock);
+
+export function parseBlocks(content: string): Block[] {
+  const lines = content.split("\n");
+  const blocks: Block[] = [];
+
+  for (let i = 0; i < lines.length; i++) {
+    const raw = lines[i] ?? "";
+    const open = FENCE_OPEN.exec(raw);
+    if (open === null) {
+      blocks.push({ kind: "line", index: i, line: parseLine(raw) });
+      continue;
+    }
+
+    let end = i + 1;
+    while (end < lines.length && !FENCE_CLOSE.test(lines[end] ?? "")) {
+      end += 1;
+    }
+    const closed = end < lines.length;
+    blocks.push({
+      kind: "code",
+      lang: open[2] ?? "",
+      code: lines.slice(i + 1, end).join("\n"),
+      from: i,
+      to: closed ? end + 1 : end,
+      closed,
+    });
+    i = end;
+  }
+
+  return blocks;
+}
+
+/** Which line an offset falls on. */
+function lineIndexOf(value: string, offset: number): number {
+  let index = 0;
+  for (let i = 0; i < offset && i < value.length; i++) {
+    if (value[i] === "\n") {
+      index += 1;
+    }
+  }
+  return index;
+}
+
+/** The character offset the given line starts at. */
+function offsetOfLine(value: string, index: number): number {
+  let offset = 0;
+  for (let i = 0; i < index; i++) {
+    const next = value.indexOf("\n", offset);
+    if (next === -1) {
+      return value.length;
+    }
+    offset = next + 1;
+  }
+  return offset;
+}
+
+/**
+ * The fenced block the offset sits in, fences included, or null.
+ *
+ * What it is for: the editor's formatting commands must do nothing inside a code
+ * block. Wrapping a line of Python in `**` because Cmd+B was pressed, or
+ * continuing a list because a line happened to start with `-`, would corrupt the
+ * one part of a note whose text is meant to be exact.
+ */
+export function codeBlockAt(value: string, offset: number): CodeBlock | null {
+  const line = lineIndexOf(value, offset);
+  for (const block of parseBlocks(value)) {
+    if (block.kind === "code" && line >= block.from && line < block.to) {
+      return block;
+    }
+  }
+  return null;
+}
+
+/** True when everything the selection touches is inside one code block. */
+export function isInsideCode(state: TextState): boolean {
+  return codeBlockAt(state.value, state.selectionStart) !== null;
+}
+
+/**
+ * Wrap the selected lines in a fence, or take the fences off the block the caret
+ * is already in.
+ *
+ * With nothing selected it opens an empty block with the caret between the
+ * fences, which is what someone who pressed the button before typing wants.
+ */
+export function toggleCodeBlock(state: TextState, lang: string): TextEdit {
+  const { value, selectionStart, selectionEnd } = state;
+
+  const existing = codeBlockAt(value, selectionStart);
+  if (existing !== null) {
+    const start = offsetOfLine(value, existing.from);
+    const endLine = existing.closed ? existing.to - 1 : existing.to;
+    const end = existing.closed
+      ? lineEndOf(value, offsetOfLine(value, endLine))
+      : value.length;
+    return {
+      start,
+      end,
+      text: existing.code,
+      selectionStart: start,
+      selectionEnd: start + existing.code.length,
+    };
+  }
+
+  const open = `\`\`\`${lang}`;
+  const close = "```";
+
+  if (selectionStart === selectionEnd) {
+    const lineStart = lineStartOf(value, selectionStart);
+    const lineEnd = lineEndOf(value, selectionStart);
+    const current = value.slice(lineStart, lineEnd);
+    // An empty line becomes the block; a line with text on it keeps its text and
+    // the block opens below, so nothing typed is swallowed.
+    const before = current.trim() === "" ? "" : `${current}\n`;
+    const text = `${before}${open}\n\n${close}`;
+    const caret = lineStart + before.length + open.length + 1;
+    return {
+      start: lineStart,
+      end: lineEnd,
+      text,
+      selectionStart: caret,
+      selectionEnd: caret,
+    };
+  }
+
+  // A selection ending at the very start of a line does not include that line.
+  const lastIndex =
+    value[selectionEnd - 1] === "\n" ? selectionEnd - 1 : selectionEnd;
+  const start = lineStartOf(value, selectionStart);
+  const end = lineEndOf(value, lastIndex);
+  const selected = value.slice(start, end);
+  const text = `${open}\n${selected}\n${close}`;
+  const inner = start + open.length + 1;
+  return {
+    start,
+    end,
+    text,
+    selectionStart: inner,
+    selectionEnd: inner + selected.length,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -285,6 +482,12 @@ const FLOW_CHARS = 400;
 export interface CardLine extends Line {
   /** Index of this line in the note content, so a tick can find it again. */
   index: number;
+  /**
+   * A line from inside a fenced block. It is shown in monospace with its
+   * indentation intact and is never parsed for inline markers — the point of a
+   * code block is that its text is exact.
+   */
+  code: boolean;
 }
 
 export interface CardPreview {
@@ -303,17 +506,30 @@ export interface CardPreview {
 
 export function cardPreview(content: string): CardPreview {
   const lines: CardLine[] = [];
-  content.split("\n").forEach((raw, index) => {
-    const line = parseLine(raw);
-    const text = line.text.trim();
-    if (text !== "") {
-      lines.push({ ...line, text, index });
+  const raw = content.split("\n");
+
+  for (const block of parseBlocks(content)) {
+    if (block.kind === "line") {
+      const text = block.line.text.trim();
+      if (text !== "") {
+        lines.push({ ...block.line, text, index: block.index, code: false });
+      }
+      continue;
     }
-  });
+    // The fences themselves are not content, so they are not previewed. What is
+    // inside keeps its indentation: code that has been left-trimmed is no longer
+    // the code that was written.
+    for (let i = block.from + 1; i < block.to - (block.closed ? 1 : 0); i++) {
+      const line = raw[i] ?? "";
+      if (line.trim() !== "") {
+        lines.push({ ...parseLine(""), text: line, index: i, code: true });
+      }
+    }
+  }
 
   const [title = null, ...rest] = lines;
 
-  if (rest.every((line) => line.kind === "paragraph")) {
+  if (rest.every((line) => line.kind === "paragraph" && !line.code)) {
     const body: CardLine[] = [];
     let chars = 0;
     for (const line of rest) {
@@ -379,6 +595,9 @@ function trailingSpace(text: string): string {
  * empty pair goes in with the caret inside, and pressing again takes it out.
  */
 export function toggleInline(state: TextState, marker: InlineMarker): TextEdit | null {
+  if (isInsideCode(state)) {
+    return null;
+  }
   const { value } = state;
   const len = marker.length;
   let start = state.selectionStart;
@@ -503,7 +722,10 @@ function listPrefix(kind: ListKind, number: number): string {
  * item is converted; a task keeps its tick. Numbering continues from an ordered
  * item directly above.
  */
-export function toggleList(state: TextState, kind: ListKind): TextEdit {
+export function toggleList(state: TextState, kind: ListKind): TextEdit | null {
+  if (isInsideCode(state)) {
+    return null;
+  }
   const { value, selectionStart, selectionEnd } = state;
   // A selection ending at the very start of a line does not include that line.
   const lastIndex =
@@ -561,7 +783,7 @@ export function toggleList(state: TextState, kind: ListKind): TextEdit {
  */
 export function continueList(state: TextState): TextEdit | null {
   const { value, selectionStart, selectionEnd } = state;
-  if (selectionStart !== selectionEnd) {
+  if (selectionStart !== selectionEnd || isInsideCode(state)) {
     return null;
   }
   const start = lineStartOf(value, selectionStart);

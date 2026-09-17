@@ -50,6 +50,12 @@ pub struct Settings {
     pub theme: Theme,
     #[serde(rename = "notes.lastColor")]
     pub notes_last_color: NoteColor,
+    /// The language written after the last code fence the editor inserted, so
+    /// the next one starts there. Free text: the frontend owns the list, and a
+    /// language it does not know is still what the author called it. Empty means
+    /// a fence with no language.
+    #[serde(rename = "notes.lastCodeLang")]
+    pub notes_last_code_lang: String,
     #[serde(rename = "shortcut.newNote")]
     pub shortcut_new_note: String,
     /// Not in brief 9.2: a system notification when a task is due.
@@ -139,6 +145,7 @@ impl Default for Settings {
             panel_width: 320.0,
             theme: Theme::System,
             notes_last_color: NoteColor::Yellow,
+            notes_last_code_lang: String::new(),
             shortcut_new_note: "CmdOrCtrl+Alt+N".to_owned(),
             // Both asked for by the owner.
             tasks_reminders: true,
@@ -180,6 +187,8 @@ pub struct SettingsPatch {
     pub theme: Option<Theme>,
     #[serde(rename = "notes.lastColor")]
     pub notes_last_color: Option<NoteColor>,
+    #[serde(rename = "notes.lastCodeLang")]
+    pub notes_last_code_lang: Option<String>,
     #[serde(rename = "shortcut.newNote")]
     pub shortcut_new_note: Option<String>,
     #[serde(rename = "tasks.reminders")]
@@ -254,6 +263,11 @@ pub fn get(connection: &Connection) -> AppResult<Settings> {
         panel_width: read(connection, "panel.width", defaults.panel_width)?,
         theme: read(connection, "theme", defaults.theme)?,
         notes_last_color: read(connection, "notes.lastColor", defaults.notes_last_color)?,
+        notes_last_code_lang: read(
+            connection,
+            "notes.lastCodeLang",
+            defaults.notes_last_code_lang,
+        )?,
         shortcut_new_note: read(connection, "shortcut.newNote", defaults.shortcut_new_note)?,
         tasks_reminders: read(connection, "tasks.reminders", defaults.tasks_reminders)?,
         panel_translucency: read(
@@ -326,6 +340,19 @@ pub fn update(connection: &Connection, patch: &SettingsPatch) -> AppResult<Setti
     }
     if let Some(value) = patch.notes_last_color {
         write(connection, "notes.lastColor", &value)?;
+    }
+    if let Some(value) = &patch.notes_last_code_lang {
+        // A language name, not a sentence: anything longer is not one, and the
+        // fence it would be written into has to stay a single line.
+        write(
+            connection,
+            "notes.lastCodeLang",
+            &value
+                .chars()
+                .take(32)
+                .filter(|c| !c.is_whitespace())
+                .collect::<String>(),
+        )?;
     }
     if let Some(value) = &patch.shortcut_new_note {
         write(connection, "shortcut.newNote", value)?;
@@ -409,6 +436,33 @@ mod tests {
         assert_eq!(settings.focus_long_break_every, 4);
         assert!(!settings.focus_auto_start);
         assert_eq!(settings.focus_today, 0);
+        assert_eq!(settings.notes_last_code_lang, "");
+    }
+
+    /// It is written into a fence, which is one line: no whitespace, and short.
+    #[test]
+    fn the_last_code_language_is_kept_to_something_a_fence_can_hold() {
+        let connection = db();
+        let settings = update(
+            &connection,
+            &SettingsPatch {
+                notes_last_code_lang: Some("python".to_owned()),
+                ..SettingsPatch::default()
+            },
+        )
+        .expect("update");
+        assert_eq!(settings.notes_last_code_lang, "python");
+
+        let settings = update(
+            &connection,
+            &SettingsPatch {
+                notes_last_code_lang: Some("not a language\nat all".to_owned()),
+                ..SettingsPatch::default()
+            },
+        )
+        .expect("update");
+        assert_eq!(settings.notes_last_code_lang, "notalanguageatall");
+        assert_eq!(get(&connection).expect("get"), settings);
     }
 
     #[test]

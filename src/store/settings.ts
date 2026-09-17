@@ -19,6 +19,7 @@ const DEFAULTS: Settings = {
   "panel.width": 320,
   theme: "system",
   "notes.lastColor": "yellow",
+  "notes.lastCodeLang": "",
   "shortcut.newNote": "CmdOrCtrl+Alt+N",
   "tasks.reminders": true,
   "panel.translucency": 0,

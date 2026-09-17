@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import {
   Bold,
+  Braces,
+  Code,
   Italic,
   List,
   ListChecks,
@@ -16,6 +18,7 @@ import {
 } from "lucide-react";
 
 import { IconButton } from "../components/IconButton";
+import { LANGUAGES } from "../lib/code";
 import { cx } from "../lib/cx";
 import { CLASSIC_COLORS, NOTE_COLORS, type Note, type NoteColor } from "../lib/ipc";
 import { prefersReducedMotion } from "../lib/motion";
@@ -23,6 +26,7 @@ import { colorName, editedLabel, quickColors } from "../lib/notes";
 import { useNow } from "../lib/useNow";
 import { useDockStore } from "../store/dock";
 import { useNotesStore } from "../store/notes";
+import { useSettingsStore } from "../store/settings";
 import { noteColorStyle } from "./NoteCard";
 import {
   applyFormat,
@@ -43,14 +47,20 @@ const FORMAT_ICONS: Record<FormatCommand, LucideIcon> = {
   bold: Bold,
   italic: Italic,
   strike: Strikethrough,
+  code: Code,
   bullet: List,
   ordered: ListOrdered,
   task: ListChecks,
+  codeblock: Braces,
 };
 
-/** Text styles, then lists: two groups, separated by space rather than a rule. */
+/**
+ * Text styles, then lists: two groups, separated by space rather than a rule.
+ * The code block is not in either — it opens a language picker rather than
+ * toggling something, and it is drawn beside them from the editor itself.
+ */
 const FORMAT_GROUPS: readonly (readonly FormatCommand[])[] = [
-  ["bold", "italic", "strike"],
+  ["bold", "italic", "strike", "code"],
   ["bullet", "ordered", "task"],
 ];
 
@@ -91,6 +101,9 @@ export function NoteEditor({ note, large = false }: NoteEditorProps) {
   const setLock = useDockStore((state) => state.setLock);
   const now = useNow();
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [languagesOpen, setLanguagesOpen] = useState(false);
+  const lastLang = useSettingsStore((state) => state.settings["notes.lastCodeLang"]);
+  const patchSettings = useSettingsStore((state) => state.patch);
   // Chosen once, when the editor opens: picking a colour must not reshuffle the
   // row under the cursor. A colour picked from the full palette joins it.
   const [quick] = useState(() =>
@@ -237,12 +250,27 @@ export function NoteEditor({ note, large = false }: NoteEditorProps) {
     };
   }, [setLock]);
 
-  const format = (command: FormatCommand) => {
+  const format = (command: FormatCommand, lang?: string) => {
     const textarea = textareaRef.current;
     if (textarea) {
-      applyFormat(textarea, command);
+      applyFormat(textarea, command, lang ?? lastLang);
     }
   };
+
+  /**
+   * A code block, in the language picked. The choice is remembered the way the
+   * note colour is, so the keyboard shortcut and the next block start where the
+   * last one did rather than at "no language" every time.
+   */
+  const insertCodeBlock = (lang: string) => {
+    setLanguagesOpen(false);
+    format("codeblock", lang);
+    if (lang !== lastLang) {
+      void patchSettings({ "notes.lastCodeLang": lang });
+    }
+  };
+
+  const codeShortcut = FORMAT_SHORTCUTS.find((item) => item.command === "codeblock");
 
   return (
     <section
@@ -274,6 +302,22 @@ export function NoteEditor({ note, large = false }: NoteEditorProps) {
               })}
             </div>
           ))}
+          {/* Not in either group: it opens a picker rather than toggling
+              something, and what it inserts depends on what is picked. */}
+          <div className={styles.group}>
+            <IconButton
+              label="Code block"
+              shortcut={codeShortcut ? shortcutLabel(codeShortcut) : undefined}
+              className={styles.footerButton}
+              pressed={languagesOpen}
+              keepFocus
+              onClick={() => {
+                setLanguagesOpen((open) => !open);
+              }}
+            >
+              <Braces size={16} strokeWidth={1.75} />
+            </IconButton>
+          </div>
         </div>
         <IconButton
           label={large ? "Shrink note" : "Expand note"}
@@ -294,6 +338,27 @@ export function NoteEditor({ note, large = false }: NoteEditorProps) {
           )}
         </IconButton>
       </div>
+      {languagesOpen && (
+        <div className={styles.languages} role="group" aria-label="Code language">
+          {[{ id: "", label: "Plain text" }, ...LANGUAGES].map((language) => (
+            <button
+              key={language.id === "" ? "plain" : language.id}
+              type="button"
+              className={cx(styles.language, language.id === lastLang && styles.languagePicked)}
+              aria-pressed={language.id === lastLang}
+              // Keep the caret in the note: the block goes where it was.
+              onMouseDown={(event) => {
+                event.preventDefault();
+              }}
+              onClick={() => {
+                insertCodeBlock(language.id);
+              }}
+            >
+              {language.label}
+            </button>
+          ))}
+        </div>
+      )}
       <textarea
         ref={textareaRef}
         className={styles.textarea}

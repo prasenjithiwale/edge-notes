@@ -1,9 +1,10 @@
-import { Fragment, useMemo, type MouseEvent, type ReactNode } from "react";
-import { Square, SquareCheck } from "lucide-react";
+import { Fragment, useMemo, useState, type MouseEvent, type ReactNode } from "react";
+import { Check, Copy, Square, SquareCheck } from "lucide-react";
 
+import { highlight, languageLabel } from "../lib/code";
 import { cx } from "../lib/cx";
 import { openUrl } from "../lib/ipc";
-import { parseInline, parseLine, plainText, type Inline, type Line } from "../lib/markdown";
+import { parseBlocks, parseInline, plainText, type Inline, type Line } from "../lib/markdown";
 import styles from "./NoteText.module.css";
 
 /**
@@ -36,6 +37,12 @@ function renderNodes(nodes: Inline[]): ReactNode {
           <s key={index} className={styles.strike}>
             {renderNodes(node.children)}
           </s>
+        );
+      case "code":
+        return (
+          <code key={index} className={styles.inlineCode}>
+            {node.text}
+          </code>
         );
       case "link":
         return (
@@ -79,11 +86,108 @@ export function FlowText({ lines }: { lines: string[] }) {
   );
 }
 
+/**
+ * Put the code on the clipboard.
+ *
+ * The Clipboard API is the right one and works in a Tauri webview, which is a
+ * secure context; the textarea fallback is for the engines and the test
+ * environment where it is missing, and costs four lines.
+ */
+async function copyText(text: string): Promise<boolean> {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    /* falls through */
+  }
+  try {
+    const carrier = document.createElement("textarea");
+    carrier.value = text;
+    carrier.setAttribute("readonly", "");
+    carrier.style.position = "fixed";
+    carrier.style.opacity = "0";
+    document.body.appendChild(carrier);
+    carrier.select();
+    // eslint-disable-next-line @typescript-eslint/no-deprecated -- the fallback.
+    const copied = document.execCommand("copy");
+    document.body.removeChild(carrier);
+    return copied;
+  } catch {
+    return false;
+  }
+}
+
+/** How long the copy button stays ticked before going back to its icon. */
+const COPIED_MS = 1_400;
+
+/**
+ * A fenced code block: a neutral inset panel with the language on it, the code
+ * highlighted, and a button to copy it.
+ *
+ * It is the one place in the app with colour that is not a note's own (brief 7.1
+ * allows the palette and the accent, and the priority flags are the other agreed
+ * exception). The reasoning is the same as for the flags: telling a comment from
+ * a string from a keyword is what makes a snippet readable at a glance, and
+ * nothing but colour does it. Everything is kept inside the block's own surface,
+ * which is neutral and the same whatever colour the note is, so the note palette
+ * is still the only colour in the note. `contrast.test.ts` holds every role
+ * above AA against that surface in both themes.
+ */
+export function CodeBlock({ lang, code }: { lang: string; code: string }) {
+  const tokens = useMemo(() => highlight(code, lang), [code, lang]);
+  const [copied, setCopied] = useState(false);
+
+  return (
+    <div className={styles.code}>
+      <div className={styles.codeHead}>
+        <span className={styles.codeLang}>{languageLabel(lang)}</span>
+        <button
+          type="button"
+          className={styles.codeCopy}
+          aria-label={copied ? "Code copied" : "Copy code"}
+          title={copied ? "Copied" : "Copy code"}
+          onClick={(event) => {
+            stop(event);
+            void copyText(code).then((ok) => {
+              if (!ok) {
+                return;
+              }
+              setCopied(true);
+              setTimeout(() => {
+                setCopied(false);
+              }, COPIED_MS);
+            });
+          }}
+        >
+          {copied ? (
+            <Check size={13} strokeWidth={2.25} />
+          ) : (
+            <Copy size={13} strokeWidth={1.75} />
+          )}
+        </button>
+      </div>
+      {/* Selectable and not inside the card's click target: code is read and
+          copied out, which a surface that swallows the pointer would prevent. */}
+      <pre className={styles.codePre} onClick={stop}>
+        <code>
+          {tokens.map((token, index) => (
+            <span key={index} className={styles[token.kind]}>
+              {token.text}
+            </span>
+          ))}
+        </code>
+      </pre>
+    </div>
+  );
+}
+
 interface LineRowProps {
   line: Line;
   className?: string | undefined;
   /** Wrap long lines instead of clipping them to one, as the reader does. */
   wrap?: boolean;
+  /** A line lifted out of a fenced block: monospace, and never inline-parsed. */
+  code?: boolean;
   /** Omit to render ticks as read-only. */
   onToggle?: (() => void) | undefined;
 }
@@ -96,7 +200,13 @@ interface LineRowProps {
  * useful, and this row no longer reads details out of the text or draws them as
  * chips — that would claim the line is something the Tasks tab knows about.
  */
-export function LineRow({ line, className, wrap = false, onToggle }: LineRowProps) {
+export function LineRow({
+  line,
+  className,
+  wrap = false,
+  code = false,
+  onToggle,
+}: LineRowProps) {
   const text = line.text;
   const label = useMemo(() => plainText(parseInline(text)), [text]);
 
@@ -134,8 +244,14 @@ export function LineRow({ line, className, wrap = false, onToggle }: LineRowProp
   return (
     <div className={cx(styles.row, wrap && styles.wrap, className)}>
       {marker}
-      <span className={cx(styles.rowText, line.kind === "task" && line.checked && styles.done)}>
-        <InlineText text={text} />
+      <span
+        className={cx(
+          styles.rowText,
+          code && styles.codeLine,
+          line.kind === "task" && line.checked && styles.done,
+        )}
+      >
+        {code ? text : <InlineText text={text} />}
       </span>
     </div>
   );
@@ -169,9 +285,12 @@ export function NoteLines({
   fallback = null,
   onToggle,
 }: NoteLinesProps) {
-  const lines = useMemo(() => content.split("\n").map(parseLine), [content]);
-  // Indices are into the content, so a tick still finds its own line.
-  const titleIndex = lines.findIndex((line) => line.text.trim() !== "");
+  const blocks = useMemo(() => parseBlocks(content), [content]);
+  // The title is the first line with text on it, and a code block counts: a note
+  // that opens with one has no other first line.
+  const titleIndex = blocks.findIndex(
+    (block) => block.kind === "code" || block.line.text.trim() !== "",
+  );
 
   if (titleIndex === -1) {
     return <>{fallback}</>;
@@ -179,7 +298,11 @@ export function NoteLines({
 
   return (
     <>
-      {lines.map((line, index) => {
+      {blocks.map((block, position) => {
+        if (block.kind === "code") {
+          return <CodeBlock key={block.from} lang={block.lang} code={block.code} />;
+        }
+        const { line, index } = block;
         if (line.text.trim() === "") {
           // A blank line is a paragraph break, and an empty list item is nothing.
           return <div key={index} className={styles.blank} />;
@@ -189,7 +312,7 @@ export function NoteLines({
             key={index}
             line={line}
             wrap
-            className={index === titleIndex ? titleClassName : lineClassName}
+            className={position === titleIndex ? titleClassName : lineClassName}
             onToggle={
               onToggle === undefined
                 ? undefined
