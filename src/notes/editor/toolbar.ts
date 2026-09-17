@@ -60,6 +60,26 @@ const LIST_FOR: Record<"bullet" | "ordered" | "task", ListType> = {
   task: "check",
 };
 
+function same(a: ToolbarState, b: ToolbarState): boolean {
+  return (
+    a.bold === b.bold &&
+    a.italic === b.italic &&
+    a.strike === b.strike &&
+    a.code === b.code &&
+    a.list === b.list
+  );
+}
+
+/**
+ * What the caret is inside, as the toolbar draws it.
+ *
+ * The listener fires on *every* editor update — each keystroke, each caret
+ * move — so it must answer with the same object when nothing it reports has
+ * changed. Handing back a fresh object each time re-renders the whole editor on
+ * every keystroke, and anything in that render that builds a new array or object
+ * for a plugin then re-registers the plugin, which is itself an update. That is
+ * a loop, and it froze the app rather than failing.
+ */
 export function useToolbarState(editor: LexicalEditor): ToolbarState {
   const [state, setState] = useState<ToolbarState>(IDLE);
 
@@ -69,19 +89,20 @@ export function useToolbarState(editor: LexicalEditor): ToolbarState {
         editorState.read(() => {
           const selection = $getSelection();
           if (!$isRangeSelection(selection)) {
-            setState(IDLE);
+            setState((previous) => (same(previous, IDLE) ? previous : IDLE));
             return;
           }
           const node = selection.anchor.getNode();
           const item = $isListItemNode(node) ? node : node.getParent();
           const list = $isListItemNode(item) ? item.getParent() : null;
-          setState({
+          const next: ToolbarState = {
             bold: selection.hasFormat("bold"),
             italic: selection.hasFormat("italic"),
             strike: selection.hasFormat("strikethrough"),
             code: selection.hasFormat("code"),
             list: $isListNode(list) ? list.getListType() : null,
-          });
+          };
+          setState((previous) => (same(previous, next) ? previous : next));
         });
       }),
     [editor],

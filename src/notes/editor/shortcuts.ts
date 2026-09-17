@@ -49,7 +49,7 @@ const CODE_FENCE: ElementTransformer = {
   type: "element",
 };
 
-export const NOTE_TRANSFORMERS: readonly Transformer[] = [
+export const NOTE_TRANSFORMERS: Transformer[] = [
   CODE_FENCE,
   UNORDERED_LIST,
   ORDERED_LIST,
@@ -64,8 +64,18 @@ export const NOTE_TRANSFORMERS: readonly Transformer[] = [
   INLINE_CODE,
 ];
 
-/** A bare web address, which is the only kind of link the dialect has. */
-export const LINK_MATCHERS: readonly LinkMatcher[] = [
+/**
+ * A bare web address, which is the only kind of link the dialect has.
+ *
+ * Mutable arrays, not `readonly` ones, for a reason that is not about types:
+ * both of these are handed straight to a Lexical plugin, and both plugins list
+ * the prop in their effect's dependencies. A `readonly` array would have to be
+ * copied at the call site to satisfy the prop, and a fresh copy every render
+ * tears the plugin down and registers it again — which schedules a transform
+ * pass, which is an update, which re-renders, which copies again. See
+ * `NoteEditor`.
+ */
+export const LINK_MATCHERS: LinkMatcher[] = [
   (text: string) => {
     const match = /https?:\/\/[^\s<>"]+[^\s<>".,;:!?'"*_~)]/.exec(text);
     if (match === null) {

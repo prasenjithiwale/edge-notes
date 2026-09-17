@@ -90,7 +90,7 @@ export function NoteEditor({ note, large = false }: NoteEditorProps) {
       key={note.id}
       initialConfig={{
         namespace: "note",
-        nodes: [...EDITOR_NODES],
+        nodes: EDITOR_NODES,
         theme: EDITOR_THEME,
         // A note is never worth losing to a render error: the editor reports it
         // and carries on with the text it has.
@@ -305,8 +305,13 @@ function NoteEditorBody({ note, large = false }: NoteEditorProps) {
         <ListPlugin />
         <CheckListPlugin />
         <LinkPlugin />
-        <AutoLinkPlugin matchers={[...LINK_MATCHERS]} />
-        <MarkdownShortcutPlugin transformers={[...NOTE_TRANSFORMERS]} />
+        {/* Both of these are module constants passed by identity, never copied.
+            Each plugin lists its prop in an effect dependency, so a fresh array
+            every render would re-register the plugin, which schedules a
+            transform pass, which is an update, which re-renders — a loop that
+            freezes the app rather than failing. */}
+        <AutoLinkPlugin matchers={LINK_MATCHERS} />
+        <MarkdownShortcutPlugin transformers={NOTE_TRANSFORMERS} />
       </div>
       <div className={styles.swatches} role="group" aria-label="Note colour">
         {shownColors.map((color) => (

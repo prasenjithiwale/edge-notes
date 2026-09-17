@@ -9,6 +9,18 @@ To release, see "Releasing" in the README.
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-09-17
+
+### Fixed
+
+- **The app no longer freezes, or disappears, while you write.** Opening a note
+  put the editor into a loop that never stopped: it redrew itself hundreds of
+  times a second, which froze the window, and on Linux the kernel eventually
+  killed the app outright. Reported on Linux; it was not Linux's fault and could
+  happen anywhere.
+- **Two methods the editor needs are now supplied where the system is too old to
+  have them**, rather than failing the first time you typed a list or a link.
+
 ## [0.2.0] - 2026-09-17
 
 ### Changed

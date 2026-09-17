@@ -22,7 +22,7 @@ function cls(name: string | undefined): string {
   return name ?? "";
 }
 
-export const EDITOR_NODES: readonly Klass<LexicalNode>[] = [
+export const EDITOR_NODES: Klass<LexicalNode>[] = [
   ListNode,
   ListItemNode,
   LinkNode,

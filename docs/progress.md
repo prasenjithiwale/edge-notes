@@ -2984,6 +2984,81 @@ Five new tests (656 frontend, 162 Rust), including the one for the missing case.
 - [ ] Copy puts three lines on the clipboard and the button says Copied
 - [ ] Open takes you to the downloads page in the browser, not in the panel
 
+## The editor never stopped rendering (17 Sep 2026)
+
+Reported from Linux, first as "the app crashes when I write a note" and then as
+"it froze". Both were the same bug, and it was not Linux's.
+
+### What happened
+
+`registerAutoLink` registers a **node transform**, and registering a node
+transform calls `markNodesWithTypesAsDirty`, which commits an editor update.
+`AutoLinkPlugin` lists its `matchers` prop in an effect's dependencies. The
+editor was handing it `[...LINK_MATCHERS]` — a fresh array every render — so:
+
+1. the body renders and builds a new `matchers` array;
+2. the plugin's effect sees a changed dependency and registers again;
+3. registering commits an update;
+4. `useToolbarState`'s update listener sets a fresh state object;
+5. React renders the body — back to 1.
+
+Nothing stopped it. On a real machine it redraws the editor as fast as it can:
+the window stops responding, and once the loop has allocated enough the kernel
+kills the process. "Freezes" and "vanishes" are the same bug seen at two moments.
+
+### The fix, in two halves
+
+- **The props are passed by identity.** `LINK_MATCHERS`, `NOTE_TRANSFORMERS` and
+  `EDITOR_NODES` are mutable module constants now — deliberately not `readonly`,
+  because `readonly T[]` does not satisfy a `T[]` prop and the obvious way out at
+  the call site is the spread that caused this.
+- **`useToolbarState` returns the previous object when nothing changed.** It
+  fires on every update, including every caret move, and a fresh object each time
+  re-rendered the whole editor on every keystroke even when nothing about the
+  toolbar had changed.
+
+Either alone breaks the cycle. Both are correct on their own account, so both
+stay.
+
+### How it was found, and what that cost
+
+Reading the two libraries' source, not guessing: `AutoLinkPlugin`'s dependency
+array and `registerNodeTransform` marking nodes dirty are the two facts that make
+the loop, and both are three lines of someone else's code.
+
+Two false confirmations along the way are worth recording. A `timeout 120 npx
+vitest …` produced no output and was read as a hang — `timeout` does not exist on
+macOS, so the command had simply not run. And an earlier version of the
+regression test counted renders of the *composer*, which renders once whatever
+happens, so it passed with the bug deliberately reintroduced. Both were caught by
+re-testing rather than by being careful, which is the lesson.
+
+### The test
+
+`editor/settles.test.tsx` stands a counting stub in front of `AutoLinkPlugin` —
+the real plugin still runs, so the behaviour under test is unchanged — renders
+the editor, and asserts the render count stops climbing. On the code as 0.2.0
+shipped it: 420 renders in the first 300 ms window, 960 in the second, still
+going. Fixed: single figures, and steady. It was checked against the bug
+deliberately reintroduced, which is the only way to know a regression test works.
+
+### Also fixed
+
+Lexical calls `Array.prototype.findLast` and `findLastIndex`, which arrived in
+Safari 15.4, while Vite builds for `safari15`. A build target covers syntax, not
+methods, so on an engine at exactly the app's stated floor the editor would have
+thrown the first time it walked a list or a link. `lib/compat.ts` supplies both
+where they are missing. Found while looking into this crash; it was not this
+crash.
+
+### Checklist
+
+- [ ] Open a note and type for a minute: the panel stays responsive
+- [ ] Add a new note from the tray shortcut and type into it straight away
+- [ ] Paste a URL into a note: it becomes a link and nothing stutters
+- [ ] Leave the editor open for a few minutes with the panel out: memory is flat
+- [ ] Linux: `ledge` from a terminal prints nothing unusual while you write
+
 ## M0 acceptance checklist
 
 From brief section 12. Run `npm run tauri dev`, then work through these with
