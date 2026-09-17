@@ -230,6 +230,8 @@ pub struct Placement {
     pub side: Side,
     pub tab_offset: f64,
     pub panel_width: f64,
+    /// What the default tab metrics are multiplied by (`tab.size`).
+    pub tab_scale: f64,
     pub monitor: String,
 }
 
@@ -239,6 +241,7 @@ impl Default for Placement {
             side: Side::Right,
             tab_offset: 0.5,
             panel_width: Metrics::default().panel_width,
+            tab_scale: 1.0,
             monitor: PRIMARY_MONITOR.to_owned(),
         }
     }
@@ -256,6 +259,11 @@ pub fn geometry_for(app: &AppHandle, placement: &Placement) -> DockGeometry {
         placement.tab_offset,
         Metrics {
             panel_width: placement.panel_width,
+            // The window and the hit area grow with the pill the frontend
+            // paints inside them, so a bigger tab is genuinely easier to hit
+            // rather than just easier to see.
+            tab_width: Metrics::default().tab_width * placement.tab_scale,
+            tab_height: Metrics::default().tab_height * placement.tab_scale,
             ..Metrics::default()
         },
     )

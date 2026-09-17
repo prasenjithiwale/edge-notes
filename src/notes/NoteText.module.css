@@ -205,8 +205,10 @@
   font-size: 12px;
   line-height: 1.5;
   /* Text in a note is not selectable (chrome is `user-select: none`); code is
-     read and copied out, so this is. */
+     read and copied out, so this is. Both spellings: WebKit honours the
+     prefixed property, and the unprefixed one alone does not override it. */
   user-select: text;
+  -webkit-user-select: text;
   cursor: text;
 }
 

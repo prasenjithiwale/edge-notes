@@ -20,6 +20,9 @@ export function noteColorStyle(color: string): CSSProperties {
   return {
     "--note-bg": `var(--note-${color}-bg)`,
     "--note-text": `var(--note-${color}-text)`,
+    // Only "none" defines an edge; every other colour falls back to nothing.
+    // It is drawn as an inset ring rather than a border so it costs no layout.
+    "--note-edge": `var(--note-${color}-edge, transparent)`,
   } as CSSProperties;
 }
 

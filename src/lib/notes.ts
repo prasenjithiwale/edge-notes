@@ -154,5 +154,10 @@ export function editedLabel(updatedAt: number, now: number): string {
  * other string in the UI (brief 7.1).
  */
 export function colorName(color: string): string {
+  // The absence of a colour is not called "None" the way a colour is called
+  // "Mint": what the button does is take the colour off.
+  if (color === "none") {
+    return "No colour";
+  }
   return color.slice(0, 1).toUpperCase() + color.slice(1);
 }

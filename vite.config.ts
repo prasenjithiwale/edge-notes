@@ -22,9 +22,20 @@ export default defineConfig({
     // cannot manage without it.
     setupFiles: ["./src/test-setup.ts"],
     include: ["src/**/*.test.ts", "src/**/*.test.tsx"],
-    // Vitest blanks CSS by default, which also empties `?raw` imports. The
-    // contrast test reads the palette straight from tokens.css, so that one
-    // file is let through.
-    css: { include: [/tokens\.css/] },
+    // Vitest blanks CSS by default, which also empties `?raw` imports. Two
+    // tests read stylesheets rather than rendering them — the palette's contrast
+    // and the `user-select` pairs that decide whether text can be selected at
+    // all — so those sheets are let through and the rest stay blank.
+    css: {
+      include: [
+        /tokens\.css/,
+        /global\.css/,
+        /NoteCard\.module\.css/,
+        /NoteReader\.module\.css/,
+        /NoteText\.module\.css/,
+        /RichEditor\.module\.css/,
+        /CodeNode\.module\.css/,
+      ],
+    },
   },
 });

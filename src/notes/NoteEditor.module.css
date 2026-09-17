@@ -1,7 +1,7 @@
 .editor {
   background: var(--note-bg);
   /* Open for editing, the card is raised a step above its neighbours. */
-  box-shadow: var(--shadow-card-raised);
+  box-shadow: inset 0 0 0 1px var(--note-edge, transparent), var(--shadow-card-raised);
   color: var(--note-text);
   border-radius: var(--radius-card);
   padding: 10px 12px;
@@ -69,6 +69,12 @@
   grid-template-columns: repeat(8, 16px);
   gap: 8px;
   padding: 4px 0;
+}
+
+/* The one swatch that is an absence rather than a colour: a ring round the
+   neutral, so it does not read as "grey" beside the grey. */
+.swatchNone {
+  box-shadow: inset 0 0 0 1.5px var(--note-none-edge);
 }
 
 .swatch {

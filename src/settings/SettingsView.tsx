@@ -18,7 +18,7 @@ import {
 } from "../lib/ipc";
 import { copyText } from "../lib/clipboard";
 import { useDockStore } from "../store/dock";
-import { applyPanelTranslucency, useSettingsStore } from "../store/settings";
+import { applyPanelTranslucency, applyTabSize, useSettingsStore } from "../store/settings";
 import styles from "./SettingsView.module.css";
 import {
   PANEL_TRANSLUCENCY,
@@ -539,6 +539,12 @@ const TAB_APPEARANCE: Choice<Settings["tab.appearance"]>[] = [
   { value: "solid", label: "Solid" },
 ];
 
+const TAB_SIZES: Choice<Settings["tab.size"]>[] = [
+  { value: "small", label: "Small" },
+  { value: "medium", label: "Medium" },
+  { value: "large", label: "Large" },
+];
+
 /** Where new versions are published; `open_url` allows http and https only. */
 const DOWNLOADS_URL = "https://prasenjithiwale.github.io/edge-notes-apt/";
 
@@ -638,6 +644,19 @@ export function SettingsView({ onClose }: SettingsViewProps) {
           value={settings["tab.appearance"]}
           onChange={(appearance) => {
             void patch({ "tab.appearance": appearance });
+          }}
+        />
+
+        <SegmentedSetting
+          legend="Tab size"
+          description="How big the tab at the screen edge is, and how easy it is to hit."
+          choices={TAB_SIZES}
+          value={settings["tab.size"]}
+          onChange={(size) => {
+            // Shown at once, then stored: the tab is on screen while you choose,
+            // so waiting for the round trip would make the choice feel dead.
+            applyTabSize(size);
+            void patch({ "tab.size": size });
           }}
         />
 

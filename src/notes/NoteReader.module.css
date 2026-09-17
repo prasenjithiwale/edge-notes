@@ -8,7 +8,7 @@
   background: var(--note-bg);
   color: var(--note-text);
   border-radius: var(--radius-card);
-  box-shadow: var(--shadow-card);
+  box-shadow: inset 0 0 0 1px var(--note-edge, transparent), var(--shadow-card);
 }
 
 .toolbar {

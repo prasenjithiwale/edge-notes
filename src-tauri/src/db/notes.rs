@@ -12,6 +12,10 @@ use crate::error::{AppError, AppResult};
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum NoteColor {
+    /// No colour at all: the card takes a neutral surface of its own rather
+    /// than the note palette. Still a stored id, not an absent one — the column
+    /// stays non-null and every note still has exactly one answer.
+    None,
     Red,
     Peach,
     Orange,
@@ -32,7 +36,8 @@ pub enum NoteColor {
 
 impl NoteColor {
     /// Every palette colour, in palette order.
-    pub const ALL: [Self; 16] = [
+    pub const ALL: [Self; 17] = [
+        Self::None,
         Self::Red,
         Self::Peach,
         Self::Orange,
@@ -54,6 +59,7 @@ impl NoteColor {
     #[must_use]
     pub fn as_str(self) -> &'static str {
         match self {
+            Self::None => "none",
             Self::Red => "red",
             Self::Peach => "peach",
             Self::Orange => "orange",
@@ -263,7 +269,9 @@ mod tests {
 
     #[test]
     fn every_palette_colour_round_trips_and_serializes_as_its_id() {
-        assert_eq!(NoteColor::ALL.len(), 16);
+        // Sixteen colours and the way to have none of them.
+        assert_eq!(NoteColor::ALL.len(), 17);
+        assert_eq!(NoteColor::parse("none").ok(), Some(NoteColor::None));
         for color in NoteColor::ALL {
             assert_eq!(NoteColor::parse(color.as_str()).ok(), Some(color));
             let json = serde_json::to_string(&color).expect("serialize");

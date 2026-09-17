@@ -121,6 +121,9 @@
 .field {
   position: relative;
   resize: none;
+  /* As in the editor: both spellings, or WebKit keeps the chrome's `none`. */
+  user-select: text;
+  -webkit-user-select: text;
   background: transparent;
   /* Transparent text over the painted copy, with a caret that is still visible. */
   color: transparent;

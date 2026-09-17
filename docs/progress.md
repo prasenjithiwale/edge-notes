@@ -3167,6 +3167,78 @@ changed editor to confirm it still comes to rest.
 - [ ] Typing `/em` jumps straight to Italic, headed "Format" alone
 - [ ] Each row shows its shortcut, and they match the keys that work
 
+## Clicking in a note, a tab size, and a note with no colour (17 Sep 2026)
+
+Three things from the owner, one of them a bug worth writing down properly.
+
+### You could not click into a note
+
+Reported as: only able to move a line at a time, unable to click on a line and
+start writing there, and a line showing as highlighted while typing. Three
+symptoms, one cause.
+
+The chrome is `user-select: none` *and* `-webkit-user-select: none` (brief 7.5),
+and every place that turns selection back on sets both — the reader, a locked
+card, the `input` rule. The rich editor set only the unprefixed one. They are
+**separate properties**, and WebKit honours the prefixed spelling, so
+`-webkit-user-select: none` went on inheriting from `body`: WebKit would not put
+a caret inside the text, a click selected the whole block instead, and the arrow
+keys moved block by block. All three symptoms are that.
+
+It is one declaration, and it had no chance of showing up in a test: jsdom has no
+layout and no selection semantics, so nothing here could have caught it by
+running. `styles/selection.test.ts` reads the stylesheets instead and fails on
+any `user-select` without its prefixed twin — which is the only shape of check
+that would have. The same omission was in the code block's `<pre>` and its
+textarea, and both are fixed.
+
+### The tab has a size
+
+- `tab.size` — Small, Medium, Large — as a segmented control under Appearance.
+- **One factor, two places.** `TabSize::scale` in Rust sizes the window and the
+  hit area; `applyTabSize` paints the pill from the same three numbers. The
+  window is Rust's and the paint is CSS's, so the numbers are written on both
+  sides; `dock/tabSize.test.ts` reads `settings.rs` and fails if they disagree. A
+  pill that outgrew its window would be clipped, and one that did not would float
+  in a box too big for it.
+- **The hit area grows too**, so a bigger tab is genuinely easier to hit and not
+  only easier to see — which is most of the point on a 22 px target.
+- Applied the moment it is picked, before the round trip to Rust: the tab is on
+  screen while you are choosing, and waiting would make the choice feel dead.
+
+### A note can have no colour
+
+- **`none` is a palette entry, not an absent one.** The column stays non-null and
+  every note still has exactly one answer, which keeps the storage rule ("store
+  only the palette id") intact and means it goes through every contrast check the
+  other sixteen do.
+- **It cannot be told from `gray` by contrast**, because two neutrals of the same
+  lightness never can be. So it is cool where gray is warm, and it is the only
+  entry with an edge: a hairline drawn `inset` in the box-shadow, which costs no
+  layout and is what stops a neutral card dissolving into a neutral panel. Its
+  swatch is a ring rather than a filled dot, so it reads as "no colour" rather
+  than as a second grey, and it is labelled "No colour" rather than "None".
+- A test checks the card stands off the panel in both themes, that it differs
+  from gray, and that `none` is the *only* entry with an edge — so the
+  `transparent` fallback every other colour relies on stays true.
+
+Twenty new tests (707 frontend, 164 Rust).
+
+### Checklist
+
+- [ ] Click into the middle of a line in a note: the caret lands where you
+      clicked, and no line is highlighted
+- [ ] Arrow keys move a character at a time; select text with the mouse
+- [ ] Select and copy from a locked card and from a code block
+- [ ] Settings › Appearance › Tab size: the tab changes the moment it is picked
+- [ ] The larger tab is easier to hit, not just larger — the whole pill responds
+- [ ] Quit and reopen: the size is still what you chose
+- [ ] Open a note, pick the first swatch: the colour comes off and the card still
+      reads as a card, in light and in dark
+- [ ] A colourless note is distinguishable from a grey one in the palette and in
+      the list
+- [ ] Turn panel translucency up: the colourless card is still visible
+
 ## M0 acceptance checklist
 
 From brief section 12. Run `npm run tauri dev`, then work through these with

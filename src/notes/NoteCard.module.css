@@ -3,7 +3,9 @@
      (brief 6.8). A faint shadow lifts it off the panel so it reads as a card —
      the owner's request, against brief 6.8's "no shadows". */
   background: var(--note-bg);
-  box-shadow: var(--shadow-card);
+  /* The inset ring is `transparent` for every colour but "none", which uses
+     it so a neutral card cannot dissolve into the panel behind it. */
+  box-shadow: inset 0 0 0 1px var(--note-edge, transparent), var(--shadow-card);
   transition: box-shadow 120ms var(--open-easing);
   color: var(--note-text);
   border: none;
@@ -163,7 +165,7 @@
 /* A little more lift under the pointer: an enhancement only, since an inactive
    window may never see hover (brief 6.9). */
 .card:hover {
-  box-shadow: var(--shadow-card-hover);
+  box-shadow: inset 0 0 0 1px var(--note-edge, transparent), var(--shadow-card-hover);
 }
 
 @media (prefers-reduced-motion: reduce) {

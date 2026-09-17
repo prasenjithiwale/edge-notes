@@ -52,7 +52,7 @@ describe("the palette tokens", () => {
       expect(() => pair(LIGHT, color)).not.toThrow();
       expect(pair(DARK, color)).toEqual(pair(SYSTEM_DARK, color));
     }
-    expect(NOTE_COLORS).toHaveLength(16);
+    expect(NOTE_COLORS).toHaveLength(17);
   });
 });
 
@@ -243,6 +243,47 @@ describe("the running-session light", () => {
       expect(tokenSet.get("focus-running")).not.toBe(tokenSet.get("priority-high"));
     });
   }
+});
+
+/**
+ * A note with no colour still has to look like a note.
+ *
+ * "No colour" is a palette entry rather than an absent one, so it goes through
+ * every check above — but those all measure text against its own background, and
+ * the thing that could go wrong here is different: a neutral card on a neutral
+ * panel, in either theme, disappearing into it. It is also the one entry that
+ * sits beside `gray`, and two neutrals of the same lightness cannot be told
+ * apart by contrast at all — so this checks the hairline exists as well.
+ */
+describe("a note with no colour", () => {
+  /** Enough of a step to read as a card. Two surfaces at 3:1 would look harsh. */
+  const VISIBLE = 1.15;
+
+  for (const theme of ["light", "dark"] as const) {
+    const tokenSet = theme === "light" ? LIGHT : DARK;
+
+    it(`stands off the panel in ${theme}`, () => {
+      const card = tokenSet.get("note-none-bg");
+      const panel = tokenSet.get("surface");
+      expect(card).toMatch(/^#[0-9a-f]{6}$/);
+      expect(contrastRatio(panel ?? "", card ?? "")).toBeGreaterThanOrEqual(VISIBLE);
+    });
+
+    it(`is not the same card as gray in ${theme}`, () => {
+      expect(tokenSet.get("note-none-bg")).not.toBe(tokenSet.get("note-gray-bg"));
+    });
+  }
+
+  it("carries a hairline, which is what gray does not", () => {
+    // Contrast cannot separate two neutrals of one lightness; the edge can.
+    expect(tokens).toMatch(/--note-none-edge:/);
+    expect(tokens).not.toMatch(/--note-gray-edge:/);
+  });
+
+  it("is the only entry with an edge, so the fallback stays transparent", () => {
+    const edges = [...tokens.matchAll(/--note-([a-z]+)-edge:/g)].map(([, name]) => name);
+    expect(new Set(edges)).toEqual(new Set(["none"]));
+  });
 });
 
 describe("contrastRatio", () => {

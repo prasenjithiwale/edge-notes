@@ -162,6 +162,38 @@ describe("task reminders setting", () => {
   });
 });
 
+describe("tab size setting", () => {
+  it("defaults to medium and applies a new size straight away", async () => {
+    render(<SettingsView onClose={() => undefined} />);
+
+    expect(screen.getByRole("button", { name: "Medium" }).getAttribute("aria-pressed")).toBe(
+      "true",
+    );
+
+    screen.getByRole("button", { name: "Large" }).click();
+
+    // Painted before it is stored: the tab is on screen while you choose.
+    expect(document.documentElement.style.getPropertyValue("--tab-pill-width")).toBe("16.8px");
+    await waitFor(() => {
+      expect(updates()).toEqual([{ patch: { "tab.size": "large" } }]);
+    });
+  });
+
+  it("scales the window and the pill together", () => {
+    useSettingsStore.setState({ settings: { ...BASE, "tab.size": "small" } });
+    render(<SettingsView onClose={() => undefined} />);
+    screen.getByRole("button", { name: "Small" }).click();
+
+    const root = document.documentElement.style;
+    // The hit area grows with the paint, so a bigger tab is easier to hit and
+    // not only easier to see.
+    expect(root.getPropertyValue("--tab-width")).toBe("17.6px");
+    expect(root.getPropertyValue("--tab-pill-width")).toBe("9.6px");
+    expect(root.getPropertyValue("--tab-height")).toBe("57.6px");
+    expect(root.getPropertyValue("--tab-pill-height")).toBe("41.6px");
+  });
+});
+
 describe("the Focus settings", () => {
   it("nudges a phase length rather than asking for it to be typed", async () => {
     render(<SettingsView onClose={() => undefined} />);

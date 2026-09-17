@@ -28,6 +28,33 @@ pub enum TabAppearance {
     Solid,
 }
 
+/// How big the collapsed tab is drawn, and how big its window is.
+///
+/// A scale rather than a pixel size: the tab is a window, a hit area and a
+/// painted pill, and all three have to move together. One factor keeps them in
+/// proportion and keeps the choice to something a person can make.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum TabSize {
+    Small,
+    Medium,
+    Large,
+}
+
+impl TabSize {
+    /// What the default metrics are multiplied by. The frontend paints the pill
+    /// from the same three numbers (`applyTabSize`); they are written down in
+    /// both places because the window is Rust's and the paint is CSS's.
+    #[must_use]
+    pub fn scale(self) -> f64 {
+        match self {
+            Self::Small => 0.8,
+            Self::Medium => 1.0,
+            Self::Large => 1.4,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Settings {
     #[serde(rename = "dock.side")]
@@ -44,6 +71,9 @@ pub struct Settings {
     pub dock_open_on: OpenTrigger,
     #[serde(rename = "tab.appearance")]
     pub tab_appearance: TabAppearance,
+    /// Not in brief 9.2: how big the collapsed tab is (owner's request).
+    #[serde(rename = "tab.size")]
+    pub tab_size: TabSize,
     #[serde(rename = "panel.width")]
     pub panel_width: f64,
     #[serde(rename = "theme")]
@@ -113,6 +143,7 @@ impl Settings {
             side: self.dock_side,
             tab_offset: self.dock_tab_offset,
             panel_width: self.panel_width,
+            tab_scale: self.tab_size.scale(),
             monitor: self.dock_monitor.clone(),
         }
     }
@@ -142,6 +173,7 @@ impl Default for Settings {
             dock_open_on: OpenTrigger::Hover,
             // Not in brief 9.2; asked for by the owner.
             tab_appearance: TabAppearance::Translucent,
+            tab_size: TabSize::Medium,
             panel_width: 320.0,
             theme: Theme::System,
             notes_last_color: NoteColor::Yellow,
@@ -181,6 +213,8 @@ pub struct SettingsPatch {
     pub dock_open_on: Option<OpenTrigger>,
     #[serde(rename = "tab.appearance")]
     pub tab_appearance: Option<TabAppearance>,
+    #[serde(rename = "tab.size")]
+    pub tab_size: Option<TabSize>,
     #[serde(rename = "panel.width")]
     pub panel_width: Option<f64>,
     #[serde(rename = "theme")]
@@ -260,6 +294,7 @@ pub fn get(connection: &Connection) -> AppResult<Settings> {
         )?,
         dock_open_on: read(connection, "dock.openOn", defaults.dock_open_on)?,
         tab_appearance: read(connection, "tab.appearance", defaults.tab_appearance)?,
+        tab_size: read(connection, "tab.size", defaults.tab_size)?,
         panel_width: read(connection, "panel.width", defaults.panel_width)?,
         theme: read(connection, "theme", defaults.theme)?,
         notes_last_color: read(connection, "notes.lastColor", defaults.notes_last_color)?,
@@ -330,6 +365,9 @@ pub fn update(connection: &Connection, patch: &SettingsPatch) -> AppResult<Setti
     }
     if let Some(value) = patch.tab_appearance {
         write(connection, "tab.appearance", &value)?;
+    }
+    if let Some(value) = patch.tab_size {
+        write(connection, "tab.size", &value)?;
     }
     if let Some(value) = patch.panel_width {
         // Brief 6.4: configurable later within 280-420.
@@ -430,6 +468,8 @@ mod tests {
         assert!(settings.tasks_reminders);
         assert_eq!(settings.panel_translucency, 0);
         assert_eq!(settings.tab_appearance, TabAppearance::Translucent);
+        assert_eq!(settings.tab_size, TabSize::Medium);
+        assert_eq!(settings.placement().tab_scale, 1.0);
         assert_eq!(settings.focus_focus_minutes, 25);
         assert_eq!(settings.focus_break_minutes, 5);
         assert_eq!(settings.focus_long_break_minutes, 15);
@@ -463,6 +503,45 @@ mod tests {
         .expect("update");
         assert_eq!(settings.notes_last_code_lang, "notalanguageatall");
         assert_eq!(get(&connection).expect("get"), settings);
+    }
+
+    /// The tab is a window, a hit area and a painted pill; the scale is what
+    /// keeps the three in proportion, so it has to reach the dock.
+    #[test]
+    fn the_tab_size_round_trips_and_reaches_the_dock() {
+        let connection = db();
+        let settings = update(
+            &connection,
+            &SettingsPatch {
+                tab_size: Some(TabSize::Large),
+                ..SettingsPatch::default()
+            },
+        )
+        .expect("update");
+
+        assert_eq!(settings.tab_size, TabSize::Large);
+        assert!(settings.placement().tab_scale > 1.0);
+        assert_eq!(get(&connection).expect("get"), settings);
+
+        // Stored as the lowercase word the frontend sends.
+        let raw: String = connection
+            .query_row(
+                "SELECT value FROM settings WHERE key = 'tab.size'",
+                [],
+                |row| row.get(0),
+            )
+            .expect("row");
+        assert_eq!(raw, "\"large\"");
+    }
+
+    #[test]
+    fn every_tab_size_is_a_different_scale_and_none_is_zero() {
+        let scales: Vec<f64> = [TabSize::Small, TabSize::Medium, TabSize::Large]
+            .into_iter()
+            .map(TabSize::scale)
+            .collect();
+        assert!(scales.iter().all(|scale| *scale > 0.0));
+        assert!(scales[0] < scales[1] && scales[1] < scales[2]);
     }
 
     #[test]

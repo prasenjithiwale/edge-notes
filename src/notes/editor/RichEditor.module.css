@@ -7,8 +7,15 @@
   font-size: inherit;
   line-height: 1.5;
   /* Text in a note is written, selected and copied; the chrome's
-     `user-select: none` must not reach in here. */
+     `user-select: none` must not reach in here.
+     Both spellings, and that is not belt and braces: they are separate
+     properties, and WebKit honours the prefixed one. With only the unprefixed
+     rule here, `-webkit-user-select: none` went on inheriting from `body`, so
+     WebKit would not put a caret inside the text — a click selected the whole
+     block instead, which showed as a highlighted line and moved a line at a
+     time. It looked like a broken editor and was one missing declaration. */
   user-select: text;
+  -webkit-user-select: text;
   cursor: text;
   overflow-wrap: anywhere;
   /* The caret is the note's text colour, not the system's. */

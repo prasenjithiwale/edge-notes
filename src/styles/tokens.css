@@ -15,6 +15,18 @@
     0 8px 28px rgba(0, 0, 0, 0.12), 0 1px 3px rgba(0, 0, 0, 0.08);
 
   /* Note palette: background / text pairs, stored by id in the database. */
+  /* No colour: a card that is plainly a card without being one of the sixteen.
+     It cannot be the panel's own surface or the note would dissolve into it, so
+     it is the sunken neutral a step away from the panel in both themes, and the
+     card's shadow does the rest. `contrast.test.ts` holds its text to AA and a
+     separate test holds the background away from the panel's. */
+  --note-none-bg: #e9edf2;
+  --note-none-text: #1d1d1f;
+  /* Only this entry has an edge. It is what stops a card with no colour from
+     dissolving into the panel behind it, and what tells it apart from `gray` —
+     two neutrals of the same lightness cannot be separated by contrast alone,
+     so this one is cooler than gray's warm tone and carries a hairline. */
+  --note-none-edge: rgba(0, 0, 0, 0.12);
   --note-red-bg: #fbdcda;
   --note-red-text: #6e2420;
   --note-peach-bg: #fde2d2;
@@ -182,6 +194,9 @@
     --shadow-card-raised: 0 6px 20px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(255, 255, 255, 0.06);
     color-scheme: dark;
 
+    --note-none-bg: #2f3238;
+    --note-none-text: #f2f2f3;
+    --note-none-edge: rgba(255, 255, 255, 0.16);
     --note-red-bg: #4e2422;
     --note-red-text: #f6c4c0;
     --note-peach-bg: #4d2e1f;
@@ -254,6 +269,9 @@
   --shadow-card-raised: 0 6px 20px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(255, 255, 255, 0.06);
   color-scheme: dark;
 
+  --note-none-bg: #2f3238;
+  --note-none-text: #f2f2f3;
+  --note-none-edge: rgba(255, 255, 255, 0.16);
   --note-red-bg: #4e2422;
   --note-red-text: #f6c4c0;
   --note-peach-bg: #4d2e1f;

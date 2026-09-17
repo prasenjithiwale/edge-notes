@@ -68,6 +68,7 @@ const SETTINGS: Settings = {
   "dock.closeDelayMs": 400,
   "dock.openOn": "hover",
   "tab.appearance": "translucent",
+  "tab.size": "medium",
   "panel.width": 320,
   theme: "system",
   "notes.lastColor": "yellow",
@@ -662,7 +663,8 @@ describe("the colour palette", () => {
 
     screen.getByRole("button", { name: "More colours" }).click();
     const grid = await screen.findByRole("group", { name: "All colours" });
-    expect(grid.querySelectorAll("button")).toHaveLength(16);
+    // Sixteen colours and the way to have none of them.
+    expect(grid.querySelectorAll("button")).toHaveLength(17);
 
     const teal = Array.from(grid.querySelectorAll("button")).find(
       (button) => button.getAttribute("aria-label") === "Teal",

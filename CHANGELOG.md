@@ -9,6 +9,23 @@ To release, see "Releasing" in the README.
 
 ## [Unreleased]
 
+### Fixed
+
+- **You can click anywhere in a note again.** Clicking in the middle of a line
+  would not put the caret there: the whole line highlighted instead, and the
+  arrow keys moved a line at a time rather than a character. One missing
+  declaration — the editor turned text selection back on with `user-select` but
+  not `-webkit-user-select`, and WebKit honours the second one.
+
+### Added
+
+- **A note can have no colour.** The first swatch in the palette takes the colour
+  off; the card keeps a neutral surface of its own and a hairline, so it still
+  reads as a card in both light and dark rather than merging into the panel.
+- **The tab at the screen edge comes in three sizes.** Settings › Appearance ›
+  Tab size: small, medium or large. The hit area grows with it, so a bigger tab
+  is easier to hit and not only easier to see.
+
 ### Changed
 
 - **The note editor's header is the note's own buttons now.** Expand on the

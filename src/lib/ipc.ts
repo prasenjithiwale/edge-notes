@@ -12,6 +12,12 @@ import { listen, type UnlistenFn } from "@tauri-apps/api/event";
  * validates the same ids (`db::notes::NoteColor`).
  */
 export const NOTE_COLORS = [
+  /**
+   * No colour: a neutral card that is still plainly a card. First, because it is
+   * the absence of the others rather than one of them — and a stored id like any
+   * other, so the column stays non-null and a note always has one answer.
+   */
+  "none",
   "red",
   "peach",
   "orange",
@@ -34,6 +40,7 @@ export type NoteColor = (typeof NOTE_COLORS)[number];
 
 /** Brief 7.3's original seven: the quick swatches before any colour has history. */
 export const CLASSIC_COLORS: readonly NoteColor[] = [
+  "none",
   "yellow",
   "peach",
   "pink",
@@ -118,6 +125,8 @@ export interface Settings {
   "dock.openOn": "hover" | "click";
   /** How the collapsed tab is painted; it is always solid while the panel is out. */
   "tab.appearance": "translucent" | "solid";
+  /** How big the collapsed tab is: its window, its hit area and its pill. */
+  "tab.size": "small" | "medium" | "large";
   "panel.width": number;
   theme: "system" | "light" | "dark";
   "notes.lastColor": NoteColor;

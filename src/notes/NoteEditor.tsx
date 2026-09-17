@@ -332,7 +332,11 @@ function Swatch({ color, selected, onPick }: SwatchProps) {
   return (
     <button
       type="button"
-      className={cx(styles.swatch, selected && styles.swatchSelected)}
+      className={cx(
+        styles.swatch,
+        color === "none" && styles.swatchNone,
+        selected && styles.swatchSelected,
+      )}
       style={{ "--swatch-bg": `var(--note-${color}-bg)` } as CSSProperties}
       aria-label={colorName(color)}
       aria-pressed={selected}
