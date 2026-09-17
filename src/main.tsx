@@ -1,3 +1,6 @@
+// First, before anything that might call one of the methods it supplies.
+import "./lib/compat";
+
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 
