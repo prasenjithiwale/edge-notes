@@ -25,6 +25,7 @@ import {
   LockOpen,
   Strikethrough,
   Trash2,
+  Type,
   type LucideIcon,
 } from "lucide-react";
 
@@ -42,6 +43,7 @@ import { FORMAT_SHORTCUTS, shortcutLabel } from "./formatting";
 import { EDITOR_NODES, EDITOR_THEME } from "./editor/config";
 import { ChangePlugin, FocusPlugin, LoadPlugin, ShortcutPlugin } from "./editor/plugins";
 import { LINK_MATCHERS, NOTE_TRANSFORMERS } from "./editor/shortcuts";
+import { SlashMenuPlugin } from "./editor/SlashMenu";
 import { isActive, runCommand, useToolbarState, type FormatCommand } from "./editor/toolbar";
 import editorStyles from "./editor/RichEditor.module.css";
 import styles from "./NoteEditor.module.css";
@@ -53,6 +55,7 @@ interface NoteEditorProps {
 }
 
 const FORMAT_ICONS: Record<FormatCommand, LucideIcon> = {
+  text: Type,
   bold: Bold,
   italic: Italic,
   strike: Strikethrough,
@@ -312,6 +315,8 @@ function NoteEditorBody({ note, large = false }: NoteEditorProps) {
             freezes the app rather than failing. */}
         <AutoLinkPlugin matchers={LINK_MATCHERS} />
         <MarkdownShortcutPlugin transformers={NOTE_TRANSFORMERS} />
+        {/* Type `/` and the line becomes whatever is picked. */}
+        <SlashMenuPlugin lang={lastLang} />
       </div>
       <div className={styles.swatches} role="group" aria-label="Note colour">
         {shownColors.map((color) => (

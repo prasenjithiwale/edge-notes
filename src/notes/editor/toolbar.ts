@@ -28,6 +28,8 @@ import {
 import { $createCodeNode } from "./CodeNode";
 
 export type FormatCommand =
+  /** Back to a plain paragraph: what the slash menu calls "Text". */
+  | "text"
   | "bold"
   | "italic"
   | "strike"
@@ -114,6 +116,8 @@ export function useToolbarState(editor: LexicalEditor): ToolbarState {
 /** Whether the caret is already inside what this button applies. */
 export function isActive(command: FormatCommand, state: ToolbarState): boolean {
   switch (command) {
+    case "text":
+      return state.list === null;
     case "bold":
       return state.bold;
     case "italic":
@@ -144,6 +148,11 @@ export function runCommand(
   lang = "",
 ): void {
   switch (command) {
+    case "text":
+      // Whatever kind of list this line is in, it stops being one. A line that
+      // is already a paragraph is left alone, which is what `REMOVE_LIST` does.
+      editor.dispatchCommand(REMOVE_LIST_COMMAND, undefined);
+      return;
     case "bold":
       editor.dispatchCommand(FORMAT_TEXT_COMMAND, "bold");
       return;

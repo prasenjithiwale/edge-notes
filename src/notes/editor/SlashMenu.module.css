@@ -1,0 +1,91 @@
+/* The plugin positions this at the caret; everything below is drawn inside it.
+   Zero-sized so it never affects layout, and above the panel's own stacking. */
+.anchor {
+  position: absolute;
+  z-index: 10;
+}
+
+/* A short list, sized to the narrowest panel rather than to its longest label:
+   the menu must not reach past the panel it opens in. */
+.menu {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 4px;
+  width: 232px;
+  max-width: calc(100vw - 32px);
+  max-height: 232px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  /* The panel's surface, not the note's colour: this is chrome that happens to
+     be over a note, the same as the task details sheet. */
+  background: var(--surface);
+  color: var(--text-primary);
+  box-shadow: var(--shadow-card-raised);
+  animation: menu-in 120ms var(--open-easing);
+}
+
+@keyframes menu-in {
+  from {
+    opacity: 0;
+    transform: translateY(-3px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .menu {
+    animation: none;
+  }
+}
+
+.item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 5px 7px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+}
+
+/* One highlight, driven by the plugin's selected index, so the keyboard and the
+   pointer agree about which row is next. */
+.selected {
+  background: var(--surface-sunken);
+}
+
+.icon {
+  flex: none;
+  color: var(--text-secondary);
+}
+
+.selected .icon {
+  color: var(--text-primary);
+}
+
+.text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.hint {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

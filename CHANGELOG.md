@@ -9,6 +9,13 @@ To release, see "Releasing" in the README.
 
 ## [Unreleased]
 
+### Added
+
+- **Type `/` in a note to change what the line is.** A menu opens with Text,
+  To-do list, Bulleted list, Numbered list and Code block; keep typing to narrow
+  it — `/todo`, `/ul`, `/code` — then Enter, or click. Arrow keys move, Escape
+  closes the menu and leaves the note alone.
+
 ## [0.2.1] - 2026-09-17
 
 ### Fixed

@@ -167,6 +167,23 @@ describe("the code block", () => {
   });
 });
 
+describe("turning a line back into a paragraph", () => {
+  it("takes a list item out of its list", () => {
+    withSelection("milk");
+    run("bullet");
+    expect(markdown()).toBe("- milk");
+
+    run("text", { ...IDLE, list: "bullet" });
+    expect(markdown()).toBe("milk");
+  });
+
+  it("leaves a line that is already a paragraph alone", () => {
+    withSelection("just a line");
+    run("text");
+    expect(markdown()).toBe("just a line");
+  });
+});
+
 describe("what the toolbar lights", () => {
   it("is on for the mark or list the caret is in, and never for the code block", () => {
     const state: ToolbarState = { ...IDLE, bold: true, list: "check" };
@@ -175,6 +192,9 @@ describe("what the toolbar lights", () => {
     expect(isActive("task", state)).toBe(true);
     expect(isActive("bullet", state)).toBe(false);
     expect(isActive("codeblock", state)).toBe(false);
+    // "Text" is on when the line is not a list, which is what it makes it.
+    expect(isActive("text", state)).toBe(false);
+    expect(isActive("text", IDLE)).toBe(true);
   });
 });
 

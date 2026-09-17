@@ -3059,6 +3059,62 @@ crash.
 - [ ] Leave the editor open for a few minutes with the panel out: memory is flat
 - [ ] Linux: `ledge` from a terminal prints nothing unusual while you write
 
+## A slash menu (17 Sep 2026)
+
+Asked for by the owner: "make notes editor like notion notes where a command can
+be given using `/` and line changes accordingly".
+
+- **Lexical's `LexicalTypeaheadMenuPlugin` does the mechanism** — the trigger,
+  the filtering, the arrow keys, the anchoring at the caret. What is written here
+  is which blocks exist, how a query matches one, and what a row looks like.
+  Writing the trigger by hand would have meant re-deriving caret geometry and
+  keyboard capture that the library already gets right.
+- **Escape was the one collision worth checking.** The panel has a single
+  ordered Escape cascade (brief 6.11) on the window, and a menu that closed on
+  Escape *and* let the event through would have closed the editor as well. The
+  plugin calls `stopImmediatePropagation` while it is showing and returns false
+  when it is not, which is exactly right — verified in its source before relying
+  on it.
+- **The menu ends where the dialect does.** Text, To-do, Bulleted, Numbered,
+  Code. No Heading: `lib/markdown.ts` has no `#`, so a heading would be written
+  into a note and read back as a paragraph with a hash in front of it — lost on
+  the next save. A test asserts the list, so adding an item is a decision about
+  the storage format rather than a line in a menu.
+- **Matching is on the words people type, not the names on screen.** Nobody
+  types "To-do list"; they type "todo", "check", "box". Each block carries its
+  own keywords and a bare `/` shows everything, so the menu can be browsed as
+  well as guessed at.
+- **`"text"` is a `FormatCommand` with no button and no shortcut.** Turning a
+  line back into a paragraph is a real command, it just has nowhere in the
+  toolbar to live; the slash menu is the only thing that runs it.
+- **The props are memoised.** `options` changes only with the query. After the
+  loop that shipped in 0.2.0, a fresh array handed to a Lexical plugin is a
+  mistake this codebase has already paid for once; `settles.test.tsx` was run
+  against the new plugin to confirm the editor still comes to rest.
+
+### What was decided against
+
+- **Headings, for now.** The obvious next item, and the reason it is not here: it
+  changes how every existing note is *read*, not just written — a note that
+  starts `# Something` would stop being a paragraph. That is worth doing
+  deliberately, with the parser, the card preview, the reader and the type scale
+  all considered, rather than as a row in a menu.
+- **A divider, a quote, a callout.** Same rule: the dialect cannot hold them.
+
+Seven new tests for the matching and two for the new command (669 in all).
+
+### Checklist
+
+- [ ] Type `/` on an empty line: the menu opens showing all five blocks
+- [ ] Keep typing `todo`: it narrows to To-do list; Enter turns the line into one
+      and the `/todo` text is gone
+- [ ] `/ul`, `/ol`, `/code` and `/text` each find the right block
+- [ ] Arrow keys move the highlight; the pointer highlights the row under it
+- [ ] Escape closes the menu and the editor stays open, with the note untouched
+- [ ] `/zebra` matches nothing and the menu closes rather than sitting empty
+- [ ] Pick Code block: the box appears with the language last used
+- [ ] `/` in the middle of a sentence does not hijack the word after it
+
 ## M0 acceptance checklist
 
 From brief section 12. Run `npm run tauri dev`, then work through these with
