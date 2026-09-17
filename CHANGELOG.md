@@ -9,6 +9,21 @@ To release, see "Releasing" in the README.
 
 ## [Unreleased]
 
+### Changed
+
+- **The note editor's header is the note's own buttons now.** Expand on the
+  left; lock, delete and done on the right, with done as a tick rather than the
+  word. The row of formatting icons has gone — every one of them is on a keyboard
+  shortcut and in the slash menu, and eight icons on a card this size crowded out
+  the controls you actually reach for.
+
+### Added
+
+- **`/bold`, `/italic`, `/strike` and `/code`**, alongside the block commands the
+  slash menu already had. The menu is in two parts now — what to turn the line
+  into, then how to style the text — and each row shows the keyboard shortcut
+  that does the same thing.
+
 ## [0.3.0] - 2026-09-17
 
 ### Added

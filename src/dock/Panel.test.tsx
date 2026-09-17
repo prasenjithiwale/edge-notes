@@ -402,21 +402,38 @@ describe("the note editor", () => {
     expect(field.textContent).not.toContain("- milk");
   });
 
-  it("offers every formatting control, each with its key", async () => {
-    await openEditorWith("Standup notes");
+  /**
+   * The header carries the note's own actions and nothing else. Formatting used
+   * to fill it; it is on the keys and in the slash menu now, and eight more
+   * icons on a 320 px card crowded out the one control that is about the window.
+   */
+  it("keeps only the note's own actions in the header", async () => {
+    const field = await openEditorWith("Standup notes");
+    // Scoped to the editor: the other cards in the list have their own Expand.
+    const editor = within(field.closest("section") as HTMLElement);
 
-    for (const name of [
-      "Bold",
-      "Italic",
-      "Strikethrough",
-      "Inline code",
-      "Bulleted list",
-      "Numbered list",
-      "Checklist",
-      "Code block",
-    ]) {
-      expect(screen.getByRole("button", { name }).getAttribute("title")).toContain(name);
+    for (const name of ["Expand note", "Lock note", "Delete note", "Done"]) {
+      expect(editor.getByRole("button", { name })).toBeTruthy();
     }
+    for (const gone of ["Bold", "Italic", "Strikethrough", "Bulleted list", "Code block"]) {
+      expect(editor.queryByRole("button", { name: gone })).toBeNull();
+    }
+  });
+
+  it("finishes with the tick rather than a word", async () => {
+    const field = await openEditorWith("Standup notes");
+    const editor = within(field.closest("section") as HTMLElement);
+
+    fireEvent.click(editor.getByRole("button", { name: "Done" }));
+
+    await waitFor(() => {
+      expect(useNotesStore.getState().editingId).toBeNull();
+    });
+  });
+
+  it("still says when the note was last written", async () => {
+    await openEditorWith("Standup notes");
+    expect(screen.getByText(/Edited|just now/)).toBeTruthy();
   });
 });
 
@@ -607,7 +624,7 @@ describe("clicking outside the editor", () => {
     useNotesStore.getState().startEditing("1");
     const field = await screen.findByLabelText("Note content");
 
-    clickOn(screen.getByRole("button", { name: "Bold" }));
+    clickOn(screen.getByRole("button", { name: "Lock note" }));
     clickOn(field);
     // Pressed inside, released outside: the click lands on a common ancestor.
     fireEvent.pointerDown(field);

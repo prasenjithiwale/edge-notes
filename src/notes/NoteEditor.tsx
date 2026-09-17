@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import { LexicalComposer } from "@lexical/react/LexicalComposer";
-import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
 import { RichTextPlugin } from "@lexical/react/LexicalRichTextPlugin";
 import { ContentEditable } from "@lexical/react/LexicalContentEditable";
 import { LexicalErrorBoundary } from "@lexical/react/LexicalErrorBoundary";
@@ -11,22 +10,13 @@ import { LinkPlugin } from "@lexical/react/LexicalLinkPlugin";
 import { AutoLinkPlugin } from "@lexical/react/LexicalAutoLinkPlugin";
 import { MarkdownShortcutPlugin } from "@lexical/react/LexicalMarkdownShortcutPlugin";
 import {
-  Bold,
-  Braces,
-  Code,
-  Italic,
-  List,
-  ListChecks,
-  ListOrdered,
+  Check,
   Maximize2,
   Minimize2,
   Palette,
   Lock,
   LockOpen,
-  Strikethrough,
   Trash2,
-  Type,
-  type LucideIcon,
 } from "lucide-react";
 
 import { IconButton } from "../components/IconButton";
@@ -39,12 +29,10 @@ import { useDockStore } from "../store/dock";
 import { useNotesStore } from "../store/notes";
 import { useSettingsStore } from "../store/settings";
 import { noteColorStyle } from "./NoteCard";
-import { FORMAT_SHORTCUTS, shortcutLabel } from "./formatting";
 import { EDITOR_NODES, EDITOR_THEME } from "./editor/config";
 import { ChangePlugin, FocusPlugin, LoadPlugin, ShortcutPlugin } from "./editor/plugins";
 import { LINK_MATCHERS, NOTE_TRANSFORMERS } from "./editor/shortcuts";
 import { SlashMenuPlugin } from "./editor/SlashMenu";
-import { isActive, runCommand, useToolbarState, type FormatCommand } from "./editor/toolbar";
 import editorStyles from "./editor/RichEditor.module.css";
 import styles from "./NoteEditor.module.css";
 
@@ -53,28 +41,6 @@ interface NoteEditorProps {
   /** Filling the large panel: no expand animation and no height cap. */
   large?: boolean;
 }
-
-const FORMAT_ICONS: Record<FormatCommand, LucideIcon> = {
-  text: Type,
-  bold: Bold,
-  italic: Italic,
-  strike: Strikethrough,
-  code: Code,
-  bullet: List,
-  ordered: ListOrdered,
-  task: ListChecks,
-  codeblock: Braces,
-};
-
-/**
- * Text styles, then lists: two groups, separated by space rather than a rule.
- * The code block is not in either — it opens a language picker rather than
- * toggling something, and it is drawn beside them from the editor itself.
- */
-const FORMAT_GROUPS: readonly (readonly FormatCommand[])[] = [
-  ["bold", "italic", "strike", "code"],
-  ["bullet", "ordered", "task"],
-];
 
 /** Brief 6.9: the card expands in place over this long. */
 const EXPAND_MS = 160;
@@ -108,8 +74,6 @@ export function NoteEditor({ note, large = false }: NoteEditorProps) {
 }
 
 function NoteEditorBody({ note, large = false }: NoteEditorProps) {
-  const [editor] = useLexicalComposerContext();
-  const toolbar = useToolbarState(editor);
   const rootRef = useRef<HTMLElement>(null);
   const setContent = useNotesStore((state) => state.setContent);
   const setColor = useNotesStore((state) => state.setColor);
@@ -203,10 +167,6 @@ function NoteEditorBody({ note, large = false }: NoteEditorProps) {
     };
   }, [setLock]);
 
-  const format = (command: FormatCommand, lang?: string) => {
-    runCommand(editor, command, toolbar, lang ?? lastLang);
-  };
-
   // Every change is written to the store as Markdown, which is what the card
   // renders and what the autosave debounce eventually writes to the database.
   const onChangeContent = useCallback(
@@ -216,59 +176,17 @@ function NoteEditorBody({ note, large = false }: NoteEditorProps) {
     [setContent, note.id],
   );
 
-  const codeShortcut = FORMAT_SHORTCUTS.find((item) => item.command === "codeblock");
-
   return (
     <section
       ref={rootRef}
       className={cx(styles.editor, large && styles.large)}
       style={noteColorStyle(note.color)}
     >
+      {/* The note's own actions, at the top where they are always in the same
+          place. Formatting is not here: every command is on a key and in the
+          slash menu, and eight more icons on a 320 px card crowded out the one
+          control that is about the window rather than the note. */}
       <div className={styles.toolbar}>
-        <div className={styles.formatting} role="toolbar" aria-label="Formatting">
-          {FORMAT_GROUPS.map((group, index) => (
-            <div key={index} className={styles.group}>
-              {group.map((command) => {
-                const shortcut = FORMAT_SHORTCUTS.find((item) => item.command === command);
-                const Icon = FORMAT_ICONS[command];
-                const on = isActive(command, toolbar);
-                return (
-                  <IconButton
-                    key={command}
-                    label={shortcut?.label ?? command}
-                    shortcut={shortcut ? shortcutLabel(shortcut) : undefined}
-                    className={styles.footerButton}
-                    // A rich editor's toolbar is a readout as well as a set of
-                    // buttons: lit means the caret is already in it.
-                    active={on}
-                    pressed={on}
-                    keepFocus
-                    onClick={() => {
-                      format(command);
-                    }}
-                  >
-                    <Icon size={16} strokeWidth={1.75} />
-                  </IconButton>
-                );
-              })}
-            </div>
-          ))}
-          {/* Its own group: it inserts a block rather than marking up what is
-              already there, and the language is a dropdown on the block. */}
-          <div className={styles.group}>
-            <IconButton
-              label="Code block"
-              shortcut={codeShortcut ? shortcutLabel(codeShortcut) : undefined}
-              className={styles.footerButton}
-              keepFocus
-              onClick={() => {
-                format("codeblock");
-              }}
-            >
-              <Braces size={16} strokeWidth={1.75} />
-            </IconButton>
-          </div>
-        </div>
         <IconButton
           label={large ? "Shrink note" : "Expand note"}
           className={styles.footerButton}
@@ -287,6 +205,47 @@ function NoteEditorBody({ note, large = false }: NoteEditorProps) {
             <Maximize2 size={16} strokeWidth={1.75} />
           )}
         </IconButton>
+        <div className={styles.actions}>
+          <IconButton
+            // A pinned note is locked: it sorts first and opens read-only. Shown
+            // as a lock (owner's request) so it no longer shares the pin with
+            // Keep open; not accent-coloured, which is reserved for focus rings
+            // and Keep open (brief 7.1).
+            label={note.pinned ? "Unlock note" : "Lock note"}
+            className={styles.footerButton}
+            pressed={note.pinned}
+            onClick={() => {
+              void setPinned(note.id, !note.pinned);
+            }}
+          >
+            {note.pinned ? (
+              <Lock size={16} strokeWidth={1.75} />
+            ) : (
+              <LockOpen size={16} strokeWidth={1.75} />
+            )}
+          </IconButton>
+          <IconButton
+            label="Delete note"
+            className={styles.footerButton}
+            onClick={() => {
+              void remove(note.id);
+            }}
+          >
+            <Trash2 size={16} strokeWidth={1.75} />
+          </IconButton>
+          {/* Outlined, as the panel's New note button is: it is the one thing
+              here that finishes what you are doing rather than changing it. */}
+          <IconButton
+            label="Done"
+            outlined
+            className={styles.footerButton}
+            onClick={() => {
+              void stopEditing();
+            }}
+          >
+            <Check size={16} strokeWidth={2} />
+          </IconButton>
+        </div>
       </div>
       <div className={styles.body}>
         <RichTextPlugin
@@ -358,42 +317,6 @@ function NoteEditorBody({ note, large = false }: NoteEditorProps) {
       )}
       <footer className={styles.footer}>
         <span className={styles.meta}>{editedLabel(note.updatedAt, now)}</span>
-        <IconButton
-          // A pinned note is locked: it sorts first and opens read-only. Shown as
-          // a lock (owner's request) so it no longer shares the pin with Keep
-          // open; not accent-coloured, which is reserved for focus rings and
-          // Keep open (brief 7.1).
-          label={note.pinned ? "Unlock note" : "Lock note"}
-          className={styles.footerButton}
-          pressed={note.pinned}
-          onClick={() => {
-            void setPinned(note.id, !note.pinned);
-          }}
-        >
-          {note.pinned ? (
-            <Lock size={16} strokeWidth={1.75} />
-          ) : (
-            <LockOpen size={16} strokeWidth={1.75} />
-          )}
-        </IconButton>
-        <IconButton
-          label="Delete note"
-          className={styles.footerButton}
-          onClick={() => {
-            void remove(note.id);
-          }}
-        >
-          <Trash2 size={16} strokeWidth={1.75} />
-        </IconButton>
-        <button
-          type="button"
-          className={styles.done}
-          onClick={() => {
-            void stopEditing();
-          }}
-        >
-          Done
-        </button>
       </footer>
     </section>
   );

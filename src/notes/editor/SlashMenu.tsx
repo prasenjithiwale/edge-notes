@@ -1,6 +1,17 @@
 import { useCallback, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
-import { Braces, List, ListChecks, ListOrdered, Type, type LucideIcon } from "lucide-react";
+import {
+  Bold,
+  Braces,
+  Code,
+  Italic,
+  List,
+  ListChecks,
+  ListOrdered,
+  Strikethrough,
+  Type,
+  type LucideIcon,
+} from "lucide-react";
 import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
 import {
   LexicalTypeaheadMenuPlugin,
@@ -10,6 +21,7 @@ import {
 import type { TextNode } from "lexical";
 
 import { cx } from "../../lib/cx";
+import { FORMAT_SHORTCUTS, shortcutLabel } from "../formatting";
 import { runCommand, useToolbarState, type FormatCommand } from "./toolbar";
 import styles from "./SlashMenu.module.css";
 
@@ -20,15 +32,34 @@ import styles from "./SlashMenu.module.css";
  * "ul" for bullets. They are matched as well as the label, so the menu finds what
  * you mean rather than only what it is called.
  */
+/**
+ * Whether an item changes what the line *is* or how the text *looks*. The two
+ * are different enough to be worth a heading between them, and a menu that only
+ * matched marks should not be headed "Turn into".
+ */
+type Group = "block" | "mark";
+
+const GROUP_LABELS: Record<Group, string> = {
+  block: "Turn into",
+  mark: "Format",
+};
+
 class BlockOption extends MenuOption {
   constructor(
     readonly command: FormatCommand,
+    readonly group: Group,
     readonly label: string,
     readonly hint: string,
     readonly keywords: readonly string[],
     readonly Icon: LucideIcon,
   ) {
     super(label);
+  }
+
+  /** The key that does the same thing, shown as the platform writes it. */
+  get shortcut(): string | null {
+    const match = FORMAT_SHORTCUTS.find((item) => item.command === this.command);
+    return match === undefined ? null : shortcutLabel(match);
   }
 
   matches(query: string): boolean {
@@ -54,11 +85,17 @@ class BlockOption extends MenuOption {
  * first, and is a change to how every existing note is read.
  */
 const BLOCKS: readonly BlockOption[] = [
-  new BlockOption("text", "Text", "Plain paragraph", ["paragraph", "plain", "body"], Type),
-  new BlockOption("task", "To-do list", "Tick things off", ["todo", "task", "check", "box"], ListChecks),
-  new BlockOption("bullet", "Bulleted list", "A simple list", ["ul", "unordered", "bullet"], List),
-  new BlockOption("ordered", "Numbered list", "A list in order", ["ol", "number", "step"], ListOrdered),
-  new BlockOption("codeblock", "Code block", "With a language of its own", ["code", "snippet", "pre"], Braces),
+  new BlockOption("text", "block", "Text", "Plain paragraph", ["paragraph", "plain", "body"], Type),
+  new BlockOption("task", "block", "To-do list", "Tick things off", ["todo", "task", "check", "box"], ListChecks),
+  new BlockOption("bullet", "block", "Bulleted list", "A simple list", ["ul", "unordered", "bullet"], List),
+  new BlockOption("ordered", "block", "Numbered list", "A list in order", ["ol", "number", "step"], ListOrdered),
+  new BlockOption("codeblock", "block", "Code block", "With a language of its own", ["code", "snippet", "pre"], Braces),
+  // The marks apply to the selection, or to whatever is typed next when there
+  // is none — which is the case the moment after `/bold` has been picked.
+  new BlockOption("bold", "mark", "Bold", "Heavier text", ["strong", "b"], Bold),
+  new BlockOption("italic", "mark", "Italic", "Slanted text", ["em", "i", "oblique"], Italic),
+  new BlockOption("strike", "mark", "Strikethrough", "Crossed out", ["strike", "s", "cross"], Strikethrough),
+  new BlockOption("code", "mark", "Code", "A word in monospace", ["inline", "mono", "tick"], Code),
 ];
 
 /**
@@ -107,9 +144,14 @@ export function SlashMenuPlugin({ lang }: { lang: string }) {
           return null;
         }
         return createPortal(
-          <ul className={styles.menu} role="listbox" aria-label="Turn this line into">
+          <ul className={styles.menu} role="listbox" aria-label="Slash commands">
             {options.map((option, index) => (
               <li key={option.key} role="presentation">
+                {/* A heading whenever the kind changes, so a filtered menu that
+                    happens to be all marks is not headed "Turn into". */}
+                {options[index - 1]?.group !== option.group && (
+                  <span className={styles.section}>{GROUP_LABELS[option.group]}</span>
+                )}
                 <button
                   type="button"
                   role="option"
@@ -135,6 +177,11 @@ export function SlashMenuPlugin({ lang }: { lang: string }) {
                     <span className={styles.label}>{option.label}</span>
                     <span className={styles.hint}>{option.hint}</span>
                   </span>
+                  {/* The key that does the same thing, for anyone who would
+                      rather not come back through the menu next time. */}
+                  {option.shortcut !== null && (
+                    <span className={styles.key}>{option.shortcut}</span>
+                  )}
                 </button>
               </li>
             ))}

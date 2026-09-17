@@ -3115,6 +3115,58 @@ Seven new tests for the matching and two for the new command (669 in all).
 - [ ] Pick Code block: the box appears with the language last used
 - [ ] `/` in the middle of a sentence does not hijack the word after it
 
+## The editor's header, and marks in the slash menu (17 Sep 2026)
+
+Two requests from the owner: keep only the expand icon in the note editor's
+header and move lock, delete and done up into it, done as an icon; and add slash
+commands for bold, italic and the rest.
+
+### The header
+
+- **Expand on the left, the note's own actions on the right.** Expand is about
+  the window; lock, delete and done are about the note. Done is a tick, and
+  outlined the way the panel's New note button is, because it is the only one
+  that finishes what you are doing rather than changing it.
+- **The footer is one line.** All that is left down there is when the note was
+  last written.
+- **Eight formatting icons went.** They are all on keys and all in the slash
+  menu. What is lost with them is the readout — a lit Bold button told you the
+  caret was already in bold, and nothing does that now. The honest replacement is
+  a toolbar that appears over a selection, the way Notion's does; that is a
+  separate piece of work and was not asked for.
+- **A quiet win:** `NoteEditorBody` no longer subscribes to `useToolbarState`,
+  because nothing in it reads the toolbar any more. It had been re-rendering the
+  whole editor on every keystroke to keep those buttons lit — which is the churn
+  that made 0.2.0's loop possible in the first place.
+
+### The marks
+
+- **`/bold`, `/italic`, `/strike`, `/code`.** With no selection — which is the
+  case the moment after a command is picked — Lexical applies the mark to
+  whatever is typed next, so `/bold` then typing gives bold text.
+- **The menu is in two parts**, "Turn into" and "Format", with the heading drawn
+  wherever the kind changes rather than at fixed positions: a query that matches
+  only marks is headed "Format" and not "Turn into".
+- **Each row shows its key.** `Bold ⌘B`, for anyone who would rather not come
+  back through the menu next time. It is the same table the keyboard reads, so
+  the two cannot drift.
+- **Two things are called code**, the block and the mark, and typing `/code`
+  finds both — block first. A test says so.
+
+Five new tests (674 in all), and `settles.test.tsx` was re-run against the
+changed editor to confirm it still comes to rest.
+
+### Checklist
+
+- [ ] The editor's header is expand, lock, delete and a tick, and nothing else
+- [ ] The tick closes the editor; delete still offers the undo toast
+- [ ] "Edited just now" is still under the note
+- [ ] ⌘B, ⌘I, ⌘⇧X, ⌘E, ⌘⇧7/8/9 and ⌘⇧C all still work with no buttons on screen
+- [ ] `/bold` then typing gives bold text; `/italic` and `/strike` likewise
+- [ ] The menu shows "Turn into" above the blocks and "Format" above the marks
+- [ ] Typing `/em` jumps straight to Italic, headed "Format" alone
+- [ ] Each row shows its shortcut, and they match the keys that work
+
 ## M0 acceptance checklist
 
 From brief section 12. Run `npm run tauri dev`, then work through these with

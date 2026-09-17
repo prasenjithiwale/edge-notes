@@ -89,3 +89,33 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
+/* The kind of thing the rows below it are. Not a row itself: it is never
+   selectable, and the plugin's index counts only the options. */
+.section {
+  display: block;
+  padding: 6px 7px 3px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+}
+
+/* The first heading sits against the menu's own padding. */
+li:first-child .section {
+  padding-top: 2px;
+}
+
+.key {
+  flex: none;
+  margin-left: auto;
+  padding-left: 8px;
+  font-size: 11px;
+  color: var(--text-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+
+.selected .key {
+  color: var(--text-secondary);
+}

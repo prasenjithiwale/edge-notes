@@ -89,11 +89,10 @@
     0 0 0 3px currentcolor;
 }
 
+/* All that is left down here is when the note was last written. */
 .footer {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
-  gap: 4px;
 }
 
 /* Brief 6.9 asks for tertiary text, but a neutral gray on a coloured card would
@@ -113,21 +112,9 @@
   background: rgb(0 0 0 / 8%);
 }
 
-.done {
-  border: none;
-  background: transparent;
-  color: inherit;
-  font-size: 13px;
-  font-weight: 600;
-  padding: 4px 8px;
-  border-radius: var(--radius-control);
-}
-
-.done:hover {
-  background: rgb(0 0 0 / 8%);
-}
-
-/* Formatting on the left, expand on the right. */
+/* Expand on the left — it is about the window — and the note's own actions on
+   the right. Formatting used to fill this row and no longer does: every command
+   is on a key and in the slash menu. */
 .toolbar {
   display: flex;
   align-items: center;
@@ -136,17 +123,10 @@
   margin: -4px -6px 0;
 }
 
-.formatting {
+.actions {
   display: flex;
   align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.group {
-  display: flex;
-  align-items: center;
-  gap: 0;
+  gap: 2px;
 }
 
 /* The large panel: the editor fills it, the textarea takes the spare height

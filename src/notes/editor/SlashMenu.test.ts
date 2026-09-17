@@ -14,7 +14,27 @@ describe("the slash menu's blocks", () => {
       "bullet",
       "ordered",
       "codeblock",
+      "bold",
+      "italic",
+      "strike",
+      "code",
     ]);
+  });
+
+  it("keeps the blocks together and the marks together, in that order", () => {
+    // The menu draws a heading wherever the kind changes, so an interleaved
+    // list would draw several.
+    const groups = BLOCKS.map((block) => block.group);
+    expect(groups.indexOf("mark")).toBe(groups.lastIndexOf("block") + 1);
+    expect(new Set(groups)).toEqual(new Set(["block", "mark"]));
+  });
+
+  it("shows the key for everything that has one", () => {
+    // "Text" is the only command with no shortcut of its own.
+    expect(BLOCKS.filter((block) => block.shortcut === null).map((b) => b.command)).toEqual([
+      "text",
+    ]);
+    expect(BLOCKS.find((block) => block.command === "bold")?.shortcut).toMatch(/B$/);
   });
 
   it("shows everything for a bare slash, so it can be browsed", () => {
@@ -24,8 +44,9 @@ describe("the slash menu's blocks", () => {
   it("finds a block by its name", () => {
     const named = (query: string) =>
       BLOCKS.filter((block) => block.matches(query)).map((block) => block.label);
-    expect(named("code")).toEqual(["Code block"]);
+    expect(named("bulleted")).toEqual(["Bulleted list"]);
     expect(named("number")).toEqual(["Numbered list"]);
+    expect(named("strikethrough")).toEqual(["Strikethrough"]);
   });
 
   /** Nobody types "To-do list"; they type "todo". */
@@ -38,6 +59,17 @@ describe("the slash menu's blocks", () => {
     expect(first("ol")).toBe("Numbered list");
     expect(first("snippet")).toBe("Code block");
     expect(first("paragraph")).toBe("Text");
+    expect(first("strong")).toBe("Bold");
+    expect(first("em")).toBe("Italic");
+    expect(first("mono")).toBe("Code");
+  });
+
+  /** Two different things are called code; both should be findable. */
+  it("offers the block and the mark when a query matches both", () => {
+    expect(BLOCKS.filter((block) => block.matches("code")).map((block) => block.label)).toEqual([
+      "Code block",
+      "Code",
+    ]);
   });
 
   it("ignores case and stray spaces", () => {
