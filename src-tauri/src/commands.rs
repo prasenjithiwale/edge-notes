@@ -231,6 +231,53 @@ pub fn notes_export(app: AppHandle, db: State<'_, Database>) -> AppResult<String
     Ok(directory.to_string_lossy().into_owned())
 }
 
+/// What the About section shows, and what a bug report needs.
+///
+/// Assembled here rather than read from the frontend: the version is Tauri's own
+/// package info, which comes from `package.json` through `tauri.conf.json`, and
+/// the data directory is a path — neither is something the webview has, or
+/// should have, a way to ask the system for itself (brief 9.5).
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AppInfo {
+    pub name: String,
+    pub version: String,
+    /// "macOS", "Windows", "Linux" — the name a person would write, not the
+    /// target triple's.
+    pub os: String,
+    pub arch: String,
+    /// Where `notes.db` lives. People do ask where their notes are.
+    pub data_dir: String,
+}
+
+#[tauri::command]
+pub fn app_info(app: AppHandle) -> AppResult<AppInfo> {
+    let package = app.package_info();
+    Ok(AppInfo {
+        name: package.name.clone(),
+        version: package.version.to_string(),
+        os: pretty_os(std::env::consts::OS),
+        arch: std::env::consts::ARCH.to_owned(),
+        data_dir: app
+            .path()
+            .app_data_dir()
+            .map(|path| path.display().to_string())
+            .unwrap_or_default(),
+    })
+}
+
+/// `std::env::consts::OS` is lowercase and terse; this is the same thing spelled
+/// the way the platform spells itself. Anything unknown is passed through rather
+/// than guessed at.
+fn pretty_os(os: &str) -> String {
+    match os {
+        "macos" => "macOS".to_owned(),
+        "windows" => "Windows".to_owned(),
+        "linux" => "Linux".to_owned(),
+        other => other.to_owned(),
+    }
+}
+
 /// The monitors the dock can be placed on, by name (brief 9.2 `dock.monitor`).
 /// Not in brief 9.3: the settings view cannot offer a choice it cannot enumerate.
 #[tauri::command]
@@ -385,4 +432,18 @@ pub fn tasks_delete(db: State<'_, Database>, id: String) -> AppResult<()> {
 #[tauri::command]
 pub fn tasks_restore(db: State<'_, Database>, id: String) -> AppResult<Task> {
     db.with(|connection| tasks::restore(connection, &id))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::pretty_os;
+
+    #[test]
+    fn the_os_is_spelled_the_way_the_platform_spells_itself() {
+        assert_eq!(pretty_os("macos"), "macOS");
+        assert_eq!(pretty_os("windows"), "Windows");
+        assert_eq!(pretty_os("linux"), "Linux");
+        // Not guessed at: a target we have never run on is shown as it is.
+        assert_eq!(pretty_os("freebsd"), "freebsd");
+    }
 }

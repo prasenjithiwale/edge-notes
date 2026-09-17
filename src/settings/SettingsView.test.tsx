@@ -14,6 +14,14 @@ const { useSettingsStore } = await import("../store/settings");
 
 const BASE = useSettingsStore.getState().settings;
 
+const APP_INFO = {
+  name: "Ledge",
+  version: "1.2.3",
+  os: "macOS",
+  arch: "aarch64",
+  dataDir: "/Users/someone/Library/Application Support/dev.ledge.app",
+};
+
 function updates(): unknown[] {
   return invoke.mock.calls
     .filter(([command]) => command === "settings_update")
@@ -31,6 +39,9 @@ beforeEach(() => {
   invoke.mockImplementation((command: string, args?: unknown) => {
     if (command === "monitors_list") {
       return Promise.resolve([]);
+    }
+    if (command === "app_info") {
+      return Promise.resolve(APP_INFO);
     }
     if (command === "settings_update") {
       const { patch } = args as { patch: Partial<Settings> };
@@ -285,5 +296,68 @@ describe("the new note shortcut", () => {
       expect(screen.getByText(/Hold/).textContent).toContain("Hold");
     });
     expect(invoke.mock.calls.filter(([command]) => command === "shortcut_set")).toEqual([]);
+  });
+});
+
+describe("the About section", () => {
+  it("shows the version, the system and where the notes live", async () => {
+    render(<SettingsView onClose={() => undefined} />);
+
+    expect(await screen.findByText("1.2.3")).toBeTruthy();
+    expect(screen.getByText("Ledge")).toBeTruthy();
+    expect(screen.getByText(/macOS/)).toBeTruthy();
+    expect(screen.getByText(/dev\.ledge\.app/)).toBeTruthy();
+  });
+
+  it("copies the details as something that can be pasted into a message", async () => {
+    const written: string[] = [];
+    Object.defineProperty(navigator, "clipboard", {
+      value: {
+        writeText: (text: string) => {
+          written.push(text);
+          return Promise.resolve();
+        },
+      },
+      configurable: true,
+    });
+
+    render(<SettingsView onClose={() => undefined} />);
+    fireEvent.click(await screen.findByRole("button", { name: "Copy" }));
+
+    await waitFor(() => {
+      expect(written).toEqual(["Ledge 1.2.3\nmacOS aarch64\nData: " + APP_INFO.dataDir]);
+    });
+    // And says it happened, since nothing else on screen changes.
+    await screen.findByRole("button", { name: "Copied" });
+  });
+
+  it("opens the downloads page through the one command that may", async () => {
+    render(<SettingsView onClose={() => undefined} />);
+    fireEvent.click(await screen.findByRole("button", { name: "Open" }));
+
+    await waitFor(() => {
+      const calls = invoke.mock.calls.filter(([command]) => command === "open_url");
+      expect(calls).toHaveLength(1);
+      expect((calls[0]?.[1] as { url: string }).url).toMatch(/^https:\/\//);
+    });
+  });
+
+  /** A version box that says "unknown" is worse than no version box. */
+  it("is left out entirely when the details cannot be read", async () => {
+    invoke.mockImplementation((command: string) => {
+      if (command === "app_info") {
+        // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors
+        return Promise.reject({ code: "unknown", message: "no" });
+      }
+      if (command === "monitors_list") {
+        return Promise.resolve([]);
+      }
+      return Promise.resolve(null);
+    });
+
+    render(<SettingsView onClose={() => undefined} />);
+
+    await screen.findByText("Appearance");
+    expect(screen.queryByText("About")).toBeNull();
   });
 });

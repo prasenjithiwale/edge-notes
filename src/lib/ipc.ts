@@ -96,6 +96,17 @@ export interface TaskPatch {
   repeat?: Repeat | null;
 }
 
+/** What the About section shows, and what a bug report needs. */
+export interface AppInfo {
+  name: string;
+  version: string;
+  /** "macOS", "Windows" or "Linux". */
+  os: string;
+  arch: string;
+  /** Where `notes.db` lives. */
+  dataDir: string;
+}
+
 /** Keys mirror the dotted names used in the settings table (brief 9.2). */
 export interface Settings {
   "dock.side": DockSide;
@@ -359,6 +370,10 @@ export function notesExport(): Promise<string> {
 }
 
 /** Monitor names for the settings view; "primary" is handled separately. */
+export function appInfo(): Promise<AppInfo> {
+  return callResult<AppInfo>("app_info");
+}
+
 export function monitorsList(): Promise<string[]> {
   return callResult<string[]>("monitors_list");
 }

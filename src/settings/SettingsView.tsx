@@ -5,14 +5,18 @@ import { IconButton } from "../components/IconButton";
 import { cx } from "../lib/cx";
 import { acceleratorFromEvent, formatAccelerator } from "../lib/accelerator";
 import {
+  appInfo,
   autostartGet,
   autostartSet,
   isIpcErrorOf,
   monitorsList,
   notesExport,
+  openUrl,
   shortcutSet,
+  type AppInfo,
   type Settings,
 } from "../lib/ipc";
+import { copyText } from "../lib/clipboard";
 import { useDockStore } from "../store/dock";
 import { applyPanelTranslucency, useSettingsStore } from "../store/settings";
 import styles from "./SettingsView.module.css";
@@ -535,6 +539,24 @@ const TAB_APPEARANCE: Choice<Settings["tab.appearance"]>[] = [
   { value: "solid", label: "Solid" },
 ];
 
+/** Where new versions are published; `open_url` allows http and https only. */
+const DOWNLOADS_URL = "https://prasenjithiwale.github.io/edge-notes-apt/";
+
+/** How long the copy button says so before going back to "Copy". */
+const COPIED_MS = 1_400;
+
+/**
+ * The app's details as one block of text, for pasting into a bug report. Plain
+ * lines rather than JSON: it is going into a message to a person.
+ */
+function detailsFor(info: AppInfo): string {
+  return [
+    `${info.name} ${info.version}`,
+    `${info.os} ${info.arch}`,
+    `Data: ${info.dataDir}`,
+  ].join("\n");
+}
+
 const SIDES: Choice<Settings["dock.side"]>[] = [
   { value: "left", label: "Left" },
   { value: "right", label: "Right" },
@@ -552,9 +574,17 @@ export function SettingsView({ onClose }: SettingsViewProps) {
   const [shortcutError, setShortcutError] = useState<string | null>(null);
   const [exportedTo, setExportedTo] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
+  const [about, setAbout] = useState<AppInfo | null>(null);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     void monitorsList().then(setMonitors);
+    void appInfo()
+      .then(setAbout)
+      .catch((error: unknown) => {
+        // The pane is still worth showing without it; the section hides itself.
+        console.error("settings: could not read the app details", error);
+      });
     // Launch at login is read from the OS, which is the only honest source: the
     // login item can be removed from System Settings without telling the app.
     void autostartGet()
@@ -830,6 +860,67 @@ export function SettingsView({ onClose }: SettingsViewProps) {
           </button>
         </div>
       </Group>
+
+      {/* Last, because it is the one section you read rather than change. Left
+          out entirely if Rust could not answer: a version box that says
+          "unknown" is worse than no version box. */}
+      {about !== null && (
+        <Group title="About">
+          <div className={styles.row}>
+            <Label text={about.name} description="Notes on the edge of your screen" />
+            <span className={styles.version}>{about.version}</span>
+          </div>
+
+          <div className={styles.row}>
+            <Label text="System" />
+            <span className={styles.value}>
+              {about.os} · {about.arch}
+            </span>
+          </div>
+
+          {/* People do ask where their notes are, and the answer is a path. */}
+          <div className={styles.row}>
+            <Label text="Notes are stored in" description={about.dataDir} />
+          </div>
+
+          <div className={styles.row}>
+            <Label
+              text="Details for a bug report"
+              description="Version, system and where the notes are."
+            />
+            <button
+              type="button"
+              className={styles.action}
+              onClick={() => {
+                void copyText(detailsFor(about)).then((ok) => {
+                  if (!ok) {
+                    return;
+                  }
+                  setCopied(true);
+                  setTimeout(() => {
+                    setCopied(false);
+                  }, COPIED_MS);
+                });
+              }}
+            >
+              {copied ? "Copied" : "Copy"}
+            </button>
+          </div>
+
+          <div className={styles.row}>
+            <Label text="Downloads and release notes" />
+            <button
+              type="button"
+              className={styles.action}
+              onClick={() => {
+                void openUrl(DOWNLOADS_URL);
+              }}
+            >
+              Open
+            </button>
+          </div>
+        </Group>
+      )}
     </div>
   );
 }

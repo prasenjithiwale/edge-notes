@@ -11,6 +11,10 @@ To release, see "Releasing" in the README.
 
 ### Added
 
+- **An About section in Settings**, with the version, the system it is running
+  on, and where your notes are kept on disk. There is a button that copies all
+  three, for when something goes wrong and you need to say what you are running,
+  and a link to the downloads page.
 - **The tab shows a red light while a focus session is running**, pulsing gently
   at the screen edge, so a session counting down behind whatever you are working
   in is visible without opening anything. It goes out by itself when the phase

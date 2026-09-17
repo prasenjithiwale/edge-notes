@@ -74,6 +74,7 @@ pub fn run() {
             commands::notes_export,
             commands::open_url,
             commands::reminders_set,
+            commands::app_info,
             commands::monitors_list,
             commands::settings_get,
             commands::settings_update,

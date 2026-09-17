@@ -2950,6 +2950,40 @@ closed, the light goes out by itself when the phase ends.
       pulsing, and still red
 - [ ] The dot is legible on the translucent tab in both light and dark
 
+## An About section in Settings (17 Sep 2026)
+
+Asked for by the owner: "a section in settings where app details version is
+listed".
+
+- **A fifth card, last in the pane**, and the only one that is read rather than
+  changed: the app's name and version, the system, the folder `notes.db` lives
+  in, a Copy button and a link to the downloads page.
+- **It comes from one new command, `app_info`.** The version is Tauri's own
+  package info, which reads `package.json` through `tauri.conf.json`, so there is
+  no second copy to fall out of step — `version.test.ts` already guards that, and
+  its comment had been talking about an "About box" since before there was one.
+  The data directory is a path, and the OS and architecture come from
+  `std::env::consts`; none of the three is something the webview should be asking
+  the system for itself (brief 9.5), and none of them needs a plugin.
+- **Copy gives plain lines, not JSON**: it is going into a message to a person.
+  This is the small half of improvement-ideas #20, whose "Copy diagnostics" also
+  wanted the session type and the scale factor — those can join it when something
+  actually needs them.
+- **The section is left out entirely if the command fails**, rather than showing
+  "unknown". A version box that cannot say the version is worse than no version
+  box, and the rest of Settings still works.
+
+Five new tests (656 frontend, 162 Rust), including the one for the missing case.
+
+### Checklist
+
+- [ ] Settings ends with an About card showing Ledge and the current version
+- [ ] The version matches `package.json` and the release it was installed from
+- [ ] System reads sensibly for the machine (macOS · aarch64, Windows · x86_64)
+- [ ] "Notes are stored in" is the folder that actually holds `notes.db`
+- [ ] Copy puts three lines on the clipboard and the button says Copied
+- [ ] Open takes you to the downloads page in the browser, not in the panel
+
 ## M0 acceptance checklist
 
 From brief section 12. Run `npm run tauri dev`, then work through these with
