@@ -352,3 +352,22 @@
   font-size: 12px;
   color: var(--text-secondary);
 }
+
+/* The database key, the one place it is ever shown. Monospace so a character
+   can be checked against what was written down, selectable so it can be copied
+   by hand — which needs both spellings of `user-select` to beat the chrome's
+   `none` (brief 7.5). */
+.recovery {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  line-height: 1.6;
+  word-break: break-all;
+  user-select: text;
+  -webkit-user-select: text;
+  cursor: text;
+  color: var(--text-secondary);
+  background: var(--surface-sunken);
+  border-radius: 6px;
+  padding: 6px 8px;
+  width: 100%;
+}

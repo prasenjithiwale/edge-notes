@@ -13,10 +13,10 @@ brief section 4, it says so, because the project rules require asking first.
 
 ## At a glance
 
-| # | Idea | Area | Effort | Impact |
-|---|---|---|---|---|
-| 1 | Hide the panel from screen sharing and screenshots | Security | S | High |
-| 2 | Encrypt notes at rest, key in the OS keychain | Security | M | High |
+| # | Idea | Area | Effort | Impact | Status |
+|---|---|---|---|---|---|
+| 1 | Hide the panel from screen sharing and screenshots | Security | S | High | **Built, 0.6.0** |
+| 2 | Encrypt notes at rest, key in the OS keychain | Security | M | High | **Built, 0.6.0** |
 | 3 | Lock down the IPC: isolation pattern, per-command permissions, stricter CSP | Security | S–M | Medium |
 | 4 | Sign and notarise macOS and Windows builds | Security / distribution | M | High |
 | 5 | Supply-chain checks in CI | Security | S | Medium |
@@ -46,6 +46,9 @@ brief section 4, it says so, because the project rules require asking first.
 
 ### 1. Hide the panel from screen sharing and screenshots
 
+**Built in 0.6.0** — `privacy.hideFromCapture`, on by default. See
+[progress.md](progress.md) for what was measured.
+
 **What.** A setting, on by default, that stops the panel appearing in screen
 shares, recordings and screenshots, so a note with a password or a private
 reminder does not end up on a video call.
@@ -63,6 +66,10 @@ survives the NSPanel conversion in `platform/macos.rs`.
 **Effort** S. **New dependencies** none.
 
 ### 2. Encrypt notes at rest, with the key in the OS keychain
+
+**Built in 0.6.0** — SQLCipher plus `keyring`, with a recovery key and a locked
+state. See [progress.md](progress.md); the recovery key is what stands in for
+the backups of idea 7, which are still not built.
 
 **What.** `notes.db` encrypted on disk, unlocked automatically with a key kept in
 the macOS Keychain, Windows Credential Manager or the Linux Secret Service.

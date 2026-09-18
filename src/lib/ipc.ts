@@ -141,6 +141,28 @@ export interface ArchivedItem {
   purgeAt: number;
 }
 
+/**
+ * How protected `notes.db` is on disk.
+ *
+ * `"on"` is the ordinary state. `"unavailable"` means this system had nowhere
+ * safe to keep a key, so the notes are in the clear and say so. `"locked"` means
+ * they are encrypted and the key is gone: the panel shows the locked view and
+ * nothing else, because there is nothing else to show.
+ */
+export type Protection = "on" | "unavailable" | "locked";
+
+/**
+ * What the app can do to protect what is in it, and what it is doing. A switch
+ * the platform cannot honour is not drawn at all.
+ */
+export interface SecurityStatus {
+  /** Whether the panel can be kept out of a capture: macOS and Windows only. */
+  captureProtection: boolean;
+  protection: Protection;
+  /** Why, when it is not simply on. A sentence, meant to be read. */
+  detail: string;
+}
+
 /** What the About section shows, and what a bug report needs. */
 export interface AppInfo {
   name: string;
@@ -173,6 +195,8 @@ export interface Settings {
   "shortcut.newNote": string;
   /** A system notification when a task is due. */
   "tasks.reminders": boolean;
+  /** Keep the panel out of screen shares, recordings and screenshots. */
+  "privacy.hideFromCapture": boolean;
   /** How see-through the panel is, 0 (solid) to 60 percent. */
   "panel.translucency": number;
   /** The Focus tab's phase lengths, in minutes. */
@@ -437,6 +461,25 @@ export function notesExport(): Promise<string> {
 /** Monitor names for the settings view; "primary" is handled separately. */
 export function appInfo(): Promise<AppInfo> {
   return callResult<AppInfo>("app_info");
+}
+
+export function securityStatus(): Promise<SecurityStatus> {
+  return callResult<SecurityStatus>("security_status");
+}
+
+/** The database key, written out for someone to keep. The one place it shows. */
+export function securityRecoveryKey(): Promise<string> {
+  return callResult<string>("security_recovery_key");
+}
+
+/** Open a locked database with a key the user kept. */
+export function securityUnlock(recovery: string): Promise<SecurityStatus> {
+  return callResult<SecurityStatus>("security_unlock", { recovery });
+}
+
+/** Set a locked database aside — never delete it — and start again. */
+export function securityStartFresh(): Promise<SecurityStatus> {
+  return callResult<SecurityStatus>("security_start_fresh");
 }
 
 export function monitorsList(): Promise<string[]> {

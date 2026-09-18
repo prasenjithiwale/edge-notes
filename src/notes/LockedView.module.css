@@ -1,0 +1,138 @@
+/* The panel with nothing in it but a way back in. Centred rather than listed,
+   because it is a state and not a screen you navigate. */
+.view {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 24px 16px 16px;
+  gap: 8px;
+}
+
+.icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: var(--surface-sunken);
+  color: var(--text-secondary);
+}
+
+.heading {
+  font-size: 15px;
+  font-weight: 600;
+  margin: 4px 0 0;
+  color: var(--text-primary);
+}
+
+.detail {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 8px;
+}
+
+.label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+/* A key is 71 characters: it has to wrap, and it has to be selectable, which
+   needs both spellings of `user-select` to beat the chrome's `none`. */
+.input {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11.5px;
+  line-height: 1.5;
+  resize: none;
+  cursor: text;
+  user-select: text;
+  -webkit-user-select: text;
+  padding: 8px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-primary);
+}
+
+.input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+}
+
+.error {
+  margin: 0;
+  font-size: 12px;
+  color: var(--priority-high);
+}
+
+.unlock,
+.secondary,
+.danger {
+  cursor: default;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 7px 12px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+}
+
+.unlock {
+  background: var(--accent);
+  color: #ffffff;
+}
+
+.unlock:disabled {
+  opacity: 0.5;
+}
+
+.secondary {
+  background: transparent;
+  color: var(--text-secondary);
+  font-weight: 400;
+}
+
+.secondary:hover {
+  color: var(--text-primary);
+}
+
+.danger {
+  background: var(--priority-high);
+  color: #ffffff;
+}
+
+.confirm {
+  margin-top: 4px;
+  padding: 10px;
+  border-radius: 10px;
+  background: var(--surface-sunken);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.confirmText {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--text-secondary);
+}
+
+.confirmRow {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}

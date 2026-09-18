@@ -8,6 +8,7 @@ pub mod notes;
 pub mod settings;
 pub mod task_import;
 pub mod tasks;
+pub mod vault;
 
 use std::path::Path;
 use std::sync::Mutex;
@@ -21,6 +22,7 @@ pub use archive::{ArchivedItem, ArchivedKind};
 pub use notes::{Note, NoteColor};
 pub use settings::{Settings, SettingsPatch, Theme};
 pub use tasks::{Status, Task, TaskPatch};
+pub use vault::{DatabaseKey, Protection};
 
 /// Unix milliseconds. Every write takes its timestamp as an argument so the
 /// repositories stay deterministic under test.
@@ -39,8 +41,49 @@ pub struct Database {
 
 impl Database {
     /// Open the database file, apply pragmas and migrate.
-    pub fn open(path: &Path) -> AppResult<Self> {
+    ///
+    /// The file is SQLCipher, so this goes through `vault`: it finds the key,
+    /// encrypts a database that is still in the clear, and hands back a
+    /// connection that is already unlocked — or, if the key is gone, an empty
+    /// in-memory database and `Protection::Locked`. An app that cannot read the
+    /// notes still has to start: the panel is where the user is told why, and
+    /// where they can put the key back.
+    pub fn open(path: &Path) -> AppResult<(Self, vault::Opened)> {
+        let (connection, opened) = vault::open(path)?;
+        // A locked database is an empty in-memory one, and migrating it would
+        // write a schema nobody asked for; it is still prepared, because every
+        // command in the app expects a connection to exist.
+        Ok((Self::prepare(connection)?, opened))
+    }
+
+    /// Replace the connection with one that has just been unlocked.
+    ///
+    /// The `Database` keeps its identity, so every command that already holds it
+    /// as state keeps working: the empty in-memory database it was started with
+    /// is swapped for the real one underneath them.
+    pub fn adopt(&self, connection: Connection) -> AppResult<()> {
+        let prepared = Self::prepare(connection)?;
+        let replacement = match prepared.connection.into_inner() {
+            Ok(connection) => connection,
+            Err(poisoned) => poisoned.into_inner(),
+        };
+        match self.connection.lock() {
+            Ok(mut held) => *held = replacement,
+            Err(poisoned) => *poisoned.into_inner() = replacement,
+        }
+        Ok(())
+    }
+
+    /// Open a file with the key supplied rather than fetched.
+    ///
+    /// The tests' way in, so they neither touch the machine's keychain nor
+    /// depend on it being there. `None` opens a plaintext file, which is what
+    /// SQLCipher does when it is never given a key.
+    pub fn open_with_key(path: &Path, key: Option<&DatabaseKey>) -> AppResult<Self> {
         let connection = Connection::open(path)?;
+        if let Some(key) = key {
+            key.apply(&connection)?;
+        }
         Self::prepare(connection)
     }
 
@@ -110,14 +153,14 @@ mod tests {
         let path = dir.join("notes.db");
 
         let id = {
-            let db = Database::open(&path).expect("open");
+            let db = Database::open_with_key(&path, None).expect("open");
             let note = db
                 .with(|c| notes::create(c, NoteColor::Mint, now_ms()))
                 .expect("create");
             note.id
         };
 
-        let reopened = Database::open(&path).expect("reopen");
+        let reopened = Database::open_with_key(&path, None).expect("reopen");
         let listed = reopened.with(notes::list).expect("list");
         assert_eq!(listed.len(), 1);
         assert_eq!(listed[0].id, id);

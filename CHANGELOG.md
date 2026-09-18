@@ -11,6 +11,33 @@ To release, see "Releasing" in the README.
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-09-18
+
+### Added
+
+- **Your notes are encrypted on disk.** `notes.db` is now SQLCipher — AES-256,
+  every page, the schema included — with the key kept in the macOS Keychain,
+  Windows Credential Manager or the Linux Secret Service. A database from an
+  earlier version is converted the first time this one opens it, and the
+  plaintext copy is removed once the encrypted one has been checked. A backup
+  tool, a sync folder or a stolen disk now gets a file of noise.
+- **A recovery key, in Settings › Privacy.** It is the same key, written out in
+  eight groups of eight. Keep it: a keychain that is reset or left behind on
+  another machine is otherwise notes nobody can read, this app included. If that
+  happens the panel says so and offers to unlock with the key — and "Start fresh"
+  renames the locked file rather than deleting it.
+- **The panel stays out of screen shares, recordings and screenshots**, on by
+  default, with a switch in Settings › Privacy. A widget that slides out on hover
+  is easy to open by accident while presenting. macOS and Windows only: Linux has
+  no way to ask for it, so the switch is not shown there.
+
+### Changed
+
+- **The note colours have colour in them now.** The sixteen were so pale they
+  read as one wash; each keeps its hue and gets two to four times the saturation,
+  in both themes. Text on them, and the medium-priority flag, were re-tuned to
+  stay above the contrast bar on the deeper cards.
+
 ## [0.5.1] - 2026-09-18
 
 ### Fixed

@@ -23,6 +23,7 @@ const DEFAULTS: Settings = {
   "notes.lastCodeLang": "",
   "shortcut.newNote": "CmdOrCtrl+Alt+N",
   "tasks.reminders": true,
+  "privacy.hideFromCapture": true,
   "panel.translucency": 0,
   "focus.focusMinutes": 25,
   "focus.breakMinutes": 5,

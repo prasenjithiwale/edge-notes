@@ -14,7 +14,19 @@
   --shadow-panel:
     0 8px 28px rgba(0, 0, 0, 0.12), 0 1px 3px rgba(0, 0, 0, 0.08);
 
-  /* Note palette: background / text pairs, stored by id in the database. */
+  /* Note palette: background / text pairs, stored by id in the database.
+
+     Retuned in 0.6.0, because the first set was so pale that sixteen colours
+     read as one. Each card is now built in OKLCH from the hue it already had —
+     the set of hues was never the problem — at a chroma the hue can actually
+     wear: the warm ones carry more of it at a card's lightness than the cool
+     ones can, so holding all sixteen to one number left yellow looking like
+     khaki. Lightness then follows the hue rather than the other way round,
+     because sRGB has no pale saturated blue, which is why a blue card sits a
+     little deeper than a yellow one. The ink is the same hue, deepened until
+     the card clears AA three ways over: as a title, at
+     `--note-secondary-opacity`, and behind the inline-code wash. The neutrals
+     are deliberately left neutral — a vibrant sand is not sand. */
   /* No colour: a card that is plainly a card without being one of the sixteen.
      It cannot be the panel's own surface or the note would dissolve into it, so
      it is the sunken neutral a step away from the panel in both themes, and the
@@ -27,38 +39,38 @@
      two neutrals of the same lightness cannot be separated by contrast alone,
      so this one is cooler than gray's warm tone and carries a hairline. */
   --note-none-edge: rgba(0, 0, 0, 0.12);
-  --note-red-bg: #fbdcda;
-  --note-red-text: #6e2420;
-  --note-peach-bg: #fde2d2;
-  --note-peach-text: #6b3419;
-  --note-orange-bg: #fde6c8;
-  --note-orange-text: #663a0a;
-  --note-yellow-bg: #fdf3c4;
-  --note-yellow-text: #5c4a00;
-  --note-lime-bg: #ebf4c8;
-  --note-lime-text: #3d520f;
-  --note-green-bg: #d5efd5;
-  --note-green-text: #1f5325;
-  --note-mint-bg: #d9f2e6;
-  --note-mint-text: #1b5238;
-  --note-teal-bg: #d2efed;
-  --note-teal-text: #145250;
-  --note-sky-bg: #d5edf7;
-  --note-sky-text: #0e4a62;
-  --note-blue-bg: #dcebfa;
-  --note-blue-text: #173f66;
-  --note-indigo-bg: #dde0fa;
-  --note-indigo-text: #2b3278;
-  --note-lavender-bg: #e6e1fa;
-  --note-lavender-text: #3a2f73;
-  --note-purple-bg: #ecdcf6;
-  --note-purple-text: #522a6e;
-  --note-pink-bg: #fadde7;
-  --note-pink-text: #6b2440;
-  --note-sand-bg: #efe3d5;
-  --note-sand-text: #54391f;
-  --note-gray-bg: #ecebe8;
-  --note-gray-text: #3a3936;
+  --note-red-bg: #fea6a2;
+  --note-red-text: #440008;
+  --note-peach-bg: #ffaf7c;
+  --note-peach-text: #361600;
+  --note-orange-bg: #febf64;
+  --note-orange-text: #2f1c00;
+  --note-yellow-bg: #f4d95d;
+  --note-yellow-text: #272000;
+  --note-lime-bg: #d3e47d;
+  --note-lime-text: #1f2400;
+  --note-green-bg: #abedac;
+  --note-green-text: #002906;
+  --note-mint-bg: #97efc9;
+  --note-mint-text: #00281a;
+  --note-teal-bg: #89ede9;
+  --note-teal-text: #002725;
+  --note-sky-bg: #87ddfe;
+  --note-sky-text: #002531;
+  --note-blue-bg: #93caff;
+  --note-blue-text: #00223e;
+  --note-indigo-bg: #b5bafe;
+  --note-indigo-text: #1b1450;
+  --note-lavender-bg: #cbbbff;
+  --note-lavender-text: #260f4b;
+  --note-purple-bg: #e6bdff;
+  --note-purple-text: #310943;
+  --note-pink-bg: #feabcb;
+  --note-pink-text: #410023;
+  --note-sand-bg: #eed4b6;
+  --note-sand-text: #2f1c02;
+  --note-gray-bg: #dbd9d3;
+  --note-gray-text: #21201d;
 
   /* Secondary text on a note card is the note's own text colour at reduced
      emphasis. 0.79 is the lowest opacity that still clears WCAG AA on every
@@ -115,7 +127,7 @@
      monochrome screenshot. Every value clears 3:1 against all sixteen note
      backgrounds and both neutral surfaces; `contrast.test.ts` enforces it. */
   --priority-high: #b3261e;
-  --priority-medium: #9a6100;
+  --priority-medium: #825100;
   --priority-low: #276b28;
 
   /* How wide a column of note text is allowed to get in the large panel. About
@@ -197,38 +209,38 @@
     --note-none-bg: #2f3238;
     --note-none-text: #f2f2f3;
     --note-none-edge: rgba(255, 255, 255, 0.16);
-    --note-red-bg: #4e2422;
-    --note-red-text: #f6c4c0;
-    --note-peach-bg: #4d2e1f;
-    --note-peach-text: #f8cdb5;
-    --note-orange-bg: #4e3517;
-    --note-orange-text: #f8d3a6;
-    --note-yellow-bg: #4a3f16;
-    --note-yellow-text: #f7e9a8;
-    --note-lime-bg: #36401a;
-    --note-lime-text: #ddebb0;
-    --note-green-bg: #213f24;
-    --note-green-text: #c0e5c0;
-    --note-mint-bg: #1d3f31;
-    --note-mint-text: #bde8d2;
-    --note-teal-bg: #1a3f3d;
-    --note-teal-text: #b8e6e2;
-    --note-sky-bg: #1a3b4b;
-    --note-sky-text: #badff1;
-    --note-blue-bg: #1e3550;
-    --note-blue-text: #bfd9f5;
-    --note-indigo-bg: #2a2e58;
-    --note-indigo-text: #cbd0f7;
-    --note-lavender-bg: #312a55;
-    --note-lavender-text: #d6cef7;
-    --note-purple-bg: #3d2850;
-    --note-purple-text: #dec6f0;
-    --note-pink-bg: #4a2333;
-    --note-pink-text: #f5c3d4;
-    --note-sand-bg: #3e3226;
-    --note-sand-text: #e6d3be;
-    --note-gray-bg: #34332f;
-    --note-gray-text: #e3e2de;
+    --note-red-bg: #672c2c;
+    --note-red-text: #ffefee;
+    --note-peach-bg: #653107;
+    --note-peach-text: #fff0e7;
+    --note-orange-bg: #704900;
+    --note-orange-text: #fff1df;
+    --note-yellow-bg: #605202;
+    --note-yellow-text: #fff5c3;
+    --note-lime-bg: #4e5800;
+    --note-lime-text: #effbbf;
+    --note-green-bg: #1c4d21;
+    --note-green-text: #dbffdb;
+    --note-mint-bg: #02583f;
+    --note-mint-text: #d5ffeb;
+    --note-teal-bg: #025f5d;
+    --note-teal-text: #cdfffc;
+    --note-sky-bg: #01576f;
+    --note-sky-text: #e5f7ff;
+    --note-blue-bg: #184469;
+    --note-blue-text: #ebf5ff;
+    --note-indigo-bg: #393a6d;
+    --note-indigo-text: #f1f2ff;
+    --note-lavender-bg: #453769;
+    --note-lavender-text: #f4f1ff;
+    --note-purple-bg: #503261;
+    --note-purple-text: #f9efff;
+    --note-pink-bg: #632c43;
+    --note-pink-text: #ffeef4;
+    --note-sand-bg: #4f3d28;
+    --note-sand-text: #fff1e1;
+    --note-gray-bg: #43413c;
+    --note-gray-text: #f5f3f0;
 
     --priority-high: #ff8a80;
     --priority-medium: #ffb74d;
@@ -272,38 +284,38 @@
   --note-none-bg: #2f3238;
   --note-none-text: #f2f2f3;
   --note-none-edge: rgba(255, 255, 255, 0.16);
-  --note-red-bg: #4e2422;
-  --note-red-text: #f6c4c0;
-  --note-peach-bg: #4d2e1f;
-  --note-peach-text: #f8cdb5;
-  --note-orange-bg: #4e3517;
-  --note-orange-text: #f8d3a6;
-  --note-yellow-bg: #4a3f16;
-  --note-yellow-text: #f7e9a8;
-  --note-lime-bg: #36401a;
-  --note-lime-text: #ddebb0;
-  --note-green-bg: #213f24;
-  --note-green-text: #c0e5c0;
-  --note-mint-bg: #1d3f31;
-  --note-mint-text: #bde8d2;
-  --note-teal-bg: #1a3f3d;
-  --note-teal-text: #b8e6e2;
-  --note-sky-bg: #1a3b4b;
-  --note-sky-text: #badff1;
-  --note-blue-bg: #1e3550;
-  --note-blue-text: #bfd9f5;
-  --note-indigo-bg: #2a2e58;
-  --note-indigo-text: #cbd0f7;
-  --note-lavender-bg: #312a55;
-  --note-lavender-text: #d6cef7;
-  --note-purple-bg: #3d2850;
-  --note-purple-text: #dec6f0;
-  --note-pink-bg: #4a2333;
-  --note-pink-text: #f5c3d4;
-  --note-sand-bg: #3e3226;
-  --note-sand-text: #e6d3be;
-  --note-gray-bg: #34332f;
-  --note-gray-text: #e3e2de;
+  --note-red-bg: #672c2c;
+  --note-red-text: #ffefee;
+  --note-peach-bg: #653107;
+  --note-peach-text: #fff0e7;
+  --note-orange-bg: #704900;
+  --note-orange-text: #fff1df;
+  --note-yellow-bg: #605202;
+  --note-yellow-text: #fff5c3;
+  --note-lime-bg: #4e5800;
+  --note-lime-text: #effbbf;
+  --note-green-bg: #1c4d21;
+  --note-green-text: #dbffdb;
+  --note-mint-bg: #02583f;
+  --note-mint-text: #d5ffeb;
+  --note-teal-bg: #025f5d;
+  --note-teal-text: #cdfffc;
+  --note-sky-bg: #01576f;
+  --note-sky-text: #e5f7ff;
+  --note-blue-bg: #184469;
+  --note-blue-text: #ebf5ff;
+  --note-indigo-bg: #393a6d;
+  --note-indigo-text: #f1f2ff;
+  --note-lavender-bg: #453769;
+  --note-lavender-text: #f4f1ff;
+  --note-purple-bg: #503261;
+  --note-purple-text: #f9efff;
+  --note-pink-bg: #632c43;
+  --note-pink-text: #ffeef4;
+  --note-sand-bg: #4f3d28;
+  --note-sand-text: #fff1e1;
+  --note-gray-bg: #43413c;
+  --note-gray-text: #f5f3f0;
 
   --priority-high: #ff8a80;
   --priority-medium: #ffb74d;

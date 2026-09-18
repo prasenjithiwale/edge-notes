@@ -50,6 +50,10 @@ pub fn run() {
     builder
         .invoke_handler(tauri::generate_handler![
             commands::app_ready,
+            commands::security_status,
+            commands::security_recovery_key,
+            commands::security_unlock,
+            commands::security_start_fresh,
             commands::app_quit,
             commands::dock_set_keep_open,
             commands::dock_set_interaction_lock,
@@ -110,7 +114,16 @@ pub fn run() {
                 }
             }
 
-            let database = Database::open(&database_path)?;
+            let (database, vault) = Database::open(&database_path)?;
+            match vault.protection {
+                db::Protection::On => log::info!("db: the notes are encrypted"),
+                db::Protection::Unavailable => {
+                    log::warn!("db: the notes are NOT encrypted: {}", vault.detail)
+                }
+                db::Protection::Locked => {
+                    log::warn!("db: the notes are locked: {}", vault.detail);
+                }
+            }
             // Brief 9.1: drop notes soft-deleted more than 30 days ago.
             match database.purge_expired() {
                 Ok(0) => {}
@@ -121,6 +134,7 @@ pub fn run() {
             let placement = stored.placement();
             let timings = stored.timings();
             app.manage(database);
+            app.manage(commands::Vault::new(database_path.clone(), vault));
 
             // Task reminders run on their own thread; the frontend sends the list.
             let reminders = reminders::Reminders::new(stored.tasks_reminders);
@@ -133,6 +147,10 @@ pub fn run() {
 
             // NSPanel conversion must happen before the window is positioned or shown.
             platform::configure(&window);
+            // Idea 1: out of screen shares and screenshots unless asked otherwise.
+            // Set here rather than in tauri.conf.json because it is a setting,
+            // and because it must be applied after the panel conversion.
+            platform::set_hidden_from_capture(&window, stored.privacy_hide_from_capture);
 
             let geometry = poller::geometry_for(&handle, &placement);
             app.manage(Arc::new(Dock::new(geometry, timings)));

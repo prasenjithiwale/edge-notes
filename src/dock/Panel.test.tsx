@@ -2,7 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 
-import type { ArchivedItem, Note, Settings, Task } from "../lib/ipc";
+import type { ArchivedItem, Note, SecurityStatus, Settings, Task } from "../lib/ipc";
 import { idle as pomodoroIdle } from "../lib/pomodoro";
 
 const invoke = vi.fn<(command: string, args?: unknown) => Promise<unknown>>();
@@ -81,6 +81,7 @@ const SETTINGS: Settings = {
   "notes.lastCodeLang": "",
   "shortcut.newNote": "CmdOrCtrl+Alt+N",
   "tasks.reminders": true,
+  "privacy.hideFromCapture": true,
   "panel.translucency": 0,
   "focus.focusMinutes": 25,
   "focus.breakMinutes": 5,
@@ -111,9 +112,16 @@ function press(key: string, init: KeyboardEventInit = {}) {
 
 /** What Rust would hand back, so a test can store a setting before the render. */
 let settingsInDb: Settings = SETTINGS;
+/** How protected the database is, for the locked-panel test. */
+let securityInDb: SecurityStatus = {
+  captureProtection: true,
+  protection: "on",
+  detail: "",
+};
 
 beforeEach(() => {
   settingsInDb = SETTINGS;
+  securityInDb = { captureProtection: true, protection: "on", detail: "" };
   // The settings store is a module singleton: left loaded from the last test, the
   // panel would hydrate the Focus tab from that test's values before this one's
   // settings_get resolved.
@@ -125,6 +133,9 @@ beforeEach(() => {
     }
     if (command === "settings_get") {
       return Promise.resolve(settingsInDb);
+    }
+    if (command === "security_status") {
+      return Promise.resolve(securityInDb);
     }
     if (command === "settings_update") {
       const { patch } = args as { patch: Partial<Settings> };
@@ -1662,5 +1673,49 @@ describe("reminders", () => {
       },
       { timeout: 3_000 },
     );
+  });
+});
+
+/**
+ * A database nobody has the key for is not an empty database, and must never be
+ * drawn as one: an empty list with a New note button invites someone to write
+ * over notes that are still there, encrypted, on disk.
+ */
+describe("a locked database", () => {
+  it("takes the panel, instead of showing an empty list", async () => {
+    securityInDb = {
+      captureProtection: true,
+      protection: "locked",
+      detail: "the notes are encrypted and this system's keychain has no key for them",
+    };
+    render(<Panel className="" />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Your notes are locked")).toBeTruthy();
+    });
+    expect(screen.queryByText("Standup notes")).toBeNull();
+    expect(screen.queryByRole("button", { name: "New note" })).toBeNull();
+  });
+
+  it("shows the notes once a key opens them", async () => {
+    securityInDb = {
+      captureProtection: true,
+      protection: "locked",
+      detail: "the notes are encrypted and this system's keychain has no key for them",
+    };
+    render(<Panel className="" />);
+    await waitFor(() => {
+      expect(screen.getByText("Your notes are locked")).toBeTruthy();
+    });
+
+    securityInDb = { captureProtection: true, protection: "on", detail: "" };
+    fireEvent.change(screen.getByRole("textbox"), {
+      target: { value: "a".repeat(64) },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Unlock" }));
+
+    await waitFor(() => {
+      expect(screen.getByText("Standup notes")).toBeTruthy();
+    });
   });
 });

@@ -285,6 +285,143 @@ pub fn app_info(app: AppHandle) -> AppResult<AppInfo> {
     })
 }
 
+/// The key, and where the database it opens lives.
+///
+/// Managed state rather than a global: the key is needed by three commands and
+/// by nothing else, and it is behind a mutex because unlocking replaces it from
+/// whatever thread the command ran on.
+pub struct Vault {
+    path: std::path::PathBuf,
+    state: std::sync::Mutex<crate::db::vault::Opened>,
+}
+
+impl Vault {
+    #[must_use]
+    pub fn new(path: std::path::PathBuf, opened: crate::db::vault::Opened) -> Self {
+        Self {
+            path,
+            state: std::sync::Mutex::new(opened),
+        }
+    }
+
+    fn with<T>(&self, action: impl FnOnce(&mut crate::db::vault::Opened) -> T) -> T {
+        match self.state.lock() {
+            Ok(mut state) => action(&mut state),
+            Err(poisoned) => action(&mut poisoned.into_inner()),
+        }
+    }
+}
+
+/// What the app can and does do to protect what is in it, for the settings view
+/// and for the panel, which has to draw a locked state rather than an empty one.
+///
+/// A capability as well as a state: a switch the platform cannot honour should
+/// not be drawn at all.
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SecurityStatus {
+    /// Whether this platform can keep the panel out of a capture (idea 1).
+    pub capture_protection: bool,
+    /// Whether the notes on disk are encrypted, unreadable, or in the clear.
+    pub protection: crate::db::Protection,
+    /// Why, when it is not simply on. A sentence, for showing to the user.
+    pub detail: String,
+}
+
+#[tauri::command]
+pub fn security_status(vault: State<'_, Vault>) -> SecurityStatus {
+    vault.with(|state| SecurityStatus {
+        capture_protection: platform::capture_protection_supported(),
+        protection: state.protection,
+        detail: state.detail.clone(),
+    })
+}
+
+/// The key, written out for someone to keep.
+///
+/// The one place it is ever shown. There is nothing to show when the database is
+/// not encrypted, and nothing to show when it is locked — the key is what is
+/// missing.
+#[tauri::command]
+pub fn security_recovery_key(vault: State<'_, Vault>) -> AppResult<String> {
+    vault.with(|state| {
+        state
+            .key
+            .as_ref()
+            .map(crate::db::DatabaseKey::recovery_key)
+            .ok_or_else(|| AppError::Locked("there is no key to show".to_owned()))
+    })
+}
+
+/// Open a locked database with a key the user kept.
+///
+/// The connection is swapped underneath every command that already holds the
+/// `Database`, so nothing else has to know this happened.
+#[tauri::command]
+pub fn security_unlock(
+    app: AppHandle,
+    db: State<'_, Database>,
+    vault: State<'_, Vault>,
+    recovery: String,
+) -> AppResult<SecurityStatus> {
+    let key = crate::db::DatabaseKey::parse(&recovery).ok_or_else(|| {
+        AppError::Locked(
+            "that is not a recovery key: it should be 64 letters and digits".to_owned(),
+        )
+    })?;
+    let path = vault.path.clone();
+    let connection = crate::db::vault::unlock(&path, &key)
+        .map_err(|_| AppError::Locked("that key does not open these notes".to_owned()))?;
+    db.adopt(connection)?;
+
+    vault.with(|state| {
+        state.protection = crate::db::Protection::On;
+        state.detail = String::new();
+        state.key = Some(key.clone());
+    });
+    log::info!("db: the notes were unlocked with a recovery key");
+    settings_after_unlock(&app, &db);
+    Ok(security_status(vault))
+}
+
+/// Give up on a database nobody has the key for and start again.
+///
+/// The old file is renamed rather than deleted, so a key found next week still
+/// has something to open.
+#[tauri::command]
+pub fn security_start_fresh(
+    app: AppHandle,
+    db: State<'_, Database>,
+    vault: State<'_, Vault>,
+) -> AppResult<SecurityStatus> {
+    let locked = vault.with(|state| state.protection == crate::db::Protection::Locked);
+    if !locked {
+        return Err(AppError::Locked(
+            "the notes are not locked, so there is nothing to set aside".to_owned(),
+        ));
+    }
+
+    let path = vault.path.clone();
+    let (aside, connection, opened) = crate::db::vault::set_aside(&path)?;
+    db.adopt(connection)?;
+    log::warn!("db: the locked notes were set aside as {}", aside.display());
+    vault.with(|state| *state = opened);
+    settings_after_unlock(&app, &db);
+    Ok(security_status(vault))
+}
+
+/// After the database underneath the app changes, the settings in it are a
+/// different set: tell the frontend, so it is not showing the empty defaults the
+/// locked database had.
+fn settings_after_unlock(app: &AppHandle, db: &Database) {
+    let Ok(settings) = db.with(settings::get) else {
+        return;
+    };
+    if let Err(error) = app.emit(SETTINGS_CHANGED_EVENT, &settings) {
+        log::error!("settings: failed to emit change after unlock: {error}");
+    }
+}
+
 /// `std::env::consts::OS` is lowercase and terse; this is the same thing spelled
 /// the way the platform spells itself. Anything unknown is passed through rather
 /// than guessed at.
@@ -344,6 +481,12 @@ pub fn settings_update(
         {
             dock.set_timings(updated.timings());
         }
+    }
+
+    if let Some(hidden) = patch.privacy_hide_from_capture
+        && let Some(window) = app.get_webview_window(crate::dock::DOCK_WINDOW_LABEL)
+    {
+        crate::platform::set_hidden_from_capture(&window, hidden);
     }
 
     if let Some(accelerator) = patch.shortcut_new_note.as_deref() {

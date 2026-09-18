@@ -57,7 +57,7 @@ mod tests {
         let current = dir.join("new.db");
 
         let id = {
-            let db = Database::open(&previous).expect("open");
+            let db = Database::open_with_key(&previous, None).expect("open");
             db.with(|c| notes::create(c, NoteColor::Mint, now_ms()))
                 .expect("create")
                 .id
@@ -73,7 +73,7 @@ mod tests {
             .expect("user_version");
         assert_eq!(version, migrations::latest_version());
 
-        let opened = Database::open(&current).expect("reopen");
+        let opened = Database::open_with_key(&current, None).expect("reopen");
         let listed = opened.with(notes::list).expect("list");
         assert_eq!(listed.len(), 1);
         assert_eq!(listed[0].id, id);
@@ -96,11 +96,11 @@ mod tests {
         let previous = dir.join("old.db");
         let current = dir.join("new.db");
 
-        Database::open(&previous)
+        Database::open_with_key(&previous, None)
             .expect("open")
             .with(|c| notes::create(c, NoteColor::Mint, now_ms()))
             .expect("create");
-        let kept = Database::open(&current)
+        let kept = Database::open_with_key(&current, None)
             .expect("open")
             .with(|c| notes::create(c, NoteColor::Blue, now_ms()))
             .expect("create")
@@ -108,7 +108,7 @@ mod tests {
 
         assert!(!adopt_database(&previous, &current).expect("adopt"));
 
-        let listed = Database::open(&current)
+        let listed = Database::open_with_key(&current, None)
             .expect("reopen")
             .with(notes::list)
             .expect("list");

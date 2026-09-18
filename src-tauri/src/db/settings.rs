@@ -91,6 +91,13 @@ pub struct Settings {
     /// Not in brief 9.2: a system notification when a task is due.
     #[serde(rename = "tasks.reminders")]
     pub tasks_reminders: bool,
+    /// Keep the panel out of screen shares, recordings and screenshots.
+    ///
+    /// On by default: a widget that slides out on hover is easy to open by
+    /// accident while presenting, and what it slides out is exactly the sort of
+    /// thing nobody meant to show. Turning it off is a deliberate act.
+    #[serde(rename = "privacy.hideFromCapture")]
+    pub privacy_hide_from_capture: bool,
     /// Not in brief 9.2: how see-through the panel's surface is, as a percentage
     /// from 0 (solid, the brief's default) to `MAX_PANEL_TRANSLUCENCY`.
     #[serde(rename = "panel.translucency")]
@@ -181,6 +188,7 @@ impl Default for Settings {
             shortcut_new_note: "CmdOrCtrl+Alt+N".to_owned(),
             // Both asked for by the owner.
             tasks_reminders: true,
+            privacy_hide_from_capture: true,
             panel_translucency: 0,
             // The classic lengths, which is what the Focus tab shipped with.
             focus_focus_minutes: 25,
@@ -227,6 +235,8 @@ pub struct SettingsPatch {
     pub shortcut_new_note: Option<String>,
     #[serde(rename = "tasks.reminders")]
     pub tasks_reminders: Option<bool>,
+    #[serde(rename = "privacy.hideFromCapture")]
+    pub privacy_hide_from_capture: Option<bool>,
     #[serde(rename = "panel.translucency")]
     pub panel_translucency: Option<u8>,
     #[serde(rename = "focus.focusMinutes")]
@@ -305,6 +315,11 @@ pub fn get(connection: &Connection) -> AppResult<Settings> {
         )?,
         shortcut_new_note: read(connection, "shortcut.newNote", defaults.shortcut_new_note)?,
         tasks_reminders: read(connection, "tasks.reminders", defaults.tasks_reminders)?,
+        privacy_hide_from_capture: read(
+            connection,
+            "privacy.hideFromCapture",
+            defaults.privacy_hide_from_capture,
+        )?,
         panel_translucency: read(
             connection,
             "panel.translucency",
@@ -397,6 +412,9 @@ pub fn update(connection: &Connection, patch: &SettingsPatch) -> AppResult<Setti
     }
     if let Some(value) = patch.tasks_reminders {
         write(connection, "tasks.reminders", &value)?;
+    }
+    if let Some(value) = patch.privacy_hide_from_capture {
+        write(connection, "privacy.hideFromCapture", &value)?;
     }
     if let Some(value) = patch.panel_translucency {
         write(

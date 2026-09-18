@@ -12,8 +12,11 @@ import {
   monitorsList,
   notesExport,
   openUrl,
+  securityRecoveryKey,
+  securityStatus,
   shortcutSet,
   type AppInfo,
+  type SecurityStatus,
   type Settings,
 } from "../lib/ipc";
 import { copyText } from "../lib/clipboard";
@@ -590,10 +593,19 @@ export function SettingsView({ onClose }: SettingsViewProps) {
   const [exportedTo, setExportedTo] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
   const [about, setAbout] = useState<AppInfo | null>(null);
+  const [security, setSecurity] = useState<SecurityStatus | null>(null);
+  const [recoveryKey, setRecoveryKey] = useState<string | null>(null);
+  const [copiedKey, setCopiedKey] = useState(false);
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     void monitorsList().then(setMonitors);
+    void securityStatus()
+      .then(setSecurity)
+      .catch((error: unknown) => {
+        // Same rule as About: a capability that cannot be read is not claimed.
+        console.error("settings: could not read the security status", error);
+      });
     void appInfo()
       .then(setAbout)
       .catch((error: unknown) => {
@@ -817,6 +829,81 @@ export function SettingsView({ onClose }: SettingsViewProps) {
           {...fieldProps}
         />
       </Group>
+
+      {security !== null && (
+        <Group title="Privacy">
+          {security.captureProtection && (
+            <SwitchSetting
+              label="Hide from screen sharing"
+              description="Keep the panel out of screen shares, recordings and screenshots."
+              checked={settings["privacy.hideFromCapture"]}
+              onChange={(checked) => {
+                void patch({ "privacy.hideFromCapture": checked });
+              }}
+              {...fieldProps}
+            />
+          )}
+
+          <div className={styles.row}>
+            <Label
+              text="Notes on disk"
+              description={
+                security.protection === "on"
+                  ? "Encrypted. The key is in this system's keychain."
+                  : `Not encrypted: ${security.detail}.`
+              }
+            />
+          </div>
+
+          {/* Only worth showing while there is a key to show: it is what gets
+              the notes back on another machine, or after a keychain is reset. */}
+          {security.protection === "on" && (
+            <div className={styles.row}>
+              <Label
+                text="Recovery key"
+                description={
+                  recoveryKey === null
+                    ? "Keep this somewhere safe. Without it, a lost keychain means lost notes."
+                    : undefined
+                }
+              />
+              {recoveryKey === null ? (
+                <button
+                  type="button"
+                  className={styles.action}
+                  onClick={() => {
+                    void securityRecoveryKey()
+                      .then(setRecoveryKey)
+                      .catch((error: unknown) => {
+                        console.error("settings: could not read the recovery key", error);
+                      });
+                  }}
+                >
+                  Reveal
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className={styles.action}
+                  onClick={() => {
+                    void copyText(recoveryKey).then((ok) => {
+                      setCopiedKey(ok);
+                    });
+                  }}
+                >
+                  {copiedKey ? "Copied" : "Copy"}
+                </button>
+              )}
+            </div>
+          )}
+
+          {recoveryKey !== null && (
+            <div className={styles.row}>
+              <code className={styles.recovery}>{recoveryKey}</code>
+            </div>
+          )}
+        </Group>
+      )}
 
       <Group title="General">
         <SwitchSetting

@@ -15,6 +15,8 @@ import {
   onNewNoteRequested,
   onQuitRequested,
   onSettingsChanged,
+  securityStatus,
+  type SecurityStatus,
 } from "../lib/ipc";
 import { facetColors, filterNotes } from "../lib/notes";
 import { openTaskCount, taskReminders } from "../lib/tasks";
@@ -23,6 +25,7 @@ import { useTasksStore } from "../store/tasks";
 import { pomodoroReminder, usePomodoroStore } from "../store/pomodoro";
 import { moveCardFocus } from "../notes/cardFocus";
 import { ArchiveView } from "../notes/ArchiveView";
+import { LockedView } from "../notes/LockedView";
 import { ColorFilter } from "../notes/ColorFilter";
 import { EmptyState } from "../notes/EmptyState";
 import { NoteEditor } from "../notes/NoteEditor";
@@ -83,6 +86,9 @@ export function Panel({ className }: PanelProps) {
   const panelRef = useRef<HTMLElement>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [showArchive, setShowArchive] = useState(false);
+  // Null until Rust answers. The panel draws its normal self meanwhile: a flash
+  // of the notes list is better than a flash of a lock on every open.
+  const [security, setSecurity] = useState<SecurityStatus | null>(null);
 
   const keepOpen = useDockStore((state) => state.keepOpen);
   const setKeepOpen = useDockStore((state) => state.setKeepOpen);
@@ -133,6 +139,13 @@ export function Panel({ className }: PanelProps) {
     void loadTasks();
     void loadSettings();
     void loadArchive();
+    void securityStatus()
+      .then(setSecurity)
+      .catch((error: unknown) => {
+        // The notes are already loaded or not; this only decides whether to say
+        // why they are empty.
+        console.error("panel: could not read the security status", error);
+      });
   }, [load, loadTasks, loadSettings, loadArchive]);
 
   useEffect(
@@ -425,6 +438,33 @@ export function Panel({ className }: PanelProps) {
     // A pinned note opens to read, as its card does; any other note to edit.
     void expand(id, { edit: target ? !target.pinned : true });
   };
+
+  if (security?.protection === "locked") {
+    // The whole panel, header and toolbar included. Nothing above the locked
+    // view would do what it says: the database behind every one of those
+    // controls is an empty in-memory stand-in, so a New note button would take
+    // a note and lose it, and Settings would offer to change defaults that
+    // belong to nothing.
+    return (
+      <section
+        ref={panelRef}
+        className={cx(className, styles.panel)}
+        data-slide="true"
+        data-panel=""
+      >
+        <LockedView
+          status={security}
+          onUnlocked={(status) => {
+            setSecurity(status);
+            void load();
+            void loadTasks();
+            void loadSettings();
+            void loadArchive();
+          }}
+        />
+      </section>
+    );
+  }
 
   return (
     <section

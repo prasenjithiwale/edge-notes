@@ -31,6 +31,11 @@ pub enum AppError {
     ShortcutUnavailable(String),
     #[error("launch at login could not be changed: {0}")]
     Autostart(String),
+    /// The notes are encrypted and the key on offer does not open them
+    /// (`db::vault`). Its own code, because the panel's locked view has to tell
+    /// a wrong key from a database that would not open at all.
+    #[error("{0}")]
+    Locked(String),
 }
 
 impl AppError {
@@ -50,6 +55,7 @@ impl AppError {
             Self::InvalidUrl(_) => "invalid_url",
             Self::ShortcutUnavailable(_) => "shortcut_unavailable",
             Self::Autostart(_) => "autostart",
+            Self::Locked(_) => "locked",
         }
     }
 }

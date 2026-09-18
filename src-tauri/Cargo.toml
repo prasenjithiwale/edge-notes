@@ -1,6 +1,6 @@
 [package]
 name = "ledge"
-version = "0.5.1"
+version = "0.6.0"
 description = "Edge-docked notes widget"
 edition = "2024"
 rust-version = "1.85"
@@ -17,7 +17,11 @@ tauri = { version = "2.11.5", features = ["image-png", "macos-private-api", "tra
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.151"
 thiserror = "2.0.20"
-rusqlite = { version = "0.40.2", features = ["bundled"] }
+# SQLCipher rather than plain SQLite, so `notes.db` is encrypted at rest with a
+# key from the OS keychain (`db::vault`). `vendored-openssl` builds OpenSSL as
+# part of the crate: the alternative links whatever the build machine happens to
+# have, which for a released binary is not a choice at all.
+rusqlite = { version = "0.40.2", features = ["bundled-sqlcipher-vendored-openssl"] }
 uuid = { version = "1.26.1", features = ["v7"] }
 tauri-plugin-single-instance = "2.4.4"
 tauri-plugin-autostart = "2.5.1"
@@ -27,8 +31,21 @@ log = "0.4.34"
 tauri-plugin-notification = "2.4.0"
 
 # Pinned per build brief section 13: community git dependency, isolated in platform/macos.rs.
+# The database key lives in the platform's own credential store. Each backend is
+# a feature: with none of them the crate compiles to a store that keeps nothing,
+# which would look like it worked and protect nothing.
 [target.'cfg(target_os = "macos")'.dependencies]
 tauri-nspanel = { git = "https://github.com/ahkohd/tauri-nspanel", rev = "c9ec2130422200f0863b23dfdad02b133a529b07" }
+keyring = { version = "3.6.3", features = ["apple-native"] }
+
+[target.'cfg(target_os = "windows")'.dependencies]
+keyring = { version = "3.6.3", features = ["windows-native"] }
+
+# Secret Service over D-Bus, not `linux-native`: the kernel keyring it uses does
+# not survive a reboot, and a key that disappears overnight locks the notes out.
+# `vendored` builds libdbus in, so an AppImage does not depend on the host's.
+[target.'cfg(target_os = "linux")'.dependencies]
+keyring = { version = "3.6.3", features = ["sync-secret-service", "crypto-rust", "vendored"] }
 
 [profile.release]
 codegen-units = 1

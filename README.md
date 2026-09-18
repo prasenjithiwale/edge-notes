@@ -266,8 +266,8 @@ WEBKIT_DISABLE_DMABUF_RENDERER=1 ledge
   unit tests, but no one has run it on those systems.
 - **Only one monitor's worth of scaling has been seen.** 150% and 200% scaling
   and multi-monitor placement are covered by unit tests, not by hardware.
-- Notes are plain text. No markdown rendering, checklists, images, reminders,
-  tags or folders.
+- No images, tags or folders. (Markdown, checklists, tasks with dates and
+  repeats, reminders and a focus timer all arrived after this list was written.)
 - There is no sync. Notes live in one SQLite file on one machine, though the
   schema is built for sync later.
 
@@ -275,15 +275,24 @@ WEBKIT_DISABLE_DMABUF_RENDERER=1 ledge
 
 One SQLite database, in the usual application data folder:
 
-| Platform | Path                                                       |
-| -------- | ---------------------------------------------------------- |
-| macOS    | `~/Library/Application Support/dev.edgenotes.app/notes.db` |
-| Windows  | `%APPDATA%\dev.edgenotes.app\notes.db`                     |
-| Linux    | `~/.local/share/dev.edgenotes.app/notes.db`                |
+| Platform | Path                                                  |
+| -------- | ----------------------------------------------------- |
+| macOS    | `~/Library/Application Support/dev.ledge.app/notes.db` |
+| Windows  | `%APPDATA%\dev.ledge.app\notes.db`                     |
+| Linux    | `~/.local/share/dev.ledge.app/notes.db`                |
+
+From 0.6.0 that file is **encrypted** — SQLCipher, AES-256, schema included —
+with the key in the macOS Keychain, Windows Credential Manager or the Linux
+Secret Service. An existing database is converted the first time 0.6.0 opens it.
+Settings → Privacy shows the key as a recovery key: keep it somewhere, because a
+lost keychain with no copy of the key means notes nobody can read, this app
+included. Where a system has no credential store at all, the notes stay in the
+clear and Settings says so rather than pretending otherwise.
 
 Deleting a note is a soft delete, so undo works; rows are purged for good 30 days
 later. Settings → Export writes every note as Markdown plus a `notes.json`
-backup into your documents folder.
+backup into your documents folder — in the clear, by design, because an export
+you cannot open is not a backup.
 
 ## Layout
 

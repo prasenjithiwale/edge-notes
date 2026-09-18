@@ -34,6 +34,7 @@ Work after M5, owner-requested, newest last:
 | The archive, and a status that takes effect at once | 18 Sep 2026 | Released in **v0.4.2**. Both owner-reported; checklist below not run on screen (machine locked). |
 | Headings, note titles, and deleting for good | 18 Sep 2026 | Released in **v0.5.0**. `@lexical/rich-text` approved by the owner the same day. |
 | The tab flashed inwards as the panel opened (macOS) | 18 Sep 2026 | Released in **v0.5.1**; measured frame by frame before and after. Windows and Linux still have the two-call split. |
+| Encryption at rest, no panel in screen shares, a vivid palette | 18 Sep 2026 | Built; ideas 1 and 2. Verified on the owner's own database and on screen. |
 
 **Releases:** [v0.0.1](https://github.com/prasenjithiwale/edge-notes/releases/tag/v0.0.1)
 and [v0.0.2](https://github.com/prasenjithiwale/edge-notes/releases/tag/v0.0.2),
@@ -3680,6 +3681,118 @@ is unchanged: it slides out to nothing with no blink at the end.
 - [ ] Dock on the left: the same
 - [ ] Quit and relaunch: the tab is visible (a cover that was never lifted would
       show up here)
+
+## Encryption at rest, a panel out of screen shares, and a palette with colour in it (18 Sep 2026)
+
+Three pieces, asked for together: ideas 1 and 2 from
+[improvement-ideas.md](improvement-ideas.md), and "the note colours look very
+dull".
+
+### Idea 1: the panel is not in screen shares or screenshots
+
+`privacy.hideFromCapture`, on by default, applied through Tauri's content
+protection — `NSWindow.sharingType = .none` on macOS,
+`SetWindowDisplayAffinity` on Windows. It is set after the NSPanel conversion and
+survives it: the panel is the same window object with a different class, and
+`sharingType` is a property of the object.
+
+**Verified on screen**, which is the only way to verify it: with the panel open
+and the window server reporting it at (1526, 158, 394, 664), a `screencapture` of
+exactly that rectangle contains the editor behind it and nothing else. Recordings
+taken twenty minutes earlier, before the change, show the panel in full.
+
+Linux has no equivalent — neither X11 nor the Wayland protocols this app can
+reach let a window ask not to be captured — so `capture_protection_supported()`
+is false there and the switch is not drawn at all. A switch that does nothing is
+worse than no switch.
+
+A side effect worth knowing: **the agent's own screenshot rig can no longer see
+the panel either.** Checking the panel's pixels now means turning the setting off
+first, or looking at the tokens through a rendered swatch rather than the app.
+
+### Idea 2: the notes are encrypted, with the key in the keychain
+
+`notes.db` is SQLCipher now: AES-256, page by page, schema included. The key is
+32 bytes from `randomblob` — SQLite's own CSPRNG, which SQLCipher backs with
+OpenSSL's, so there is no random-number dependency for a single line — and it
+lives in the platform's credential store through `keyring`. Both were approved by
+the owner, along with the choice of SQLCipher over encrypting note text by hand
+(which would have left ids, timestamps, colours and the schema readable).
+
+`db/vault.rs` is the whole of it. The startup decision is a four-way match on
+"is there a key" against "is there a database, and is it encrypted":
+
+| | no database | plaintext database | encrypted database |
+|---|---|---|---|
+| **key in the store** | new encrypted database | carried across once | opened |
+| **store empty** | key made and stored, then encrypted | key made, carried across | **locked** |
+| **no store at all** | plaintext, and Settings says so | left in the clear | **locked** |
+
+Three things it took a probe to get right:
+
+- **`sqlcipher_export` does not carry `user_version`.** It copies the schema and
+  the rows and leaves the migration number at 0, so every migration would run
+  again on a database that already has them. `encrypt_file` copies it across
+  explicitly and a test asserts it.
+- **The key is stored before anything is encrypted with it.** A key that could
+  not be kept is a database that could not be opened again; if the store refuses,
+  nothing is encrypted and the reason is shown.
+- **`keyring` has no default backend.** With no platform feature it compiles to a
+  store that keeps nothing and reports success — the first probe "round-tripped"
+  a secret that was never in the Keychain at all. The features are declared per
+  platform: `apple-native`, `windows-native`, and `sync-secret-service` on Linux
+  rather than `linux-native`, whose kernel keyring does not survive a reboot.
+
+**Losing the key.** It is the one thing in the app that cannot be undone, so it is
+handled three ways: Settings › Privacy shows the key as eight groups of eight to
+write down; a database whose key is missing opens `Locked` and `LockedView` takes
+the whole panel — header and toolbar included, because every control there would
+act on the empty in-memory stand-in behind it; and "Start fresh" **renames** the
+locked file rather than deleting it. `security_unlock` swaps the real connection
+in underneath every command that already holds the `Database`, so nothing else in
+the app has to know it happened.
+
+**Verified on the owner's own database**, which the dev server migrated in place
+while this was being built:
+
+- the file's header is random bytes, not `SQLite format 3`
+- `strings` finds none of the note text in either `notes.db` or `notes.db-wal`
+- opened with the key from the Keychain: `user_version 4`, 9 notes (2 live),
+  2 tasks, 11 settings rows — everything that was there before
+- no `notes.db.plaintext-backup` left behind, and no errors or warnings in the log
+
+### The palette has colour in it now
+
+The sixteen colours sat at OKLCH chroma 0.026–0.062, which is why they read as
+one pale wash: the hues were fine and the saturation was not there. Each card is
+rebuilt at the same hue with two to four times the chroma, and lightness now
+follows the hue — sRGB has no pale saturated blue, so a blue card sits deeper
+than a yellow one.
+
+Equal chroma is not equal vividness: the first attempt held all sixteen to one
+number and left yellow looking like khaki while the greens shouted, so the
+targets are per hue, and the neutrals (`sand`, `gray`) are deliberately left
+neutral. The ink is the same hue, deepened until the card clears AA three ways
+over — as a title, at `--note-secondary-opacity`, and behind the inline-code wash.
+
+One thing fell out of it that the tests caught: deeper cards cost
+`--priority-medium` its 3:1, so the amber flag was darkened to `#825100` to match.
+`contrast.test.ts` failed on six cards before it was.
+
+### Checklist
+
+- [x] The panel does not appear in a screenshot (measured)
+- [x] The notes are unreadable on disk and unchanged in the app (measured)
+- [ ] Settings › Privacy: the switch turns capture protection off again, and a
+      screenshot then shows the panel
+- [ ] Settings › Privacy: Reveal shows a key of eight groups of eight, and Copy
+      copies it
+- [ ] Delete the keychain item (`security delete-generic-password -s dev.ledge.app
+      -a notes.db`), restart: the panel says the notes are locked, and the key
+      just copied unlocks them
+- [ ] "Start fresh instead" asks first, and leaves a `notes.db.locked-…` file
+- [ ] The sixteen colours look right on a real screen, in both themes
+- [ ] A note with no colour is still plainly a card
 
 ## M0 acceptance checklist
 
