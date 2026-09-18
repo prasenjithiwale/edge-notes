@@ -5,11 +5,14 @@ import { BLOCKS } from "./SlashMenu";
 /** What the menu offers, and how it decides what you meant. */
 describe("the slash menu's blocks", () => {
   it("offers only what the note's storage format can hold", () => {
-    // A menu item that wrote something the Markdown dialect cannot express
-    // would be lost on the next save. Headings are the obvious absentee: they
-    // need the dialect to learn `#` first.
+    // A menu item that wrote something the Markdown dialect cannot express would
+    // be lost on the next save. Headings joined the dialect in 0.5.0 and stop at
+    // three, because `#### ` is not something it can write back.
     expect(BLOCKS.map((block) => block.command)).toEqual([
       "text",
+      "heading1",
+      "heading2",
+      "heading3",
       "task",
       "bullet",
       "ordered",

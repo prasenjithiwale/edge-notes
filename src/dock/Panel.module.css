@@ -98,3 +98,12 @@
   padding: 0 8px;
   border-top: 1px solid var(--border);
 }
+
+/* What the panel keeps about itself, together at the leading edge: Settings,
+   then the archive beside it. Keep open stays at the far end, where it is the
+   one control that changes how the panel behaves rather than what it shows. */
+.toolbarGroup {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}

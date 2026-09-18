@@ -1,5 +1,5 @@
-import { useEffect } from "react";
-import { ArrowLeft, ListChecks, StickyNote } from "lucide-react";
+import { useEffect, useState } from "react";
+import { ArrowLeft, ListChecks, StickyNote, Trash2 } from "lucide-react";
 
 import { IconButton } from "../components/IconButton";
 import { cx } from "../lib/cx";
@@ -63,11 +63,23 @@ export function keptLabel(purgeAt: number, now: number): string {
 
 function Row({ item, now }: { item: ArchivedItem; now: number }) {
   const restore = useArchiveStore((state) => state.restore);
+  const purge = useArchiveStore((state) => state.purge);
   const restoringId = useArchiveStore((state) => state.restoringId);
   const busy = restoringId === item.id;
+  /**
+   * Armed to delete for good.
+   *
+   * Everything else in the app answers a mistake with an undo, which is better
+   * than a confirmation (brief 6.9) — but there is nothing behind this one, so
+   * it is the single place a question is the right answer. Asked in the row
+   * rather than in a dialog: the panel has no modals, and the row is what the
+   * question is about.
+   */
+  const [arming, setArming] = useState(false);
 
   const title = headline(item.text);
   const rest = item.kind === "note" ? preview(item.text) : "";
+  const named = title === "" ? `empty ${item.kind}` : title;
 
   return (
     <li className={styles.row}>
@@ -93,19 +105,56 @@ function Row({ item, now }: { item: ArchivedItem; now: number }) {
         </span>
       </span>
 
-      <button
-        type="button"
-        className={styles.restore}
-        disabled={restoringId !== null}
-        // Named for the thing it puts back: a column of buttons all saying
-        // "Restore" says nothing on its own to anyone reading it aloud.
-        aria-label={`Restore ${title === "" ? `empty ${item.kind}` : title}`}
-        onClick={() => {
-          void restore(item);
-        }}
-      >
-        {busy ? "Restoring" : "Restore"}
-      </button>
+      {arming ? (
+        <span className={styles.actions}>
+          <button
+            type="button"
+            className={cx(styles.action, styles.danger)}
+            aria-label={`Delete ${named} for good`}
+            onClick={() => {
+              void purge(item);
+            }}
+          >
+            Delete for good
+          </button>
+          <button
+            type="button"
+            className={styles.action}
+            onClick={() => {
+              setArming(false);
+            }}
+          >
+            Keep
+          </button>
+        </span>
+      ) : (
+        <span className={styles.actions}>
+          <button
+            type="button"
+            className={styles.action}
+            disabled={restoringId !== null}
+            // Named for the thing it puts back: a column of buttons all saying
+            // "Restore" says nothing on its own to anyone reading it aloud.
+            aria-label={`Restore ${named}`}
+            onClick={() => {
+              void restore(item);
+            }}
+          >
+            {busy ? "Restoring" : "Restore"}
+          </button>
+          <button
+            type="button"
+            className={styles.discard}
+            aria-label={`Delete ${named} permanently`}
+            title="Delete permanently"
+            onClick={() => {
+              setArming(true);
+            }}
+          >
+            <Trash2 size={13} strokeWidth={1.75} aria-hidden="true" />
+          </button>
+        </span>
+      )}
     </li>
   );
 }
@@ -154,7 +203,8 @@ export function ArchiveView({ onClose }: ArchiveViewProps) {
         <>
           <p className={styles.note}>
             Deleted notes and tasks are kept for thirty days. Restoring one puts it
-            back where it was.
+            back where it was; deleting it here is the one thing in Ledge that
+            cannot be undone.
           </p>
           <ul className={styles.list}>
             {items.map((item) => (

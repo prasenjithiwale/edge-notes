@@ -15,6 +15,35 @@ describe("parseLine", () => {
     expect(parseLine("Just text")).toMatchObject({ kind: "paragraph", text: "Just text" });
   });
 
+  it("reads the three heading levels, with the level on the line", () => {
+    expect(parseLine("# Title")).toMatchObject({ kind: "heading", level: 1, text: "Title" });
+    expect(parseLine("## Section")).toMatchObject({
+      kind: "heading",
+      level: 2,
+      text: "Section",
+    });
+    expect(parseLine("### Smaller")).toMatchObject({ kind: "heading", level: 3 });
+    // The prefix is what has to be written back to reproduce the line.
+    expect(parseLine("## Section").prefix).toBe("## ");
+  });
+
+  /**
+   * Three levels is what the dialect can write, so a fourth hash is text. So is
+   * a hash with nothing after it, and an indented one: a heading inside a list
+   * is not something this dialect can express.
+   */
+  it("leaves anything it cannot write back as a paragraph", () => {
+    for (const line of ["#### Four", "#NoSpace", "  # indented", "#", "text # middle"]) {
+      expect(parseLine(line), line).toMatchObject({ kind: "paragraph", level: 0, text: line });
+    }
+  });
+
+  it("gives every other kind of line a level of zero", () => {
+    for (const line of ["- milk", "1. first", "- [ ] task", "plain"]) {
+      expect(parseLine(line).level, line).toBe(0);
+    }
+  });
+
   it("reads bullets with any of the three markers", () => {
     for (const marker of ["-", "*", "+"]) {
       expect(parseLine(`${marker} milk`)).toMatchObject({

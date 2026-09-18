@@ -4,6 +4,9 @@ import {
   Bold,
   Braces,
   Code,
+  Heading1,
+  Heading2,
+  Heading3,
   Italic,
   List,
   ListChecks,
@@ -86,6 +89,9 @@ class BlockOption extends MenuOption {
  */
 const BLOCKS: readonly BlockOption[] = [
   new BlockOption("text", "block", "Text", "Plain paragraph", ["paragraph", "plain", "body"], Type),
+  new BlockOption("heading1", "block", "Heading 1", "A note's title", ["h1", "title", "heading"], Heading1),
+  new BlockOption("heading2", "block", "Heading 2", "A section", ["h2", "section", "heading"], Heading2),
+  new BlockOption("heading3", "block", "Heading 3", "A smaller section", ["h3", "heading"], Heading3),
   new BlockOption("task", "block", "To-do list", "Tick things off", ["todo", "task", "check", "box"], ListChecks),
   new BlockOption("bullet", "block", "Bulleted list", "A simple list", ["ul", "unordered", "bullet"], List),
   new BlockOption("ordered", "block", "Numbered list", "A list in order", ["ol", "number", "step"], ListOrdered),

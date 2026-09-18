@@ -111,23 +111,66 @@
   color: var(--text-tertiary);
 }
 
-.restore {
+.actions {
   flex: none;
   align-self: center;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.action {
   border: 1px solid var(--border);
   border-radius: var(--radius-control);
   background: var(--surface);
   color: var(--text-primary);
   font-size: 11px;
   padding: 3px 8px;
+  white-space: nowrap;
 }
 
-.restore:hover:not(:disabled) {
+.action:hover:not(:disabled) {
   background: var(--surface-sunken);
 }
 
-.restore:disabled {
+.action:disabled {
   color: var(--text-tertiary);
+}
+
+/* The one irreversible thing in the app, and the only red in the chrome: the
+   priority flags and the focus light are the other two exceptions to brief
+   7.1's neutral chrome, and each is there because the alternative is someone
+   not noticing. It is only ever drawn on the armed step, never on the icon that
+   arms it — asking the question is not the danger. */
+.danger {
+  border-color: var(--priority-high);
+  color: var(--priority-high);
+}
+
+.danger:hover {
+  background: var(--priority-high);
+  color: var(--surface);
+}
+
+/* The bin that asks. Quiet by default: the row is about restoring, and this is
+   the other, rarer thing you might want. */
+.discard {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--text-tertiary);
+}
+
+.discard:hover {
+  border-color: var(--border);
+  background: var(--surface);
+  color: var(--text-secondary);
 }
 
 /* Reachable only by restoring the last thing while the archive is open: the

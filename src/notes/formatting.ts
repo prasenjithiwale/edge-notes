@@ -17,11 +17,18 @@ export interface FormatShortcut {
   /** `KeyboardEvent.code`, because Shift turns `7` into `&` in `key`. */
   code: string;
   shift: boolean;
+  /** Option on macOS, Alt elsewhere. Only the headings use it. */
+  alt?: boolean;
   /** How the key is written in a tooltip. */
   keyLabel: string;
 }
 
 export const FORMAT_SHORTCUTS: readonly FormatShortcut[] = [
+  // The headings take Option rather than Shift: ⌘⇧1 is not free everywhere, and
+  // ⌘⌥1 is the key every editor that has headings already uses for them.
+  { command: "heading1", label: "Heading 1", code: "Digit1", shift: false, alt: true, keyLabel: "1" },
+  { command: "heading2", label: "Heading 2", code: "Digit2", shift: false, alt: true, keyLabel: "2" },
+  { command: "heading3", label: "Heading 3", code: "Digit3", shift: false, alt: true, keyLabel: "3" },
   { command: "bold", label: "Bold", code: "KeyB", shift: false, keyLabel: "B" },
   { command: "italic", label: "Italic", code: "KeyI", shift: false, keyLabel: "I" },
   { command: "strike", label: "Strikethrough", code: "KeyX", shift: true, keyLabel: "X" },
@@ -39,11 +46,14 @@ type KeyInput = Pick<
 
 /** The formatting command a key press asks for, if any. */
 export function formatCommandForKey(event: KeyInput): FormatCommand | null {
-  if (!(event.metaKey || event.ctrlKey) || event.altKey) {
+  if (!(event.metaKey || event.ctrlKey)) {
     return null;
   }
   const match = FORMAT_SHORTCUTS.find(
-    (shortcut) => shortcut.code === event.code && shortcut.shift === event.shiftKey,
+    (shortcut) =>
+      shortcut.code === event.code &&
+      shortcut.shift === event.shiftKey &&
+      (shortcut.alt ?? false) === event.altKey,
   );
   return match?.command ?? null;
 }
@@ -52,10 +62,10 @@ function isMac(): boolean {
   return typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.userAgent);
 }
 
-/** "⌘⇧X" on macOS, "Ctrl+Shift+X" elsewhere. */
+/** "⌘⇧X" on macOS, "Ctrl+Shift+X" elsewhere; "⌘⌥1" and "Ctrl+Alt+1" for headings. */
 export function shortcutLabel(shortcut: FormatShortcut, mac = isMac()): string {
   if (mac) {
-    return `⌘${shortcut.shift ? "⇧" : ""}${shortcut.keyLabel}`;
+    return `⌘${shortcut.alt === true ? "⌥" : ""}${shortcut.shift ? "⇧" : ""}${shortcut.keyLabel}`;
   }
-  return `Ctrl+${shortcut.shift ? "Shift+" : ""}${shortcut.keyLabel}`;
+  return `Ctrl+${shortcut.alt === true ? "Alt+" : ""}${shortcut.shift ? "Shift+" : ""}${shortcut.keyLabel}`;
 }

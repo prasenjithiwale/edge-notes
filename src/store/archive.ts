@@ -1,6 +1,12 @@
 import { create } from "zustand";
 
-import { archiveList, notesRestore, tasksRestore, type ArchivedItem } from "../lib/ipc";
+import {
+  archiveList,
+  archivePurge,
+  notesRestore,
+  tasksRestore,
+  type ArchivedItem,
+} from "../lib/ipc";
 import { useNotesStore } from "./notes";
 import { useTasksStore } from "./tasks";
 
@@ -24,6 +30,7 @@ interface ArchiveStore {
 
   load: () => Promise<void>;
   restore: (item: ArchivedItem) => Promise<void>;
+  purge: (item: ArchivedItem) => Promise<void>;
 }
 
 export const useArchiveStore = create<ArchiveStore>((set, get) => ({
@@ -71,6 +78,23 @@ export const useArchiveStore = create<ArchiveStore>((set, get) => ({
       await get().load();
     } finally {
       set({ restoringId: null });
+    }
+  },
+
+  /**
+   * Delete one for good. The screen asks first — this is the only thing in the
+   * app with no way back, so it is the only thing that gets a confirmation
+   * rather than an undo.
+   */
+  purge: async (item) => {
+    try {
+      await archivePurge(item.id, item.kind);
+      set((state) => ({
+        items: state.items.filter((candidate) => candidate.id !== item.id),
+      }));
+    } catch (error: unknown) {
+      console.error("archive: delete failed", error);
+      await get().load();
     }
   },
 }));

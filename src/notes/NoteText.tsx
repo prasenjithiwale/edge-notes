@@ -212,7 +212,22 @@ export function LineRow({
   }
 
   return (
-    <div className={cx(styles.row, wrap && styles.wrap, className)}>
+    <div
+      className={cx(
+        styles.row,
+        wrap && styles.wrap,
+        // A heading is a heading wherever a note is shown: in the reader, on a
+        // locked card, and in the expanded panel. The card's own title class is
+        // still applied on top for the first line, which is how a note that
+        // opens with plain text keeps reading as having a title.
+        line.kind === "heading" && styles[`h${String(line.level)}`],
+        className,
+      )}
+      // Not an <h1>: a note is not a document outline, and a card full of real
+      // headings would put a dozen of them into the panel's heading order.
+      role={line.kind === "heading" ? "heading" : undefined}
+      aria-level={line.kind === "heading" ? line.level : undefined}
+    >
       {marker}
       <span
         className={cx(

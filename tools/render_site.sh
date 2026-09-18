@@ -271,10 +271,12 @@ features=$(
   feature expanded.png \
     "A note expanded to fill a large panel, with checkboxes, a numbered list and a shell code block." \
     "Write in rich text; keep plain Markdown" \
-    "<p>The editor is rich text — bold with <kbd>&#8984;B</kbd>, lists with
-     <kbd>&#8984;&#8679;8</kbd>, or type <kbd>/</kbd> for a menu of blocks. What is
-     stored is still Markdown, byte for byte, so a note is a file you could have
-     written by hand.</p>
+    "<p>The editor is rich text — headings with <kbd>&#8984;&#8997;1</kbd>, bold
+     with <kbd>&#8984;B</kbd>, lists with <kbd>&#8984;&#8679;8</kbd>, or type
+     <kbd>/</kbd> for a menu of blocks. A note's first line is its name in the
+     list, so a Heading 1 there is how it gets a title. What is stored is still
+     Markdown, byte for byte, so a note is a file you could have written by
+     hand.</p>
      <p>Code goes in a fenced block with a language of its own and syntax colour for
      sixteen of them. Need room? Expand the note and the panel itself grows.</p>" \
     wide

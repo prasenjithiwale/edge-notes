@@ -65,6 +65,34 @@ describe("loading", () => {
   });
 });
 
+describe("deleting for good", () => {
+  it("sends the id and the kind, and drops the row", async () => {
+    const task = item({ id: "task-1", kind: "task", text: "milk", color: null });
+    useArchiveStore.setState({ items: [item({ id: "note-1" }), task], loaded: true });
+
+    await useArchiveStore.getState().purge(task);
+
+    expect(calls("archive_purge")).toEqual([{ id: "task-1", kind: "task" }]);
+    expect(useArchiveStore.getState().items.map((entry) => entry.id)).toEqual(["note-1"]);
+  });
+
+  it("reads the list again when the delete fails", async () => {
+    invoke.mockImplementation((command: string) => {
+      if (command === "archive_purge") {
+        return Promise.reject(new Error("no"));
+      }
+      return Promise.resolve([]);
+    });
+    const quiet = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    useArchiveStore.setState({ items: [item({ id: "note-1" })], loaded: true });
+
+    await useArchiveStore.getState().purge(item({ id: "note-1" }));
+
+    expect(useArchiveStore.getState().items).toEqual([]);
+    quiet.mockRestore();
+  });
+});
+
 describe("restoring", () => {
   it("puts a note back, re-reads the notes and drops the row", async () => {
     useArchiveStore.setState({ items: [item({ id: "note-1" })], loaded: true });

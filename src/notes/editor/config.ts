@@ -2,12 +2,15 @@
  * What the note editor is made of: which node types exist, and the class names
  * the editor puts on them.
  *
- * The node list is deliberately short. A note has paragraphs, three kinds of
- * list, bare links and code blocks — no headings, no quotes, no tables — because
- * that is the whole of the Markdown dialect a note is stored in, and a node the
- * dialect cannot write is a node that would be lost on the next save.
+ * The node list is deliberately short. A note has paragraphs, headings of three
+ * levels, three kinds of list, bare links and code blocks — no quotes, no
+ * tables — because that is the whole of the Markdown dialect a note is stored
+ * in, and a node the dialect cannot write is a node that would be lost on the
+ * next save. Headings joined the dialect in 0.5.0; `####` still cannot be
+ * written, so there is no h4.
  */
 import { ListItemNode, ListNode } from "@lexical/list";
+import { HeadingNode } from "@lexical/rich-text";
 import { AutoLinkNode, LinkNode } from "@lexical/link";
 import type { EditorThemeClasses, Klass, LexicalNode } from "lexical";
 
@@ -23,6 +26,7 @@ function cls(name: string | undefined): string {
 }
 
 export const EDITOR_NODES: Klass<LexicalNode>[] = [
+  HeadingNode,
   ListNode,
   ListItemNode,
   LinkNode,
@@ -32,6 +36,11 @@ export const EDITOR_NODES: Klass<LexicalNode>[] = [
 
 export const EDITOR_THEME: EditorThemeClasses = {
   paragraph: cls(styles.paragraph),
+  heading: {
+    h1: cls(styles.h1),
+    h2: cls(styles.h2),
+    h3: cls(styles.h3),
+  },
   link: cls(styles.link),
   text: {
     bold: cls(styles.bold),

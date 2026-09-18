@@ -32,6 +32,7 @@ Work after M5, owner-requested, newest last:
 | Task statuses (open, in progress, done, cancelled) | 18 Sep 2026 | Built, full gate green, released in **v0.4.0**. Checklist below not yet run on the packaged app. |
 | Public links, a changelog page and a theme switch | 18 Sep 2026 | Released in **v0.4.1**. The site no longer links into the private repository. |
 | The archive, and a status that takes effect at once | 18 Sep 2026 | Released in **v0.4.2**. Both owner-reported; checklist below not run on screen (machine locked). |
+| Headings, note titles, and deleting for good | 18 Sep 2026 | Released in **v0.5.0**. `@lexical/rich-text` approved by the owner the same day. |
 
 **Releases:** [v0.0.1](https://github.com/prasenjithiwale/edge-notes/releases/tag/v0.0.1)
 and [v0.0.2](https://github.com/prasenjithiwale/edge-notes/releases/tag/v0.0.2),
@@ -879,6 +880,61 @@ limitations.
   ad-hoc signed, which runs locally but is stopped by Gatekeeper anywhere else.
   The steps and the environment variables are in the README, unexercised.
 - **No CI.** Nothing runs the checks or builds the other platforms automatically.
+
+## Headings, and deleting for good (18 Sep 2026)
+
+**The dialect learned `#`.** Headings were the one thing the slash menu
+deliberately did not offer — "the menu ends where the dialect does" — so adding
+them meant adding them to the storage format first, not to the editor. Asked for
+by the owner along with "every note should have a title"; asked back which of two
+things a title was, and the answer was **the first heading**, not a column.
+
+- `lib/markdown.ts` parses `# `, `## `, `### ` at the start of an unindented
+  line, and `Line` gains `level` (0 for everything else). Three levels, because
+  a fourth is something the dialect cannot write back and `#### ` therefore has
+  to stay the text somebody typed — as do `#NoSpace` and an indented hash. The
+  round-trip contract in `editor/markdown.test.ts` covers all three near-misses.
+- The editor gains `HeadingNode` from **`@lexical/rich-text`** (0.50.0 exact,
+  approved by the owner; the same library and version as the two already in
+  section 4). `$setFromMarkdown` builds them, `$toMarkdown` writes the hashes
+  back, and the node list test says exactly which nodes exist.
+- Keys are **⌘⌥1/2/3**, not ⌘⇧1: Shift+digit is not free everywhere, and Option
+  is what editors with headings already use. `FormatShortcut` grew an `alt` flag
+  and `formatCommandForKey` now matches on it rather than refusing every Alt
+  combination — the one line in that function that had to change, and the reason
+  the "needs the exact modifiers" test grew a case.
+- Typing `# ` works through a transformer written here rather than the library's,
+  whose own accepts six levels.
+- A heading renders as a heading wherever a note is *read* as well as written —
+  `NoteText`'s `LineRow` carries the same three sizes — with `role="heading"` and
+  `aria-level` rather than a real `<h1>`: a note is not a document outline, and a
+  card full of `<h1>`s would put a dozen of them into the panel's heading order.
+- The empty-note placeholder is "Title, then the note". A placeholder, not a
+  formatted first line: nothing may write a `# ` somebody did not type, which is
+  the round-trip contract.
+
+**Deleting for good.** `archive::purge_one` is the only hard delete in the app.
+Its guard is in the SQL — `deleted_at IS NOT NULL` — so it can reach nothing but
+a row already in the archive, and a bug in an id cannot take a live note with it.
+The screen asks first, in the row rather than in a dialog: this is the one thing
+with no undo behind it, and brief 6.9's "an undo beats a confirmation" has
+nothing to offer where there is no undo.
+
+**The archive button moved** to sit beside the settings gear. `justify-content:
+space-between` on a three-button toolbar had stranded it in the middle; the two
+panel-about-itself buttons are one group now, and Keep open stays at the far end.
+
+### Checklist
+
+- [ ] Type `# ` in a note: the line becomes a heading, and the card shows it as
+      the note's title
+- [ ] ⌘⌥1, ⌘⌥2, ⌘⌥3 on a line; pressing the same one again makes it text
+- [ ] `/head` narrows the slash menu to the three headings
+- [ ] `#### four` stays as typed, in the editor and on the card
+- [ ] Close and reopen a note with headings: not a byte has changed
+- [ ] Archive a note, press the bin: it asks, and Keep backs out
+- [ ] Press the bin then Delete for good: it goes, and cannot be restored
+- [ ] The archive button sits next to the gear, not in the middle
 
 ## The archive, and a status that moves its row (18 Sep 2026)
 

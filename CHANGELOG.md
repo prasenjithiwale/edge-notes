@@ -11,6 +11,25 @@ To release, see "Releasing" in the README.
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-09-18
+
+### Added
+
+- **Notes have headings now: `# `, `## ` and `### `.** Type the hashes, press
+  <kbd>⌘⌥1</kbd>, <kbd>⌘⌥2</kbd> or <kbd>⌘⌥3</kbd>, or use `/heading` — the slash
+  menu has all three at the top. A note's first line is what the list shows as
+  its name, so making it a Heading 1 is how a note gets a title, and the title
+  now looks like one on the card as well as in the editor.
+- **Delete something for good, from the archive.** Each row has a bin beside its
+  Restore; it asks once, and then the thing is gone rather than waiting out its
+  thirty days. It is the only action in Ledge with no undo behind it, which is
+  why it is the only one that asks.
+
+### Changed
+
+- **The archive button sits beside the settings gear**, where it belongs, rather
+  than adrift in the middle of the toolbar.
+
 ## [0.4.2] - 2026-09-18
 
 ### Added

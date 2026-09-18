@@ -25,6 +25,17 @@ describe("formatCommandForKey", () => {
     expect(formatCommandForKey(key({ metaKey: true, altKey: true, code: "KeyB" }))).toBeNull();
   });
 
+  /** The headings are the only three that take Option as well. */
+  it("reads the heading keys, and only with Option held", () => {
+    expect(formatCommandForKey(key({ metaKey: true, altKey: true, code: "Digit1" }))).toBe(
+      "heading1",
+    );
+    expect(formatCommandForKey(key({ ctrlKey: true, altKey: true, code: "Digit3" }))).toBe(
+      "heading3",
+    );
+    expect(formatCommandForKey(key({ metaKey: true, code: "Digit2" }))).toBeNull();
+  });
+
   it("does not claim the panel's own shortcuts", () => {
     for (const code of ["KeyF", "KeyN"]) {
       expect(formatCommandForKey(key({ metaKey: true, code }))).toBeNull();
@@ -36,12 +47,15 @@ describe("the table itself", () => {
   it("gives every command exactly one key, and no two the same", () => {
     const seen = new Set<string>();
     for (const shortcut of FORMAT_SHORTCUTS) {
-      const key = `${shortcut.code}${shortcut.shift ? "+shift" : ""}`;
+      const key = `${shortcut.code}${shortcut.shift ? "+shift" : ""}${shortcut.alt === true ? "+alt" : ""}`;
       expect(seen.has(key), `${key} is bound twice`).toBe(false);
       seen.add(key);
     }
     // Every command the toolbar can run is reachable from the keyboard.
     expect(FORMAT_SHORTCUTS.map((shortcut) => shortcut.command)).toEqual([
+      "heading1",
+      "heading2",
+      "heading3",
       "bold",
       "italic",
       "strike",

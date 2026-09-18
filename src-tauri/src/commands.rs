@@ -6,8 +6,8 @@ use std::sync::Arc;
 use tauri::{AppHandle, Emitter, Manager, State};
 
 use crate::db::{
-    ArchivedItem, Database, Note, NoteColor, Settings, SettingsPatch, Status, Task, TaskPatch,
-    archive, notes, now_ms, settings, tasks,
+    ArchivedItem, ArchivedKind, Database, Note, NoteColor, Settings, SettingsPatch, Status, Task,
+    TaskPatch, archive, notes, now_ms, settings, tasks,
 };
 use crate::dock::{DOCK_WINDOW_LABEL, Dock, Input, Phase, poller};
 use crate::error::{AppError, AppResult};
@@ -176,6 +176,16 @@ pub fn notes_restore(db: State<'_, Database>, id: String) -> AppResult<Note> {
 #[tauri::command]
 pub fn archive_list(db: State<'_, Database>) -> AppResult<Vec<ArchivedItem>> {
     db.with(archive::list)
+}
+
+/// Delete one archived thing for good, rather than waiting out its thirty days.
+///
+/// The only command in the app that destroys anything, and the only one with no
+/// undo behind it. It can reach nothing but a row that is already deleted, which
+/// is enforced in the SQL rather than here.
+#[tauri::command]
+pub fn archive_purge(db: State<'_, Database>, id: String, kind: ArchivedKind) -> AppResult<()> {
+    db.with(|connection| archive::purge_one(connection, &id, kind))
 }
 
 // -- Settings ---------------------------------------------------------------

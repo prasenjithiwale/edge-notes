@@ -17,7 +17,7 @@ use rusqlite::Connection;
 
 use crate::error::AppResult;
 
-pub use archive::ArchivedItem;
+pub use archive::{ArchivedItem, ArchivedKind};
 pub use notes::{Note, NoteColor};
 pub use settings::{Settings, SettingsPatch, Theme};
 pub use tasks::{Status, Task, TaskPatch};

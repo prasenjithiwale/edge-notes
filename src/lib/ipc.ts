@@ -379,6 +379,17 @@ export function archiveList(): Promise<ArchivedItem[]> {
   return callResult<ArchivedItem[]>("archive_list");
 }
 
+/**
+ * Delete one for good, without waiting out its thirty days.
+ *
+ * The only call in the app that destroys anything and the only one with nothing
+ * behind it: Rust will touch nothing but a row that is already in the archive,
+ * and the screen asks before sending it.
+ */
+export async function archivePurge(id: string, kind: ArchivedItem["kind"]): Promise<void> {
+  await callResult<null>("archive_purge", { id, kind });
+}
+
 export function notesRestore(id: string): Promise<Note> {
   return callResult<Note>("notes_restore", { id });
 }

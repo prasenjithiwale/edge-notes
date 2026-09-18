@@ -21,10 +21,19 @@ export type Inline =
   | { kind: "code"; text: string }
   | { kind: "link"; url: string };
 
-export type LineKind = "paragraph" | "bullet" | "ordered" | "task";
+export type LineKind = "paragraph" | "heading" | "bullet" | "ordered" | "task";
 
 export interface Line {
   kind: LineKind;
+  /**
+   * 1, 2 or 3 for a heading; 0 for everything else.
+   *
+   * Three levels and no more, because a note in a 320 px panel that needs a
+   * fourth is a note that wants to be two notes — and because the dialect can
+   * only offer what it can write back: `####` stays literal text, exactly as it
+   * would have before headings existed.
+   */
+  level: number;
   /** Leading whitespace of a list item; empty for a paragraph. */
   indent: string;
   /** Everything before the text: indent plus marker, e.g. `"  - [ ] "`. */
@@ -39,16 +48,39 @@ export interface Line {
   marker: string;
 }
 
-export type ListKind = Exclude<LineKind, "paragraph">;
+export type ListKind = Exclude<LineKind, "paragraph" | "heading">;
 
 const LIST_ITEM =
   /^([ \t]*)(?:([-*+])[ \t]+\[([ xX])\](?:[ \t]+|$)|([-*+])[ \t]+|(\d{1,9})([.)])[ \t]+)/;
 
+/**
+ * `# `, `## ` or `### ` at the very start of a line. Not indented: an indented
+ * hash is a line of text that begins with a hash, and a heading inside a list is
+ * not something this dialect can write back.
+ */
+const HEADING = /^(#{1,3})[ \t]+(.*)$/;
+
 export function parseLine(line: string): Line {
+  const heading = HEADING.exec(line);
+  if (heading) {
+    const hashes = heading[1] ?? "#";
+    return {
+      kind: "heading",
+      level: hashes.length,
+      indent: "",
+      prefix: `${hashes} `,
+      text: heading[2] ?? "",
+      checked: false,
+      number: 0,
+      marker: hashes,
+    };
+  }
+
   const match = LIST_ITEM.exec(line);
   if (!match) {
     return {
       kind: "paragraph",
+      level: 0,
       indent: "",
       prefix: "",
       text: line,
@@ -60,7 +92,7 @@ export function parseLine(line: string): Line {
 
   const [prefix, indent = "", taskMarker, check, bulletMarker, digits, delimiter] =
     match;
-  const base = { indent, prefix, text: line.slice(prefix.length) };
+  const base = { indent, prefix, text: line.slice(prefix.length), level: 0 };
 
   if (taskMarker !== undefined) {
     return {

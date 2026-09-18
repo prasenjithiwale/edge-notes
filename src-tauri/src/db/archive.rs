@@ -12,16 +12,16 @@
 //! title — because restoring is what happens next, and everything else about it
 //! comes back with it.
 
-use rusqlite::Connection;
-use serde::Serialize;
+use rusqlite::{Connection, params};
+use serde::{Deserialize, Serialize};
 
-use crate::error::AppResult;
+use crate::error::{AppError, AppResult};
 
 use super::notes::PURGE_AFTER_MS;
 
 /// The kind of thing that was deleted. Serialised as `"note"` or `"task"`, which
 /// is what the frontend switches on to know which restore command to send.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum ArchivedKind {
     Note,
@@ -101,6 +101,29 @@ pub fn list(connection: &Connection) -> AppResult<Vec<ArchivedItem>> {
     Ok(items)
 }
 
+/// Delete one for good, before its thirty days are up.
+///
+/// The only hard delete in the app, and the only thing here that cannot be
+/// undone — which is why it is guarded twice. `deleted_at IS NOT NULL` is the
+/// binding half: this can reach a row that is already in the archive and nothing
+/// else, so a bug in the id cannot take a live note with it. A row that is not
+/// there is an error rather than a silent success, because the caller believed
+/// it was deleting something.
+pub fn purge_one(connection: &Connection, id: &str, kind: ArchivedKind) -> AppResult<()> {
+    let sql = match kind {
+        ArchivedKind::Note => "DELETE FROM notes WHERE id = ?1 AND deleted_at IS NOT NULL",
+        ArchivedKind::Task => "DELETE FROM tasks WHERE id = ?1 AND deleted_at IS NOT NULL",
+    };
+    let deleted = connection.execute(sql, params![id])?;
+    if deleted == 0 {
+        return Err(match kind {
+            ArchivedKind::Note => AppError::NoteNotFound(id.to_owned()),
+            ArchivedKind::Task => AppError::TaskNotFound(id.to_owned()),
+        });
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -158,6 +181,63 @@ mod tests {
         assert_eq!(items[1].kind, ArchivedKind::Note);
         assert_eq!(items[1].text, "Milk and coffee");
         assert_eq!(items[1].color.as_deref(), Some("blue"));
+    }
+
+    #[test]
+    fn purging_one_takes_it_out_for_good() {
+        let db = db();
+        let note = db
+            .with(|c| notes::create(c, NoteColor::Sand, NOW))
+            .expect("note");
+        db.with(|c| notes::delete(c, &note.id, NOW + 1))
+            .expect("delete");
+
+        db.with(|c| purge_one(c, &note.id, ArchivedKind::Note))
+            .expect("purge");
+
+        assert!(db.with(list).expect("list").is_empty());
+        assert!(db.with(|c| notes::get(c, &note.id)).expect("get").is_none());
+        // And it cannot be restored, because there is nothing to restore.
+        assert!(db.with(|c| notes::restore(c, &note.id)).is_err());
+    }
+
+    /// The guard that matters: this is the one irreversible thing in the app, so
+    /// it must not be able to reach a note somebody is still using.
+    #[test]
+    fn will_not_touch_a_note_that_is_not_in_the_archive() {
+        let db = db();
+        let note = db
+            .with(|c| notes::create(c, NoteColor::Sky, NOW))
+            .expect("note");
+
+        assert!(
+            db.with(|c| purge_one(c, &note.id, ArchivedKind::Note))
+                .is_err()
+        );
+        assert!(db.with(|c| notes::get(c, &note.id)).expect("get").is_some());
+    }
+
+    #[test]
+    fn purges_a_task_from_the_tasks_table() {
+        let db = db();
+        let task = db
+            .with(|c| {
+                tasks::create(
+                    c,
+                    &TaskPatch {
+                        title: Some("Call the bank".to_owned()),
+                        ..TaskPatch::default()
+                    },
+                    NOW,
+                )
+            })
+            .expect("task");
+        db.with(|c| tasks::delete(c, &task.id, NOW + 1))
+            .expect("delete");
+
+        db.with(|c| purge_one(c, &task.id, ArchivedKind::Task))
+            .expect("purge");
+        assert!(db.with(|c| tasks::get(c, &task.id)).expect("get").is_none());
     }
 
     #[test]

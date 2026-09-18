@@ -143,6 +143,11 @@ beforeEach(() => {
     if (command === "archive_list") {
       return Promise.resolve(archivedInDb);
     }
+    if (command === "archive_purge") {
+      const { id } = args as { id: string };
+      archivedInDb = archivedInDb.filter((entry) => entry.id !== id);
+      return Promise.resolve(null);
+    }
     if (command === "notes_restore" || command === "tasks_restore") {
       const { id } = args as { id: string };
       archivedInDb = archivedInDb.filter((entry) => entry.id !== id);
@@ -796,6 +801,44 @@ describe("the archive", () => {
       const button = screen.getByRole("button", { name: "Archive, empty" });
       expect((button as HTMLButtonElement).disabled).toBe(true);
     });
+  });
+
+  /**
+   * The only irreversible thing in the app, so the only one that asks first:
+   * everything else answers a mistake with an undo, and there is nothing behind
+   * this one.
+   */
+  it("asks before deleting something for good, and does nothing until told twice", async () => {
+    archivedInDb = [
+      {
+        id: "3",
+        kind: "note",
+        text: "Book flights",
+        color: "mint",
+        deletedAt: Date.now() - 60_000,
+        purgeAt: Date.now() + 30 * 24 * 60 * 60 * 1000,
+      },
+    ];
+    await renderPanel();
+    (await screen.findByRole("button", { name: "Archive, 1 deleted" })).click();
+
+    (await screen.findByRole("button", { name: "Delete Book flights permanently" })).click();
+    // Armed, and nothing sent.
+    expect(commandCalls("archive_purge")).toEqual([]);
+
+    // Backing out leaves the row alone.
+    (await screen.findByRole("button", { name: "Keep" })).click();
+    await screen.findByRole("button", { name: "Restore Book flights" });
+    expect(commandCalls("archive_purge")).toEqual([]);
+
+    (await screen.findByRole("button", { name: "Delete Book flights permanently" })).click();
+    (await screen.findByRole("button", { name: "Delete Book flights for good" })).click();
+
+    await waitFor(() => {
+      expect(commandCalls("archive_purge")).toEqual([{ id: "3", kind: "note" }]);
+    });
+    // It is gone from the list, and there is nothing left to restore.
+    await screen.findByText("Nothing deleted");
   });
 
   it("closes on Esc, like the settings pane it sits beside", async () => {

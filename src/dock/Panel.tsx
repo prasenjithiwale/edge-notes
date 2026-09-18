@@ -584,6 +584,11 @@ export function Panel({ className }: PanelProps) {
       {/* The panel's own controls, at the foot of it and the same on every tab:
           what they change is the panel, not what is in it. */}
       <div className={styles.toolbar}>
+        {/* Settings and the archive are one group at the left: they are both the
+            panel showing you something about itself, and `space-between` on
+            three buttons left the archive stranded in the middle of the bar
+            rather than beside the gear it belongs to. */}
+        <div className={styles.toolbarGroup}>
         <IconButton
           label={showSettings ? "Back" : "Settings"}
           active={showSettings}
@@ -617,6 +622,7 @@ export function Panel({ className }: PanelProps) {
         >
           <Archive size={16} strokeWidth={1.75} />
         </IconButton>
+        </div>
         <IconButton
           label="Keep open"
           active={keepOpen}

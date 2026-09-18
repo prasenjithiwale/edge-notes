@@ -58,6 +58,7 @@ The approved mockups show three states:
 | Tauri plugins | `tauri-plugin-single-instance`, `tauri-plugin-autostart`, `tauri-plugin-global-shortcut`, `tauri-plugin-log` | Tray uses Tauri's built-in `tray-icon` feature |
 | macOS only | `tauri-nspanel` (branch `v2.1`, pinned to a commit) | Converts the window to an NSPanel |
 | Rich text | `lexical` + `@lexical/react` | The note editor, from 0.2.0; approved by the owner on 17 Sep 2026 |
+| Headings | `@lexical/rich-text` | `HeadingNode`, for the three heading levels from 0.5.0; approved by the owner on 18 Sep 2026 |
 | Tests | `cargo test`; Vitest | |
 
 Rust owns the database so the frontend never needs SQL, filesystem, or window permissions, commands stay typed, and a future sync engine can sit next to the data.

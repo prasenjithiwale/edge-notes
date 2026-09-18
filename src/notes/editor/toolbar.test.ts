@@ -11,6 +11,8 @@ import { ListItemNode, ListNode, registerCheckList, registerList } from "@lexica
 import { AutoLinkNode, LinkNode } from "@lexical/link";
 
 import { CodeNode } from "./CodeNode";
+import { HeadingNode } from "@lexical/rich-text";
+
 import { EDITOR_NODES } from "./config";
 import { $setFromMarkdown, $toMarkdown } from "./markdown";
 import { isActive, runCommand, type FormatCommand, type ToolbarState } from "./toolbar";
@@ -23,6 +25,7 @@ const IDLE: ToolbarState = {
   strike: false,
   code: false,
   list: null,
+  heading: 0,
 };
 
 beforeEach(() => {
@@ -200,6 +203,13 @@ describe("what the toolbar lights", () => {
 
 describe("the node list", () => {
   it("is exactly what the dialect can write back", () => {
-    expect(EDITOR_NODES).toEqual([ListNode, ListItemNode, LinkNode, AutoLinkNode, CodeNode]);
+    expect(EDITOR_NODES).toEqual([
+      HeadingNode,
+      ListNode,
+      ListItemNode,
+      LinkNode,
+      AutoLinkNode,
+      CodeNode,
+    ]);
   });
 });

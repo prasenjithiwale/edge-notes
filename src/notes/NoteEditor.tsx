@@ -253,8 +253,13 @@ function NoteEditorBody({ note, large = false }: NoteEditorProps) {
             <ContentEditable
               className={editorStyles.editable}
               aria-label="Note content"
-              aria-placeholder="Write a note"
-              placeholder={<div className={styles.placeholder}>Write a note</div>}
+              // The first line of a note is what the card shows as its name, so
+              // the placeholder says what to put there. It is a placeholder and
+              // not a formatted first line on purpose: a note is stored exactly
+              // as it is written, and nothing may add a heading somebody did not
+              // type. `/` or ⌘⌥1 turns the line into one.
+              aria-placeholder="Title, then the note"
+              placeholder={<div className={styles.placeholder}>Title, then the note</div>}
             />
           }
           ErrorBoundary={LexicalErrorBoundary}

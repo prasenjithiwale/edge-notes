@@ -32,6 +32,7 @@ import {
   type ListType,
 } from "@lexical/list";
 import { $createLinkNode, $isLinkNode } from "@lexical/link";
+import { $createHeadingNode, $isHeadingNode, type HeadingTagType } from "@lexical/rich-text";
 
 import { parseBlocks, parseInline, type Inline, type ListKind } from "../../lib/markdown";
 import { $createCodeNode, $isCodeNode } from "./CodeNode";
@@ -140,6 +141,15 @@ export function $setFromMarkdown(content: string): void {
       list = null;
       listKind = null;
       root.append(paragraphFor(line.text));
+      continue;
+    }
+
+    if (line.kind === "heading") {
+      list = null;
+      listKind = null;
+      const heading = $createHeadingNode(`h${String(line.level)}` as HeadingTagType);
+      heading.append(...inlineNodes(parseInline(line.text), NO_MARKS));
+      root.append(heading);
       continue;
     }
 
@@ -342,6 +352,13 @@ export function $toMarkdown(): string {
     }
     if ($isListNode(child)) {
       lines.push(...listMarkdown(child, 0));
+      continue;
+    }
+    if ($isHeadingNode(child)) {
+      // The tag is `h1`..`h3` by construction — the editor is given no other
+      // heading nodes — and its number is the number of hashes.
+      const hashes = "#".repeat(Number(child.getTag().slice(1)));
+      lines.push(...inlineMarkdown(child).map((line) => `${hashes} ${line}`));
       continue;
     }
     if ($isParagraphNode(child)) {

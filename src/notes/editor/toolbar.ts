@@ -24,12 +24,21 @@ import {
   FORMAT_TEXT_COMMAND,
   type LexicalEditor,
 } from "lexical";
+import {
+  $createHeadingNode,
+  $isHeadingNode,
+  type HeadingTagType,
+} from "@lexical/rich-text";
+import { $setBlocksType } from "@lexical/selection";
 
 import { $createCodeNode } from "./CodeNode";
 
 export type FormatCommand =
   /** Back to a plain paragraph: what the slash menu calls "Text". */
   | "text"
+  | "heading1"
+  | "heading2"
+  | "heading3"
   | "bold"
   | "italic"
   | "strike"
@@ -46,6 +55,8 @@ export interface ToolbarState {
   strike: boolean;
   code: boolean;
   list: ListType | null;
+  /** 1, 2 or 3 when the caret is in a heading; 0 when it is not. */
+  heading: number;
 }
 
 const IDLE: ToolbarState = {
@@ -54,6 +65,14 @@ const IDLE: ToolbarState = {
   strike: false,
   code: false,
   list: null,
+  heading: 0,
+};
+
+/** The three the dialect can write, and the tag Lexical knows each by. */
+const HEADING_LEVEL: Record<"heading1" | "heading2" | "heading3", 1 | 2 | 3> = {
+  heading1: 1,
+  heading2: 2,
+  heading3: 3,
 };
 
 const LIST_FOR: Record<"bullet" | "ordered" | "task", ListType> = {
@@ -68,7 +87,8 @@ function same(a: ToolbarState, b: ToolbarState): boolean {
     a.italic === b.italic &&
     a.strike === b.strike &&
     a.code === b.code &&
-    a.list === b.list
+    a.list === b.list &&
+    a.heading === b.heading
   );
 }
 
@@ -97,12 +117,14 @@ export function useToolbarState(editor: LexicalEditor): ToolbarState {
           const node = selection.anchor.getNode();
           const item = $isListItemNode(node) ? node : node.getParent();
           const list = $isListItemNode(item) ? item.getParent() : null;
+          const block = $isHeadingNode(node) ? node : node.getParent();
           const next: ToolbarState = {
             bold: selection.hasFormat("bold"),
             italic: selection.hasFormat("italic"),
             strike: selection.hasFormat("strikethrough"),
             code: selection.hasFormat("code"),
             list: $isListNode(list) ? list.getListType() : null,
+            heading: $isHeadingNode(block) ? Number(block.getTag().slice(1)) : 0,
           };
           setState((previous) => (same(previous, next) ? previous : next));
         });
@@ -117,7 +139,11 @@ export function useToolbarState(editor: LexicalEditor): ToolbarState {
 export function isActive(command: FormatCommand, state: ToolbarState): boolean {
   switch (command) {
     case "text":
-      return state.list === null;
+      return state.list === null && state.heading === 0;
+    case "heading1":
+    case "heading2":
+    case "heading3":
+      return state.heading === HEADING_LEVEL[command];
     case "bold":
       return state.bold;
     case "italic":
@@ -152,7 +178,39 @@ export function runCommand(
       // Whatever kind of list this line is in, it stops being one. A line that
       // is already a paragraph is left alone, which is what `REMOVE_LIST` does.
       editor.dispatchCommand(REMOVE_LIST_COMMAND, undefined);
+      editor.update(() => {
+        const selection = $getSelection();
+        if ($isRangeSelection(selection)) {
+          // A heading is an element, not a mark, so going back to plain text is
+          // swapping the block rather than turning something off.
+          $setBlocksType(selection, () => $createParagraphNode());
+        }
+      });
       return;
+    case "heading1":
+    case "heading2":
+    case "heading3": {
+      const level = HEADING_LEVEL[command];
+      editor.update(() => {
+        const selection = $getSelection();
+        if (!$isRangeSelection(selection)) {
+          return;
+        }
+        // Pressing the level the line already is turns it back into text, the
+        // way pressing a list button inside that list does.
+        const already = state.heading === level;
+        $setBlocksType(selection, () =>
+          already
+            ? $createParagraphNode()
+            : $createHeadingNode(`h${String(level)}` as HeadingTagType),
+        );
+      });
+      // A heading is not a list item; leaving a list is part of becoming one.
+      if (!(state.list === null)) {
+        editor.dispatchCommand(REMOVE_LIST_COMMAND, undefined);
+      }
+      return;
+    }
     case "bold":
       editor.dispatchCommand(FORMAT_TEXT_COMMAND, "bold");
       return;

@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { $getRoot, createEditor, type LexicalEditor } from "lexical";
 import { $isListNode, ListItemNode, ListNode } from "@lexical/list";
 import { LinkNode } from "@lexical/link";
+import { HeadingNode } from "@lexical/rich-text";
 
 import { CodeNode } from "./CodeNode";
 import { $setFromMarkdown, $toMarkdown } from "./markdown";
@@ -11,7 +12,7 @@ let editor: LexicalEditor;
 beforeEach(() => {
   editor = createEditor({
     namespace: "test",
-    nodes: [ListNode, ListItemNode, LinkNode, CodeNode],
+    nodes: [HeadingNode, ListNode, ListItemNode, LinkNode, CodeNode],
     onError: (error) => {
       throw error;
     },
@@ -55,7 +56,20 @@ describe("a note survives a trip through the editor", () => {
     ["a code block with no language", "```\nplain\n```"],
     ["a code block between paragraphs", "before\n```js\nconst a = 1\n```\nafter"],
     ["an empty note", ""],
-    ["everything at once", "# not a heading\n**Title**\n- [ ] do it\n\n```json\n{}\n```\nend"],
+    // The three levels the dialect writes, and the shapes that look like
+    // headings and are not: a fourth hash, no space after it, and an indented
+    // one. Each of those has to come back as the text somebody typed.
+    ["a heading", "# Release runbook"],
+    ["the second and third levels", "## Before the tag\n### Checks"],
+    ["marks inside a heading", "## A **bold** word and `code`"],
+    ["a heading above its paragraph", "# Title\n\nWhat it is about"],
+    ["a fourth hash, which is not a heading", "#### Not a heading"],
+    ["a hash with no space", "#NoSpace"],
+    ["an indented hash", "  # indented"],
+    [
+      "everything at once",
+      "# Title\n**Bold**\n- [ ] do it\n\n```json\n{}\n```\n### End",
+    ],
   ];
 
   for (const [name, markdown] of notes) {

@@ -8,10 +8,14 @@
  * format is written by `editor/markdown.ts` and is always ours.
  *
  * The list is built from the library's pieces rather than taken whole: its
- * `TRANSFORMERS` includes headings, quotes and its own code block, none of which
- * this dialect can store, and a node that cannot be written back is a node that
- * would be lost on the next save.
+ * `TRANSFORMERS` includes quotes and its own code block, neither of which this
+ * dialect can store, and a node that cannot be written back is a node that would
+ * be lost on the next save. Its heading transformer is taken, but narrowed to
+ * the three levels the dialect writes — `#### ` stays the text somebody typed.
  */
+import {
+  $createHeadingNode,
+} from "@lexical/rich-text";
 import {
   BOLD_ITALIC_STAR,
   BOLD_ITALIC_UNDERSCORE,
@@ -30,6 +34,7 @@ import {
 import type { LinkMatcher } from "@lexical/react/LexicalAutoLinkPlugin";
 
 import { $createCodeNode, CodeNode } from "./CodeNode";
+import { HeadingNode } from "@lexical/rich-text";
 
 /**
  * ```` ```python ```` at the start of a line opens a code block in that
@@ -49,8 +54,30 @@ const CODE_FENCE: ElementTransformer = {
   type: "element",
 };
 
+/**
+ * `# `, `## ` or `### ` at the start of a line. The library's own heading
+ * transformer accepts six levels; this one is written here rather than narrowed
+ * afterwards, because the regexp is the whole of the difference and a fourth
+ * hash has to stay literal text.
+ */
+const HEADING: ElementTransformer = {
+  dependencies: [HeadingNode],
+  // Writing is `editor/markdown.ts`'s job, which walks the whole note.
+  export: () => null,
+  regExp: /^(#{1,3})\s$/,
+  replace: (parentNode, children, match) => {
+    const level = (match[1] ?? "#").length;
+    const heading = $createHeadingNode(level === 1 ? "h1" : level === 2 ? "h2" : "h3");
+    heading.append(...children);
+    parentNode.replace(heading);
+    heading.select(0, 0);
+  },
+  type: "element",
+};
+
 export const NOTE_TRANSFORMERS: Transformer[] = [
   CODE_FENCE,
+  HEADING,
   UNORDERED_LIST,
   ORDERED_LIST,
   CHECK_LIST,
