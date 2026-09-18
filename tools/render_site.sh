@@ -273,22 +273,25 @@ features=$(
     wide
 
   feature tasks.png \
-    "The Tasks tab, with sections for Today, Tomorrow, Upcoming, Someday and Done." \
+    "The Tasks tab, with an In progress section at the top, then Today, Tomorrow, Upcoming, Someday, Done and Cancelled." \
     "Tasks that know what day it is" \
-    "<p>Tasks are their own list, not checkboxes buried in a note: Today,
-     Tomorrow, Upcoming, Someday and Done, folded away when you do not need them.
-     Type the details straight into the add field — <code>@tomorrow</code>,
+    "<p>Tasks are their own list, not checkboxes buried in a note: In progress at
+     the top, then Today, Tomorrow, Upcoming and Someday, with Done and Cancelled
+     folded away at the bottom.</p>
+     <p>Type the details straight into the add field — <code>@tomorrow</code>,
      <code>2pm</code>, <code>!high</code> — and see them read back as chips before
      you press Return.</p>"
 
   feature task-details.png \
-    "A task's details: priority, due date and time, repeat, notes, and a Focus on this button." \
-    "Due dates, priorities, repeats" \
-    "<p>Open a task and it becomes a small sheet: priority, a due date and time,
-     a repeat that moves the task on when you tick it rather than completing it,
-     and room for notes.</p>
-     <p>Anything due can raise a system notification, and a task can be handed
-     straight to the focus timer.</p>"
+    "A task's details: status, priority, due date and time, repeat, notes, and a Focus on this button." \
+    "Four statuses, not one tick" \
+    "<p>A task is <b>Open</b>, <b>In progress</b>, <b>Done</b> or <b>Cancelled</b>.
+     The box in the row still finishes one in a press — that is the thing you do
+     all day — and the sheet is where a task is started or dropped. Something you
+     decided against is closed without being counted as work you did.</p>
+     <p>Underneath: priority, a due date and time, and a repeat that moves the
+     task on when you tick it rather than completing it. Anything due can raise a
+     system notification, and a task can be handed straight to the focus timer.</p>"
 
   feature focus.png \
     "The Focus tab with a pomodoro timer running at 24:35, working on the task Cut 0.4.0." \
@@ -630,6 +633,22 @@ $key_section
 </section>
 
 <section class="band">
+  <div class="wrap narrow">
+    <h2>Open source, closed to contributions</h2>
+    <p>The code is on
+    <a href="https://github.com/prasenjithiwale/edge-notes">GitHub</a> to read,
+    fork and change for your own use. It is not open to contributions: no pull
+    requests, and no feature requests taken as a queue. This is one person's app,
+    built to one set of opinions about what it should be, and keeping it that way
+    is most of why it stays small.</p>
+    <p>Bug reports are the exception and they are welcome — if something is
+    broken, <a href="https://github.com/prasenjithiwale/edge-notes/issues">open an
+    issue</a> and say what happened. A fork is the right answer to "I would have
+    done this differently", and that is a compliment, not a brush-off.</p>
+  </div>
+</section>
+
+<section class="band soft">
   <div class="wrap narrow">
     <h2>What it does not do</h2>
     <p>There is no account, no cloud and no sync: notes live in a SQLite file in

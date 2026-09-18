@@ -9,8 +9,43 @@ To release, see "Releasing" in the README.
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-09-18
+
+### Added
+
+- **A task has a status now: Open, In progress, Done or Cancelled.** A tick
+  answered one question — is this finished — and the two answers it could not
+  give are the ones you want most: what am I in the middle of, and what did I
+  decide against. The box in the row still finishes a task in one press; the new
+  Status control in its details sheet is where a task is started or dropped.
+- **In progress is the first section in the list**, above Today, because a task
+  you have started is where you were. Cancelled sits at the bottom beside Done,
+  folded away, and both stop being listed a day later.
+- **Cancelled is closed without being finished.** It is not counted on the tab,
+  it raises no reminder, and it is never mistaken for work that was done. The
+  record stays — deciding against something is worth remembering — and ticking a
+  cancelled task says you did it after all.
+- **The row shows the status without being asked**: a half-filled ring for a task
+  in progress, with a hairline down the edge of its row, and a struck circle for
+  one that was cancelled. Both read in a screenshot and to a screen reader, not
+  only in colour.
+
 ### Fixed
 
+- **You can click anywhere in an expanded note.** The writing surface stopped at
+  the last line and at the edges of the reading column, so most of the large
+  panel was dead: pressing there put the caret nowhere, and the arrow keys were
+  the only way to reach a line. The column is now the editable's own margin, and
+  it fills the panel, so a press anywhere in it lands on the nearest line.
+- **No blue box round the line you are writing on.** The editor asked for no
+  focus ring and did not get its way: the app's accent ring is drawn with a bare
+  `:focus-visible`, which ties with a plain class and wins on order, so the ring
+  came back on the text — and on the single check list line the caret was on,
+  because a check list item can hold focus.
+- **A finished task can be unfinished again.** Ticking a task holds its row
+  among the open ones rather than letting it jump to Done under the cursor, and
+  the box was reading its state from that held copy instead of from the task. It
+  stayed filled whatever the store said, so the next press read as another tick.
 - **You can click anywhere in a note again.** Clicking in the middle of a line
   would not put the caret there: the whole line highlighted instead, and the
   arrow keys moved a line at a time rather than a character. One missing
