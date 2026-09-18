@@ -6,8 +6,8 @@ use std::sync::Arc;
 use tauri::{AppHandle, Emitter, Manager, State};
 
 use crate::db::{
-    Database, Note, NoteColor, Settings, SettingsPatch, Status, Task, TaskPatch, notes, now_ms,
-    settings, tasks,
+    ArchivedItem, Database, Note, NoteColor, Settings, SettingsPatch, Status, Task, TaskPatch,
+    archive, notes, now_ms, settings, tasks,
 };
 use crate::dock::{DOCK_WINDOW_LABEL, Dock, Input, Phase, poller};
 use crate::error::{AppError, AppResult};
@@ -167,6 +167,15 @@ pub fn notes_delete(db: State<'_, Database>, id: String) -> AppResult<()> {
 #[tauri::command]
 pub fn notes_restore(db: State<'_, Database>, id: String) -> AppResult<Note> {
     db.with(|connection| notes::restore(connection, &id))
+}
+
+/// Everything deleted and not yet purged, notes and tasks together, newest
+/// first. What is put back goes through `notes_restore` and `tasks_restore`,
+/// which already existed for undo: the archive is a second way to reach the
+/// same door, not a second door.
+#[tauri::command]
+pub fn archive_list(db: State<'_, Database>) -> AppResult<Vec<ArchivedItem>> {
+    db.with(archive::list)
 }
 
 // -- Settings ---------------------------------------------------------------

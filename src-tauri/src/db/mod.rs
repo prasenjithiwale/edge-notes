@@ -2,6 +2,7 @@
 //! connection — only the typed commands in `commands.rs`.
 
 pub mod adopt;
+pub mod archive;
 pub mod migrations;
 pub mod notes;
 pub mod settings;
@@ -16,6 +17,7 @@ use rusqlite::Connection;
 
 use crate::error::AppResult;
 
+pub use archive::ArchivedItem;
 pub use notes::{Note, NoteColor};
 pub use settings::{Settings, SettingsPatch, Theme};
 pub use tasks::{Status, Task, TaskPatch};

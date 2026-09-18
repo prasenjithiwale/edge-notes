@@ -11,7 +11,7 @@
   color: var(--text-secondary);
 }
 
-.button:hover {
+.button:hover:not(:disabled) {
   background: var(--surface-sunken);
 }
 
@@ -31,4 +31,12 @@
 
 .active:hover {
   background: var(--accent-soft);
+}
+
+/* Off, and readable as off: dimmed rather than hidden, because a control that
+   disappears when it has nothing to do teaches nobody that it exists. */
+.button:disabled {
+  color: var(--text-tertiary);
+  opacity: 0.45;
+  background: transparent;
 }

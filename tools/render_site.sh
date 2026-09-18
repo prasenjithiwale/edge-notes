@@ -263,8 +263,10 @@ features=$(
      them, plus none at all. The newest sits at the top unless you lock it, and a
      locked note stays put and opens read-only. The dots under the tabs filter the
      list by colour, and <kbd>&#8984;F</kbd> searches it.</p>
-     <p>Deleting is undoable: a note goes to a toast with an <b>Undo</b> in it, and
-     is kept for thirty days after that.</p>"
+     <p>Deleting is undoable twice over: a note goes to a toast with an
+     <b>Undo</b> in it, and after that it waits in the <b>Archive</b> at the foot
+     of the panel — everything deleted in the last thirty days, notes and tasks
+     together, each with a Restore beside it.</p>"
 
   feature expanded.png \
     "A note expanded to fill a large panel, with checkboxes, a numbered list and a shell code block." \

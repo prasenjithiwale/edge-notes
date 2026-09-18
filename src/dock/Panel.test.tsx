@@ -2,7 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 
-import type { Note, Settings, Task } from "../lib/ipc";
+import type { ArchivedItem, Note, Settings, Task } from "../lib/ipc";
 import { idle as pomodoroIdle } from "../lib/pomodoro";
 
 const invoke = vi.fn<(command: string, args?: unknown) => Promise<unknown>>();
@@ -22,6 +22,7 @@ const { Panel } = await import("./Panel");
 const { useDockStore } = await import("../store/dock");
 const { useNotesStore } = await import("../store/notes");
 const { useTasksStore } = await import("../store/tasks");
+const { useArchiveStore } = await import("../store/archive");
 const { usePomodoroStore } = await import("../store/pomodoro");
 const { useSettingsStore } = await import("../store/settings");
 
@@ -41,6 +42,8 @@ const NOTES: Note[] = [
   note({ id: "2", content: "Groceries\nMilk and coffee", color: "blue", updatedAt: 20 }),
   note({ id: "3", content: "Book flights", color: "mint", updatedAt: 10 }),
 ];
+
+let archivedInDb: ArchivedItem[] = [];
 
 let madeTask = 0;
 function task(overrides: Partial<Task> = {}): Task {
@@ -137,6 +140,16 @@ beforeEach(() => {
     if (command === "tasks_list") {
       return Promise.resolve(tasksInDb);
     }
+    if (command === "archive_list") {
+      return Promise.resolve(archivedInDb);
+    }
+    if (command === "notes_restore" || command === "tasks_restore") {
+      const { id } = args as { id: string };
+      archivedInDb = archivedInDb.filter((entry) => entry.id !== id);
+      return Promise.resolve(
+        command === "notes_restore" ? note({ id, content: "Book flights" }) : task({ id }),
+      );
+    }
     if (command === "tasks_create") {
       const { patch } = args as { patch: Partial<Task> };
       const created = task({ id: `created-${String(madeTask + 1)}`, ...patch });
@@ -153,7 +166,9 @@ beforeEach(() => {
       const { id, status } = args as { id: string; status: Task["status"] };
       const found = tasksInDb.find((entry) => entry.id === id) ?? task();
       const closed = status === "done" || status === "cancelled";
-      const updated = { ...found, status, doneAt: closed ? 1_000 : null };
+      // As Rust does: the time it closed. A fixed old timestamp would put the
+      // task outside the day-long window the closed sections show.
+      const updated = { ...found, status, doneAt: closed ? Date.now() : null };
       tasksInDb = tasksInDb.map((entry) => (entry.id === id ? updated : entry));
       return Promise.resolve(updated);
     }
@@ -161,6 +176,8 @@ beforeEach(() => {
   });
   useDockStore.setState({ locks: new Set(), large: false, panelWidth: 320 });
   tasksInDb = [];
+  archivedInDb = [];
+  useArchiveStore.setState({ items: [], loaded: false, restoringId: null });
   usePomodoroStore.setState({
     state: pomodoroIdle(),
     autoStart: false,
@@ -173,7 +190,8 @@ beforeEach(() => {
     draft: "",
     editingId: null,
     detailsId: null,
-    collapsed: new Set(["done"]),
+    // What the store starts with: both closed sections folded.
+    collapsed: new Set(["done", "cancelled"]),
     pendingUndo: null,
   });
   useNotesStore.setState({
@@ -692,6 +710,119 @@ describe("the colour palette", () => {
   });
 });
 
+describe("the archive", () => {
+  /**
+   * The owner's report, 18 Sep 2026: a deleted note showed an undo toast for a
+   * few seconds and then could not be found at all. It was never gone — soft
+   * deletes are kept for thirty days — but nothing could see it, so the toast
+   * expiring looked like the note being destroyed.
+   */
+  it("is not clickable while nothing has been deleted", async () => {
+    await renderPanel();
+
+    const button = await screen.findByRole("button", { name: "Archive, empty" });
+    expect((button as HTMLButtonElement).disabled).toBe(true);
+    // Pressing it opens nothing, which is the point of it being off.
+    button.click();
+    expect(screen.queryByRole("region", { name: "Archive" })).toBeNull();
+  });
+
+  it("lists what has been deleted, newest first, and says how long it is kept", async () => {
+    archivedInDb = [
+      {
+        id: "3",
+        kind: "note",
+        text: "Book flights\nAisle seat",
+        color: "mint",
+        deletedAt: Date.now() - (2 * 60 + 5) * 60 * 1000,
+        purgeAt: Date.now() + 28 * 24 * 60 * 60 * 1000 - 60_000,
+      },
+      {
+        id: "milk",
+        kind: "task",
+        text: "milk",
+        color: null,
+        deletedAt: Date.now() - (3 * 24 + 1) * 60 * 60 * 1000,
+        purgeAt: Date.now() + 27 * 24 * 60 * 60 * 1000,
+      },
+    ];
+    await renderPanel();
+
+    const button = await screen.findByRole("button", { name: "Archive, 2 deleted" });
+    expect((button as HTMLButtonElement).disabled).toBe(false);
+    button.click();
+
+    const archive = await screen.findByRole("region", { name: "Archive" });
+    const rows = within(archive).getAllByRole("listitem");
+    expect(rows).toHaveLength(2);
+    // Newest first is the order the command returns; the view does not re-sort.
+    expect(rows[0]?.textContent).toContain("Book flights");
+    expect(rows[0]?.textContent).toContain("2 hours ago");
+    expect(rows[1]?.textContent).toContain("3 days ago");
+    // What it costs to wait: the day it goes for good.
+    expect(rows[0]?.textContent).toContain("Kept for 28 more days");
+  });
+
+  it("puts a note back and drops it from the list", async () => {
+    archivedInDb = [
+      {
+        id: "3",
+        kind: "note",
+        text: "Book flights",
+        color: "mint",
+        deletedAt: Date.now() - 60_000,
+        purgeAt: Date.now() + 30 * 24 * 60 * 60 * 1000,
+      },
+    ];
+    await renderPanel();
+    (await screen.findByRole("button", { name: "Archive, 1 deleted" })).click();
+
+    (await screen.findByRole("button", { name: "Restore Book flights" })).click();
+
+    await waitFor(() => {
+      expect(commandCalls("notes_restore")).toEqual([{ id: "3" }]);
+    });
+    // The notes list is read again, so the note lands where its own timestamp
+    // puts it rather than at the top.
+    await waitFor(() => {
+      expect(commandCalls("notes_list").length).toBeGreaterThan(1);
+    });
+    // The row has gone, and the screen says why it is empty rather than showing
+    // a list of nothing.
+    await screen.findByText("Nothing deleted");
+    // And on the way out, the door has closed behind you.
+    (await screen.findByRole("button", { name: "Back to notes" })).click();
+    await waitFor(() => {
+      const button = screen.getByRole("button", { name: "Archive, empty" });
+      expect((button as HTMLButtonElement).disabled).toBe(true);
+    });
+  });
+
+  it("closes on Esc, like the settings pane it sits beside", async () => {
+    archivedInDb = [
+      {
+        id: "3",
+        kind: "note",
+        text: "Book flights",
+        color: "mint",
+        deletedAt: Date.now() - 60_000,
+        purgeAt: Date.now() + 30 * 24 * 60 * 60 * 1000,
+      },
+    ];
+    await renderPanel();
+    (await screen.findByRole("button", { name: "Archive, 1 deleted" })).click();
+    await screen.findByRole("region", { name: "Archive" });
+
+    fireEvent.keyDown(window, { key: "Escape" });
+
+    await waitFor(() => {
+      expect(screen.queryByRole("region", { name: "Archive" })).toBeNull();
+    });
+    // And the panel is still open: Esc closed the front-most thing, not both.
+    expect(useDockStore.getState().phase).not.toBe("collapsed");
+  });
+});
+
 describe("the Tasks tab", () => {
   /** Today, as the store writes it: these tests run against the real clock. */
   function todayKey(): string {
@@ -730,47 +861,96 @@ describe("the Tasks tab", () => {
   });
 
   /**
-   * The sheet is where a status other than done is set, and the row has to stay
-   * under the cursor while it happens: the sheet is open below it, and a list
-   * that reshuffled would take the controls away mid-press.
+   * A status chosen in the sheet takes effect in the list at once.
+   *
+   * Reported by the owner on 18 Sep 2026: the row held its old section until the
+   * tab was left and come back to, so the list went on saying "In progress"
+   * about a task the sheet open inside it said was cancelled. Only a tick holds
+   * a row now — that is a press protecting itself from its own consequences;
+   * this is an answer, and an answer that is ignored looks broken.
    */
-  it("starts a task from its sheet and holds the row where it was", async () => {
+  it("moves a row as soon as its status is chosen in the sheet", async () => {
     await withTasks(task({ id: "draft", title: "draft the email", dueDate: todayKey() }));
     await useNotesStore.getState().setView("todo");
 
     (await screen.findByRole("button", { name: /draft the email/ })).click();
-    const start = await screen.findByRole("button", { name: "In progress" });
-    start.click();
+    (await screen.findByRole("button", { name: "In progress" })).click();
 
     await waitFor(() => {
       expect(commandCalls("tasks_set_status")).toEqual([
         { id: "draft", status: "in_progress" },
       ]);
     });
+
     const panel = screen.getByRole("tabpanel", { name: "Tasks" });
-    // The box says so at once, in the three-state way a box says it.
+    // The headings carry their count, which is what tells them from the sheet's
+    // own "Today" chip and its "In progress" segment.
     await waitFor(() => {
       expect(
-        within(panel).getByRole("checkbox", { name: "draft the email" }).getAttribute(
-          "aria-checked",
-        ),
-      ).toBe("mixed");
+        within(panel).getAllByRole("button", { name: "In progress1" }).length,
+      ).toBeGreaterThan(0);
     });
-    // And it is still under Today, where it was pressed. The headings carry
-    // their count, which is what tells them from the sheet's own "Today" chip
-    // and its "In progress" segment.
+    expect(within(panel).queryByRole("button", { name: "Today1" })).toBeNull();
+    // The box says so too, in the three-state way a box says it.
+    expect(
+      within(panel).getByRole("checkbox", { name: "draft the email" }).getAttribute(
+        "aria-checked",
+      ),
+    ).toBe("mixed");
+    // And the sheet went with it rather than being left behind.
+    expect(within(panel).getByRole("textbox", { name: "Task" })).toBeTruthy();
+  });
+
+  /** The same, for the status the owner reported it with. */
+  it("moves a row out of In progress the moment it is cancelled", async () => {
+    await withTasks(
+      task({ id: "venue", title: "book the venue", status: "in_progress" }),
+      task({ id: "other", title: "call the printer", dueDate: todayKey() }),
+    );
+    await useNotesStore.getState().setView("todo");
+
+    (await screen.findByRole("button", { name: /book the venue/ })).click();
+    (await screen.findByRole("button", { name: "Cancelled" })).click();
+
+    await waitFor(() => {
+      expect(commandCalls("tasks_set_status")).toEqual([
+        { id: "venue", status: "cancelled" },
+      ]);
+    });
+
+    const panel = screen.getByRole("tabpanel", { name: "Tasks" });
+    // In progress is empty now, so the section is gone; Cancelled has it, folded
+    // as it starts, with the count as the answer.
+    await waitFor(() => {
+      expect(within(panel).queryByRole("button", { name: "In progress1" })).toBeNull();
+    });
+    expect(within(panel).getByRole("button", { name: "Cancelled1" })).toBeTruthy();
+    expect(within(panel).queryByRole("checkbox", { name: /book the venue/ })).toBeNull();
+  });
+
+  /**
+   * The box is the other half of the rule: ticking one must not throw the row
+   * into Done from under the finger that ticked it.
+   */
+  it("keeps a ticked row where it was until the tab is left", async () => {
+    await withTasks(task({ id: "milk", title: "milk", dueDate: todayKey() }));
+    await useNotesStore.getState().setView("todo");
+
+    (await screen.findByRole("checkbox", { name: "milk" })).click();
+
+    await waitFor(() => {
+      expect(commandCalls("tasks_set_status")).toEqual([{ id: "milk", status: "done" }]);
+    });
+    const panel = screen.getByRole("tabpanel", { name: "Tasks" });
     expect(within(panel).getAllByRole("button", { name: "Today1" }).length).toBeGreaterThan(
       0,
     );
-    expect(within(panel).queryByRole("button", { name: "In progress1" })).toBeNull();
 
-    // Coming back is a new visit, and by then it has settled.
+    // Coming back is a new visit, and by then it has settled into Done.
     await useNotesStore.getState().setView("notes");
     await useNotesStore.getState().setView("todo");
     await waitFor(() => {
-      expect(screen.getAllByRole("button", { name: "In progress1" }).length).toBeGreaterThan(
-        0,
-      );
+      expect(screen.queryByRole("checkbox", { name: "milk" })).toBeNull();
     });
   });
 
@@ -786,11 +966,16 @@ describe("the Tasks tab", () => {
         { id: "venue", status: "cancelled" },
       ]);
     });
-    // The box is not a tick: a cancelled task was not done.
-    await waitFor(() => {
-      const box = screen.getByRole("checkbox", { name: "book the venue (cancelled)" });
-      expect(box.getAttribute("aria-checked")).toBe("false");
+
+    // Cancelled starts folded, as Done does; unfolding it is where the task went.
+    const panel = screen.getByRole("tabpanel", { name: "Tasks" });
+    (await within(panel).findByRole("button", { name: "Cancelled1" })).click();
+
+    // The box is not a tick: a cancelled task was not done, and says which.
+    const box = await within(panel).findByRole("checkbox", {
+      name: "book the venue (cancelled)",
     });
+    expect(box.getAttribute("aria-checked")).toBe("false");
     // And the tab stops counting it as work.
     await waitFor(() => {
       expect(screen.getByRole("tab", { name: "Tasks" })).toBeTruthy();

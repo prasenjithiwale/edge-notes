@@ -121,6 +121,26 @@ export interface TaskPatch {
   repeat?: Repeat | null;
 }
 
+/**
+ * A deleted note or task, still restorable.
+ *
+ * Both are soft-deleted and purged thirty days later, which undo has always
+ * relied on; the archive is the same rows, made visible, so a delete whose toast
+ * has gone is not the same as a delete that was final.
+ */
+export interface ArchivedItem {
+  id: string;
+  kind: "note" | "task";
+  /** A note's whole content, or a task's title. */
+  text: string;
+  /** The note's palette id; tasks have none. */
+  color: NoteColor | null;
+  /** Unix milliseconds. */
+  deletedAt: number;
+  /** When it is purged for good: thirty days after it was deleted. */
+  purgeAt: number;
+}
+
 /** What the About section shows, and what a bug report needs. */
 export interface AppInfo {
   name: string;
@@ -352,6 +372,11 @@ export function notesSetPinned(id: string, pinned: boolean): Promise<Note> {
 
 export async function notesDelete(id: string): Promise<void> {
   await callResult<null>("notes_delete", { id });
+}
+
+/** Everything deleted and not yet purged, notes and tasks, newest first. */
+export function archiveList(): Promise<ArchivedItem[]> {
+  return callResult<ArchivedItem[]>("archive_list");
 }
 
 export function notesRestore(id: string): Promise<Note> {

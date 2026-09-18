@@ -65,6 +65,7 @@ pub fn run() {
             commands::notes_set_pinned,
             commands::notes_delete,
             commands::notes_restore,
+            commands::archive_list,
             commands::tasks_list,
             commands::tasks_create,
             commands::tasks_update,

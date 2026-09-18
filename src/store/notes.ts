@@ -10,6 +10,7 @@ import {
   type Note,
   type NoteColor,
 } from "../lib/ipc";
+import { refreshArchive } from "./archive";
 import { toggleTaskLine } from "../lib/markdown";
 import { isNoteEmpty, sortNotes } from "../lib/notes";
 import { useSettingsStore } from "./settings";
@@ -338,6 +339,7 @@ export const useNotesStore = create<NotesStore>((set, get) => ({
 
     try {
       await notesDelete(id);
+      refreshArchive();
     } catch (error: unknown) {
       console.error("notes: delete failed", error);
       return;
@@ -364,6 +366,7 @@ export const useNotesStore = create<NotesStore>((set, get) => ({
 
     try {
       const restored = await notesRestore(pending.note.id);
+      refreshArchive();
       savedContent.set(restored.id, restored.content);
       set((state) => ({ notes: sortNotes([...state.notes, restored]) }));
     } catch (error: unknown) {

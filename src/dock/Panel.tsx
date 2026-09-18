@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Pin, Plus, Search, Settings as SettingsIcon } from "lucide-react";
+import { Archive, Pin, Plus, Search, Settings as SettingsIcon } from "lucide-react";
 import type { UnlistenFn } from "@tauri-apps/api/event";
 
 import { IconButton } from "../components/IconButton";
@@ -22,6 +22,7 @@ import { isRunning } from "../lib/pomodoro";
 import { useTasksStore } from "../store/tasks";
 import { pomodoroReminder, usePomodoroStore } from "../store/pomodoro";
 import { moveCardFocus } from "../notes/cardFocus";
+import { ArchiveView } from "../notes/ArchiveView";
 import { ColorFilter } from "../notes/ColorFilter";
 import { EmptyState } from "../notes/EmptyState";
 import { NoteEditor } from "../notes/NoteEditor";
@@ -32,6 +33,7 @@ import { PomodoroView } from "../focus/PomodoroView";
 import { TABS, ViewTabs } from "../notes/ViewTabs";
 import { SearchField } from "../notes/SearchField";
 import { SettingsView } from "../settings/SettingsView";
+import { useArchiveStore } from "../store/archive";
 import { useDockStore } from "../store/dock";
 import { useNotesStore } from "../store/notes";
 import { useSettingsStore } from "../store/settings";
@@ -80,6 +82,7 @@ function isTextField(target: EventTarget | null): boolean {
 export function Panel({ className }: PanelProps) {
   const panelRef = useRef<HTMLElement>(null);
   const [showSettings, setShowSettings] = useState(false);
+  const [showArchive, setShowArchive] = useState(false);
 
   const keepOpen = useDockStore((state) => state.keepOpen);
   const setKeepOpen = useDockStore((state) => state.setKeepOpen);
@@ -118,6 +121,8 @@ export function Panel({ className }: PanelProps) {
   const closeSearch = useNotesStore((state) => state.closeSearch);
   const setColorFilter = useNotesStore((state) => state.setColorFilter);
 
+  const loadArchive = useArchiveStore((state) => state.load);
+  const archived = useArchiveStore((state) => state.items.length);
   const loadSettings = useSettingsStore((state) => state.load);
   const applySettings = useSettingsStore((state) => state.apply);
   const settings = useSettingsStore((state) => state.settings);
@@ -127,7 +132,8 @@ export function Panel({ className }: PanelProps) {
     void load();
     void loadTasks();
     void loadSettings();
-  }, [load, loadTasks, loadSettings]);
+    void loadArchive();
+  }, [load, loadTasks, loadSettings, loadArchive]);
 
   useEffect(
     () => subscription(onSettingsChanged(applySettings), "settings:changed"),
@@ -231,9 +237,11 @@ export function Panel({ className }: PanelProps) {
   // through a ref rather than closing over a stale one. Written in an effect,
   // because a ref must not be touched during render.
   const settingsOpenRef = useRef(false);
+  const archiveOpenRef = useRef(false);
   useEffect(() => {
     settingsOpenRef.current = showSettings;
-  }, [showSettings]);
+    archiveOpenRef.current = showArchive;
+  }, [showSettings, showArchive]);
 
   // Keyboard handling sits on the window, not on the panel element: closing the
   // editor or the search field unmounts the focused node and focus falls back to
@@ -334,6 +342,8 @@ export function Panel({ className }: PanelProps) {
         // swallow the same key.
         if (settingsOpenRef.current) {
           setShowSettings(false);
+        } else if (archiveOpenRef.current) {
+          setShowArchive(false);
         } else if (notesStore.editingId !== null) {
           void notesStore.stopEditing();
         } else if (notesStore.expandedId !== null) {
@@ -488,6 +498,12 @@ export function Panel({ className }: PanelProps) {
             setShowSettings(false);
           }}
         />
+      ) : showArchive ? (
+        <ArchiveView
+          onClose={() => {
+            setShowArchive(false);
+          }}
+        />
       ) : (
         // Notes and Tasks sit side by side on a track that slides between them,
         // in tab order. Both stay mounted so there is something to slide; the
@@ -573,10 +589,33 @@ export function Panel({ className }: PanelProps) {
           active={showSettings}
           pressed={showSettings}
           onClick={() => {
+            setShowArchive(false);
             setShowSettings((open) => !open);
           }}
         >
           <SettingsIcon size={16} strokeWidth={1.75} />
+        </IconButton>
+        {/* Beside Settings, and dead while the archive is empty: a button that
+            opens a screen saying "nothing here" is a button that wasted a press.
+            The count is in its name, so what it would show is known before it is
+            pressed — and by a screen reader, not only by eye. */}
+        <IconButton
+          label={
+            showArchive
+              ? "Back"
+              : archived === 0
+                ? "Archive, empty"
+                : `Archive, ${String(archived)} deleted`
+          }
+          active={showArchive}
+          pressed={showArchive}
+          disabled={archived === 0 && !showArchive}
+          onClick={() => {
+            setShowSettings(false);
+            setShowArchive((open) => !open);
+          }}
+        >
+          <Archive size={16} strokeWidth={1.75} />
         </IconButton>
         <IconButton
           label="Keep open"

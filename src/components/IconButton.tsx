@@ -10,6 +10,11 @@ interface IconButtonProps {
   active?: boolean;
   outlined?: boolean;
   pressed?: boolean;
+  /**
+   * Off, and plainly so. Used where the button would open something with
+   * nothing in it: the archive, while nothing has been deleted.
+   */
+  disabled?: boolean;
   className?: string | undefined;
   /** Shown in the tooltip after the label, e.g. "⌘B". */
   shortcut?: string | undefined;
@@ -32,6 +37,7 @@ export function IconButton({
   active = false,
   outlined = false,
   pressed,
+  disabled = false,
   className,
   shortcut,
   keepFocus = false,
@@ -48,6 +54,7 @@ export function IconButton({
       )}
       aria-label={label}
       title={shortcut === undefined ? label : `${label} (${shortcut})`}
+      disabled={disabled}
       {...(keepFocus
         ? {
             onMouseDown: (event: MouseEvent) => {

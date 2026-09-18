@@ -183,18 +183,25 @@ export function TasksView({ active, query }: TasksViewProps) {
 
   const rootRef = useRef<HTMLDivElement>(null);
   const [focused, setFocused] = useState(false);
-  /**
-   * Rows whose status changed during this visit, against the status they had
-   * when it did.
+   /**
+   * Rows *ticked* during this visit, against the status they had when it
+   * happened.
    *
-   * A row is grouped by the status it was holding, not the one it has now, so
-   * ticking a task does not throw it into Done from under the cursor and
-   * starting one does not tear it out of Today mid-press. Which status it *was*
-   * is what is remembered, rather than a bare "this moved": a task ticked while
-   * in progress belongs back in In progress for the rest of the visit, and
-   * anything less specific would still move it.
+   * A ticked row is grouped by the status it was holding rather than the one it
+   * has now, so the box you just pressed does not throw the row into Done from
+   * under your finger. Which status it *was* is what is remembered rather than a
+   * bare "this moved": a task ticked while in progress belongs back in In
+   * progress for the rest of the visit, and anything less specific would still
+   * move it.
+   *
+   * Only the box. A status chosen in the sheet is not a press that needs
+   * protecting from its own consequences — it is an answer to "what is happening
+   * with this", and holding the row made the list disagree with the sheet
+   * sitting open inside it until the tab was left and come back to. Reported by
+   * the owner on 18 Sep 2026: cancelling a task from its sheet left it under In
+   * progress.
    */
-  const [heldHere, setHeldHere] = useState<ReadonlyMap<string, Status>>(new Map());
+  const [tickedHere, setTickedHere] = useState<ReadonlyMap<string, Status>>(new Map());
 
   // Each time the tab is shown is a new visit: what was ticked last time settles
   // into Done. Adjusted while rendering, when `active` changes, so the first
@@ -203,7 +210,7 @@ export function TasksView({ active, query }: TasksViewProps) {
   if (active !== seenActive) {
     setSeenActive(active);
     if (active) {
-      setHeldHere(new Map());
+      setTickedHere(new Map());
     }
   }
 
@@ -212,7 +219,7 @@ export function TasksView({ active, query }: TasksViewProps) {
   if (phase !== seenPhase) {
     setSeenPhase(phase);
     if (phase === "collapsed") {
-      setHeldHere(new Map());
+      setTickedHere(new Map());
     }
   }
 
@@ -235,43 +242,6 @@ export function TasksView({ active, query }: TasksViewProps) {
     }
   }, [active]);
 
-  // A sheet is a task's own screen, and opening one on the last row would
-  // otherwise unfold it below the fold, where nothing says it is there.
-  useEffect(() => {
-    if (detailsId === null || !active) {
-      return;
-    }
-    const sheet = rootRef.current?.querySelector<HTMLElement>(`[data-sheet="${detailsId}"]`);
-    // Feature-detected: jsdom has no layout, so it has no `scrollIntoView`.
-    if (typeof sheet?.scrollIntoView === "function") {
-      sheet.scrollIntoView({ block: "nearest", behavior: "smooth" });
-    }
-  }, [detailsId, active]);
-
-  const searching = query.trim() !== "";
-  const sections = useMemo(() => {
-    const at = new Date(now);
-    // A task whose status changed during this visit is grouped as the status it
-    // had, so the row under the cursor stays where the cursor is.
-    const asShown = filterTasks(tasks, query).map((task) => {
-      const held = heldHere.get(task.id);
-      if (held === undefined || held === task.status) {
-        return task;
-      }
-      // An open status has no closing time, and `groupTasks` reads that time to
-      // decide what has aged out of Done.
-      return { ...task, status: held, doneAt: held === "done" || held === "cancelled" ? task.doneAt : null };
-    });
-    return groupTasks(asShown, at);
-  }, [tasks, query, now, heldHere]);
-
-  const hasAny = tasks.length > 0;
-  const nothingMatches = sections.length === 0;
-  // Everything is closed, but there are still tasks: not the same as having
-  // none, and not the same as a search that found nothing.
-  const allClear =
-    !searching && sections.every((section) => CLOSED_SECTIONS.includes(section.kind));
-
   /**
    * The stored task behind a row, by id.
    *
@@ -285,20 +255,54 @@ export function TasksView({ active, query }: TasksViewProps) {
    */
   const stored = useMemo(() => new Map(tasks.map((task) => [task.id, task])), [tasks]);
 
-  /**
-   * Remember where a row was before its status changed, for the rest of the
-   * visit. Every status change on this screen goes through here — the box and
-   * the sheet's segments alike — because a row that moved would be as surprising
-   * from one as from the other.
-   */
-  const hold = (task: Task) => {
-    setHeldHere((current) =>
+  // A sheet is a task's own screen, and opening one on the last row would
+  // otherwise unfold it below the fold, where nothing says it is there.
+  //
+  // Keyed on the status as well as the task, because a status set in the sheet
+  // moves the row to another section at once and the sheet goes with it: without
+  // this, choosing "In progress" would carry the sheet to the top of the list and
+  // leave the reader looking at where it used to be.
+  const openStatus = detailsId === null ? null : (stored.get(detailsId)?.status ?? null);
+  useEffect(() => {
+    if (detailsId === null || !active) {
+      return;
+    }
+    const sheet = rootRef.current?.querySelector<HTMLElement>(`[data-sheet="${detailsId}"]`);
+    // Feature-detected: jsdom has no layout, so it has no `scrollIntoView`.
+    if (typeof sheet?.scrollIntoView === "function") {
+      sheet.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    }
+  }, [detailsId, openStatus, active]);
+
+  const searching = query.trim() !== "";
+  const sections = useMemo(() => {
+    const at = new Date(now);
+    // A task ticked during this visit is grouped as the status it had, so the
+    // row under the cursor stays where the cursor is.
+    const asShown = filterTasks(tasks, query).map((task) => {
+      const held = tickedHere.get(task.id);
+      if (held === undefined || held === task.status) {
+        return task;
+      }
+      // An open status has no closing time, and `groupTasks` reads that time to
+      // decide what has aged out of Done.
+      return { ...task, status: held, doneAt: held === "done" || held === "cancelled" ? task.doneAt : null };
+    });
+    return groupTasks(asShown, at);
+  }, [tasks, query, now, tickedHere]);
+
+  const hasAny = tasks.length > 0;
+  const nothingMatches = sections.length === 0;
+  // Everything is closed, but there are still tasks: not the same as having
+  // none, and not the same as a search that found nothing.
+  const allClear =
+    !searching && sections.every((section) => CLOSED_SECTIONS.includes(section.kind));
+
+  /** Remember where a ticked row was, for the rest of the visit. */
+  const onTick = (task: Task) => {
+    setTickedHere((current) =>
       current.has(task.id) ? current : new Map(current).set(task.id, task.status),
     );
-  };
-
-  const onTick = (task: Task) => {
-    hold(task);
     void tick(task.id);
   };
 
@@ -365,9 +369,6 @@ export function TasksView({ active, query }: TasksViewProps) {
           <TaskDetails
             task={task}
             onFocusChange={setFocused}
-            onStatusChange={() => {
-              hold(task);
-            }}
             onClose={() => {
               openDetails(null);
             }}

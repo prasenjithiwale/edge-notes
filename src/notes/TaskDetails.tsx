@@ -41,12 +41,6 @@ interface TaskDetailsProps {
   onClose: () => void;
   /** Told when a field here has the keyboard, so the panel stays open. */
   onFocusChange: (focused: boolean) => void;
-  /**
-   * Told *before* a status is written, so the list can hold the row where it is
-   * for the rest of the visit. Changing a status here moves the task between
-   * sections, and the sheet is open underneath it.
-   */
-  onStatusChange: () => void;
 }
 
 function Section({
@@ -114,12 +108,7 @@ const STATUS_ICONS: Record<Status, ComponentType<{ size?: number; strokeWidth?: 
  * of a sentence on the way in, and any of them could be broken by editing the
  * words around them.
  */
-export function TaskDetails({
-  task,
-  onClose,
-  onFocusChange,
-  onStatusChange,
-}: TaskDetailsProps) {
+export function TaskDetails({ task, onClose, onFocusChange }: TaskDetailsProps) {
   const patch = useTasksStore((state) => state.patch);
   const setStatus = useTasksStore((state) => state.setStatus);
   const setTitle = useTasksStore((state) => state.setTitle);
@@ -225,11 +214,15 @@ export function TaskDetails({
                 type="button"
                 className={cx(styles.segment, selected && styles.selected)}
                 aria-pressed={selected}
+                // The row moves to the section its new status belongs in, at
+                // once: this is an answer to "what is happening with this", and
+                // a list that went on saying the old one until the tab was left
+                // would be disagreeing with the sheet open inside it. The sheet
+                // travels with the row, and the list scrolls it back into view.
                 onClick={() => {
                   if (selected) {
                     return;
                   }
-                  onStatusChange();
                   void setStatus(task.id, status);
                 }}
               >

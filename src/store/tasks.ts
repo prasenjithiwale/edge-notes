@@ -11,6 +11,7 @@ import {
   type Task,
   type TaskPatch,
 } from "../lib/ipc";
+import { refreshArchive } from "./archive";
 import {
   isClosed,
   nextOccurrence,
@@ -224,6 +225,7 @@ export const useTasksStore = create<TasksStore>((set, get) => ({
 
     try {
       await tasksDelete(id);
+      refreshArchive();
     } catch (error: unknown) {
       console.error("tasks: delete failed", error);
       set({ pendingUndo: null });
@@ -252,6 +254,7 @@ export const useTasksStore = create<TasksStore>((set, get) => ({
 
     try {
       const restored = await tasksRestore(pending.task.id);
+      refreshArchive();
       set((state) => ({ tasks: [...state.tasks, restored] }));
     } catch (error: unknown) {
       console.error("tasks: restore failed", error);

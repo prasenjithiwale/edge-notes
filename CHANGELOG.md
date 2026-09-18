@@ -11,6 +11,25 @@ To release, see "Releasing" in the README.
 
 ## [Unreleased]
 
+## [0.4.2] - 2026-09-18
+
+### Added
+
+- **An Archive, beside the settings gear at the foot of the panel.** Everything
+  you delete is kept for thirty days — that was always true, but the undo toast
+  was the only way to see it, so a delete you noticed a minute later looked
+  final. The archive lists deleted notes and tasks together, newest first, with
+  how long each one has left and a Restore beside it. The button is not
+  clickable while there is nothing to restore, and says how many there are.
+
+### Fixed
+
+- **A status chosen in a task's sheet takes effect at once.** Setting one to
+  Cancelled left the row sitting under In progress until you left the tab and
+  came back — the list disagreeing with the sheet open inside it. Only a tick
+  holds a row in place now, which is what that rule was for: stopping the box you
+  just pressed from throwing the row into Done from under your finger.
+
 ## [0.4.1] - 2026-09-18
 
 ### Changed
