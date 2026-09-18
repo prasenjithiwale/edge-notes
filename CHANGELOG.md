@@ -11,6 +11,18 @@ To release, see "Releasing" in the README.
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-09-18
+
+### Fixed
+
+- **The panel opens without the tab flashing into the middle of the screen.**
+  For an instant at the start of every open, the tab was drawn where the panel's
+  top-left corner was about to be, and then vanished. macOS applies a window's
+  move and its resize as two separate changes, so the still-collapsed window was
+  moved into place before it grew, carrying the tab with it; Ledge now sets the
+  whole frame in one go, and keeps the panel out of sight for the two frames it
+  takes the webview to catch up.
+
 ## [0.5.0] - 2026-09-18
 
 ### Added

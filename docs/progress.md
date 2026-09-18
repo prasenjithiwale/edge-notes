@@ -33,7 +33,7 @@ Work after M5, owner-requested, newest last:
 | Public links, a changelog page and a theme switch | 18 Sep 2026 | Released in **v0.4.1**. The site no longer links into the private repository. |
 | The archive, and a status that takes effect at once | 18 Sep 2026 | Released in **v0.4.2**. Both owner-reported; checklist below not run on screen (machine locked). |
 | Headings, note titles, and deleting for good | 18 Sep 2026 | Released in **v0.5.0**. `@lexical/rich-text` approved by the owner the same day. |
-| The tab flashed inwards as the panel opened (macOS) | 18 Sep 2026 | Fixed; measured frame by frame before and after. Windows and Linux still have the two-call split. |
+| The tab flashed inwards as the panel opened (macOS) | 18 Sep 2026 | Released in **v0.5.1**; measured frame by frame before and after. Windows and Linux still have the two-call split. |
 
 **Releases:** [v0.0.1](https://github.com/prasenjithiwale/edge-notes/releases/tag/v0.0.1)
 and [v0.0.2](https://github.com/prasenjithiwale/edge-notes/releases/tag/v0.0.2),
@@ -3646,6 +3646,15 @@ with `alpha=0.0`, and back to `alpha=1.0` 34 ms later. There is no intermediate
 rect, and nothing is on screen while the pixels are stale. The collapse back to
 the tab stays at `alpha=1.0` throughout.
 
+Confirmed on screen afterwards, same method as the diagnosis, twice: the two
+clusters of changed pixels are now one — the pill leaving its own place — and
+there is no pill at (1532, 168) or anywhere else. The tab is simply absent for
+two or three frames while the panel arrives. The cost is that the slide is
+covered for its first 33 ms, so the panel is first seen about 70% of the way in
+rather than 57%; with `--open-easing` being `cubic-bezier(0.2, 0, 0, 1)` that is
+about 20 ms of a slide that was always going to be half out by then. The close
+is unchanged: it slides out to nothing with no blink at the end.
+
 ### Still open
 
 - **Windows has the same two-call split** (`SetWindowPos` twice) and will show
@@ -3656,16 +3665,14 @@ the tab stays at `alpha=1.0` throughout.
   wait in between, and is the one platform where the placement is known to need
   re-checking. `gdk_window_move_resize` is the atomic call there. Not attempted
   without hardware.
-- The pixel-level confirmation on screen is still to be run: the machine locked
-  itself while the fix was being measured, and the checks above were done through
-  the window list rather than the recording.
 
 ### Checklist (macOS)
 
-- [ ] Open the panel ten times: the tab never appears anywhere but the screen
-      edge, and nothing flashes in the middle of the screen
-- [ ] The panel slides in from the edge rather than appearing part-way in
-- [ ] Close it ten times: the tab is back at the edge with no blink
+- [x] Open the panel: the tab never appears anywhere but the screen edge, and
+      nothing flashes in the middle of the screen (recorded and diffed twice)
+- [ ] Open it ten times by hand: the same, and it feels right
+- [ ] Close it ten times: the tab is back at the edge with no blink (recorded
+      once, clean)
 - [ ] Expand a note to the large panel and shrink it again: no frame of the old
       panel in the new one's place
 - [ ] Drag the tab along the edge: it still follows the cursor
