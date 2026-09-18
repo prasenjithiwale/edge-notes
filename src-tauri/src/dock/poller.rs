@@ -325,10 +325,13 @@ fn apply_rect(app: &AppHandle, rect: Rect) {
 
 /// Move and resize the window.
 ///
-/// Tauri 2.11 has no atomic bounds API, so this is two calls. Both are issued
-/// inside one main-thread closure so they land in the same run-loop turn and the
-/// compositor presents a single update. If a jump ever shows up on macOS, the
-/// next step is `NSPanel::setFrame_display_` through the panel handle.
+/// macOS sets the frame in one go through the panel handle, because its two
+/// calls are applied in separate run-loop turns and the moved-but-not-yet-grown
+/// window is a frame the user can see (`platform::macos::set_frame`).
+///
+/// Everywhere else Tauri 2.11 has no atomic bounds API, so this is two calls.
+/// Both are issued inside one main-thread closure so they land in the same
+/// run-loop turn and the compositor has the chance to present a single update.
 #[cfg(not(target_os = "linux"))]
 fn apply_rect(app: &AppHandle, rect: Rect) {
     let handle = app.clone();
@@ -336,6 +339,19 @@ fn apply_rect(app: &AppHandle, rect: Rect) {
         let Some(window) = handle.get_webview_window(DOCK_WINDOW_LABEL) else {
             return;
         };
+        #[cfg(target_os = "macos")]
+        {
+            // A window collapsing back to the tab is the one resize that needs
+            // no cover: the panel has already slid out, so the pixels the
+            // webview painted last are the panel's empty margin, and hiding the
+            // tab for two frames would blink the only thing always on screen.
+            let cover = handle
+                .try_state::<std::sync::Arc<Dock>>()
+                .is_some_and(|dock| dock.phase().is_expanded());
+            if crate::platform::macos::set_frame(&window, rect, cover) {
+                return;
+            }
+        }
         let current = current_rect(&window).unwrap_or(rect);
         let position = PhysicalPosition::new(rect.x, rect.y);
         let size = PhysicalSize::new(rect.width, rect.height);

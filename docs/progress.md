@@ -33,6 +33,7 @@ Work after M5, owner-requested, newest last:
 | Public links, a changelog page and a theme switch | 18 Sep 2026 | Released in **v0.4.1**. The site no longer links into the private repository. |
 | The archive, and a status that takes effect at once | 18 Sep 2026 | Released in **v0.4.2**. Both owner-reported; checklist below not run on screen (machine locked). |
 | Headings, note titles, and deleting for good | 18 Sep 2026 | Released in **v0.5.0**. `@lexical/rich-text` approved by the owner the same day. |
+| The tab flashed inwards as the panel opened (macOS) | 18 Sep 2026 | Fixed; measured frame by frame before and after. Windows and Linux still have the two-call split. |
 
 **Releases:** [v0.0.1](https://github.com/prasenjithiwale/edge-notes/releases/tag/v0.0.1)
 and [v0.0.2](https://github.com/prasenjithiwale/edge-notes/releases/tag/v0.0.2),
@@ -3577,6 +3578,100 @@ a task that had just been finished; it gets the stored one now as well.
 - [ ] Space on a row still ticks it (it settles into Done at once, because the
       keyboard path calls `tick` directly and takes no hold — an old difference
       between the two, left alone here)
+
+## The tab flashed inwards as the panel opened (18 Sep 2026)
+
+Reported by the owner: something flashes on screen for an instant when the panel
+opens — "visible for a fraction of a millisecond" — on macOS as well as Windows,
+and blamed on the Linux placement fix of 15 Sep.
+
+### What it actually is, measured frame by frame
+
+The screen was recorded with `screencapture -v` while the cursor was warped onto
+the tab (`CGWarpMouseCursorPosition`; no Accessibility permission needed for a
+warp), and the frames were pulled out with `AVAssetReader` and diffed against the
+frame before the open. On this 1920×1080 display, with the dock on the right:
+
+- Collapsed window: **(1898, 454, 22, 72)**; the pill is painted at +6,+10 inside
+  it, so at (1904, 464).
+- Expanded window: **(1526, 158, 394, 664)**.
+- For **two frames** at the start of every open, the recording has exactly two
+  clusters of changed pixels: the pill gone from (1904, 464) and the same pill,
+  the same size, at **(1532, 168)** — which is +6,+10 inside the *expanded*
+  window. Then the next frame has the panel already 60% slid in.
+
+So the window changes to the expanded rect while the webview still holds the
+collapsed rendering, and the window server has to show that rendering at the new
+origin: the tab appears to jump 370 px inwards and 296 px up, then vanish, before
+the panel arrives. Nothing to do with the Linux fix, which does not compile into
+the macOS build at all — `apply_rect`'s macOS path has not changed since M0. What
+has changed is how much there is to lay out before the first paint.
+
+### Two causes, one behind the other
+
+1. **The move and the resize are not one change.** tao's `set_outer_position` and
+   `set_inner_size` on macOS are `set_frame_top_left_point_async` and
+   `set_content_size_async`, and each `dispatch_async`es a block of its own onto
+   the main queue. Issuing them back to back inside one `run_on_main_thread`
+   closure — which is what `apply_rect` was written to do — still reaches the
+   window server as two changes in two run-loop turns. Growing moves first
+   (`apply_order`), so the still-collapsed window is moved to the panel's corner
+   and only then grown.
+2. **The frame change is atomic; the repaint behind it is not.** Even as one
+   change, the window server presents the new rect with whatever the web process
+   last painted, and that is a frame behind.
+
+### Fix
+
+- `platform::macos::set_frame` sends **`setFrame:display:`** to the panel —
+  origin and size in one transaction. It is expressed as a delta from the
+  window's current frame, so Cocoa's bottom-left origin and tao's flip constant
+  cancel and it cannot disagree with `outer_position`. It returns false if the
+  panel or the geometry cannot be read, and `apply_rect` then falls back to the
+  two calls rather than leaving the window where it was. This is the reserve fix
+  CLAUDE.md has been carrying since M0.
+- A resize **while the panel is out** hides the panel for `REVEAL_DELAY` (33 ms,
+  two frames at 60 Hz) so the stale frame is never shown. The collapse back to
+  the tab is deliberately *not* covered: there the stale pixels are the panel's
+  own empty margin, and a cover would blink the tab instead — the one thing
+  always on screen.
+- The reveal thread is started **before** the panel is hidden, and hiding is
+  skipped if it could not start; every later placement sets the alpha back to 1
+  whether it covered anything or not. A cover that is never lifted is an app that
+  has vanished, so nothing on the path back may be able to not happen.
+
+Measured after the change, with `CGWindowListCopyWindowInfo` sampled every 3 ms:
+the window goes from (1898, 454, 22, 72) to (1526, 158, 394, 664) in one sample
+with `alpha=0.0`, and back to `alpha=1.0` 34 ms later. There is no intermediate
+rect, and nothing is on screen while the pixels are stale. The collapse back to
+the tab stays at `alpha=1.0` throughout.
+
+### Still open
+
+- **Windows has the same two-call split** (`SetWindowPos` twice) and will show
+  the same jump. The one-call fix needs `SetWindowPos` through `hwnd()`, which is
+  either a new dependency or a hand-written `extern "system"` declaration, and
+  neither can be compiled or seen here. Not attempted.
+- **Linux** takes the `settle_rect` path, which is deliberately two steps with a
+  wait in between, and is the one platform where the placement is known to need
+  re-checking. `gdk_window_move_resize` is the atomic call there. Not attempted
+  without hardware.
+- The pixel-level confirmation on screen is still to be run: the machine locked
+  itself while the fix was being measured, and the checks above were done through
+  the window list rather than the recording.
+
+### Checklist (macOS)
+
+- [ ] Open the panel ten times: the tab never appears anywhere but the screen
+      edge, and nothing flashes in the middle of the screen
+- [ ] The panel slides in from the edge rather than appearing part-way in
+- [ ] Close it ten times: the tab is back at the edge with no blink
+- [ ] Expand a note to the large panel and shrink it again: no frame of the old
+      panel in the new one's place
+- [ ] Drag the tab along the edge: it still follows the cursor
+- [ ] Dock on the left: the same
+- [ ] Quit and relaunch: the tab is visible (a cover that was never lifted would
+      show up here)
 
 ## M0 acceptance checklist
 

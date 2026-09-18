@@ -3,12 +3,16 @@
 //! Isolated here so `tauri-nspanel` — a pinned community git dependency — can be
 //! swapped out without touching the dock logic.
 
+use std::time::Duration;
+
 use tauri::{App, Manager, WebviewWindow};
+// `NSPoint`, `NSRect` and `NSSize` are spelled out where they are used: the
+// `tauri_panel!` macro below imports them into this module itself.
 use tauri_nspanel::{
     CollectionBehavior, ManagerExt, PanelLevel, StyleMask, WebviewWindowExt, tauri_panel,
 };
 
-use crate::dock::DOCK_WINDOW_LABEL;
+use crate::dock::{DOCK_WINDOW_LABEL, Rect};
 
 tauri_panel! {
     panel!(DockPanel {
@@ -88,4 +92,119 @@ pub fn focus_panel(window: &WebviewWindow) {
     // were all tried and none of them delivered a keystroke, so none of them are
     // carried here.
     panel.show_and_make_key();
+}
+
+/// Move and resize the panel in one window-server transaction.
+///
+/// Tauri 2.11 has no atomic bounds API, and on macOS the two calls it does have
+/// are not even applied in the same run-loop turn: tao's `set_outer_position`
+/// and `set_inner_size` each `dispatch_async` their own block onto the main
+/// queue (`set_frame_top_left_point_async`, `set_content_size_async`), so
+/// issuing them back to back inside one `run_on_main_thread` closure still
+/// reaches the window server as two separate changes.
+///
+/// Opening a right dock moves the window a panel's width inwards before it
+/// grows, and the webview's last painted frame — the collapsed tab, drawn at the
+/// window's top-left — is what the window server has to show at the new origin.
+/// The tab appears to jump into the middle of the screen for a frame or two
+/// before the panel arrives. `setFrame:display:` carries the origin and the size
+/// together, so that intermediate state never exists.
+///
+/// The target is in tao's coordinates (physical pixels, y down from the primary
+/// monitor's top-left) and Cocoa's are logical points with y up from the bottom
+/// left, so the move is expressed as a delta from the window's current frame:
+/// the flip constant cancels, and this cannot disagree with whatever tao would
+/// have computed.
+///
+/// One transaction is not the whole story: the window server presents the new
+/// frame with whatever the webview last painted, so a window that has just
+/// grown is shown with the collapsed tab's pixels in its top-left corner for a
+/// frame while the web process lays out the new size. `cover` hides the panel
+/// across a resize for exactly that long — see `reveal_after_resize`.
+///
+/// False means the frame could not be set — the caller falls back to the two
+/// calls rather than leaving the window where it was.
+pub fn set_frame(window: &WebviewWindow, rect: Rect, cover: bool) -> bool {
+    let Ok(panel) = window.app_handle().get_webview_panel(DOCK_WINDOW_LABEL) else {
+        log::error!("macos: panel not found, cannot set the frame");
+        return false;
+    };
+    let (Ok(position), Ok(size), Ok(scale)) = (
+        window.outer_position(),
+        window.outer_size(),
+        window.scale_factor(),
+    ) else {
+        log::error!("macos: could not read the window geometry");
+        return false;
+    };
+    if scale <= 0.0 {
+        return false;
+    }
+
+    // Only a resize can show pixels the webview painted for a different
+    // window; a move carries content that is still right for the one it has.
+    let resized = rect.width != size.width || rect.height != size.height;
+    panel.set_alpha_value(if cover && resized && reveal_after_resize(window) {
+        0.0
+    } else {
+        // Also the repair for a reveal that never arrived: an invisible widget
+        // is worse than a visible seam, so every placement puts the panel back.
+        1.0
+    });
+
+    let frame = panel.as_panel().frame();
+    let dx = (f64::from(rect.x) - f64::from(position.x)) / scale;
+    // A Cocoa origin is the bottom-left corner, so the window moves up by
+    // whatever its bottom edge moves up in tao's downward coordinates.
+    let bottom = f64::from(position.y) + f64::from(size.height);
+    let target_bottom = f64::from(rect.y) + f64::from(rect.height);
+    let dy = (bottom - target_bottom) / scale;
+
+    panel.as_panel().setFrame_display(
+        tauri_nspanel::NSRect::new(
+            tauri_nspanel::NSPoint::new(frame.origin.x + dx, frame.origin.y + dy),
+            tauri_nspanel::NSSize::new(
+                f64::from(rect.width) / scale,
+                f64::from(rect.height) / scale,
+            ),
+        ),
+        true,
+    );
+    true
+}
+
+/// How long the panel stays invisible while the webview catches up with a
+/// window that has just been resized.
+///
+/// Measured here on a 60 Hz display: one frame of the collapsed tab, drawn at
+/// the expanded window's top-left corner, is what the window server has to show
+/// while the web process lays out the new size. Two frames of cover is enough,
+/// and it is short enough that the panel behind it has barely started to slide.
+const REVEAL_DELAY: Duration = Duration::from_millis(33);
+
+/// Put the panel back on screen once the webview has had time to paint.
+///
+/// The thread is started *before* the panel is hidden and hiding is skipped if
+/// it could not start, because the tab is the whole of this app's UI while it is
+/// collapsed: a cover that is never lifted is an app that has vanished.
+fn reveal_after_resize(window: &WebviewWindow) -> bool {
+    let app = window.app_handle().clone();
+    std::thread::Builder::new()
+        .name("dock-reveal".into())
+        .spawn(move || {
+            std::thread::sleep(REVEAL_DELAY);
+            let handle = app.clone();
+            if let Err(error) =
+                app.run_on_main_thread(move || match handle.get_webview_panel(DOCK_WINDOW_LABEL) {
+                    Ok(panel) => panel.set_alpha_value(1.0),
+                    Err(error) => {
+                        log::error!("macos: panel not found, cannot reveal it: {error:?}")
+                    }
+                })
+            {
+                log::error!("macos: failed to schedule the reveal: {error}");
+            }
+        })
+        .map_err(|error| log::error!("macos: failed to start the reveal: {error}"))
+        .is_ok()
 }
