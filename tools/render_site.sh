@@ -80,6 +80,11 @@ if [ -d "$screenshots" ]; then
   cp "$screenshots"/*.png "$repo/screenshots/"
 fi
 
+# The app's own icon, straight from the bundle's, so the tab and the wordmark
+# show what the Dock and the Start menu show.
+[ -f "$source_dir/src-tauri/icons/128x128.png" ] &&
+  cp "$source_dir/src-tauri/icons/128x128.png" "$repo/icon.png"
+
 # A screenshot is only put on the page if it is actually there: the site should
 # never show a broken image because a file was renamed here.
 shot() { [ -f "$repo/screenshots/$1" ]; }
@@ -329,7 +334,8 @@ cat > "$repo/index.html" <<HTML
 <meta property="og:url" content="$site/">
 <meta property="og:image" content="$site/screenshots/hero.png">
 <meta name="twitter:card" content="summary_large_image">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%231d1d1f'/%3E%3Crect x='20' y='9' width='5' height='14' rx='2.5' fill='%23fff'/%3E%3C/svg%3E">
+<link rel="icon" href="icon.png" sizes="128x128" type="image/png">
+<link rel="apple-touch-icon" href="icon.png">
 <style>
   :root {
     color-scheme: light dark;
@@ -407,14 +413,14 @@ cat > "$repo/index.html" <<HTML
   }
   .top-inner { display: flex; align-items: center; gap: 20px; height: 54px; }
   .wordmark { font-weight: 600; letter-spacing: -.01em; text-decoration: none; display: flex; align-items: center; gap: 9px; }
-  .mark { width: 18px; height: 18px; border-radius: 5px; background: var(--fg); position: relative; }
-  .mark::after { content: ""; position: absolute; right: 3px; top: 4px; width: 4px; height: 10px; border-radius: 2px; background: var(--bg); }
+  .mark { width: 20px; height: 20px; border-radius: 5px; }
   .top nav { margin-left: auto; display: flex; gap: 22px; font-size: 14px; }
   .top nav a { color: var(--muted); text-decoration: none; }
   .top nav a:hover { color: var(--fg); }
 
   /* Hero */
-  .hero { padding: 84px 0 8px; text-align: center; }
+  .hero { padding: 76px 0 8px; text-align: center; }
+  .app-icon { width: 78px; height: 78px; border-radius: 18px; margin: 0 auto 22px; box-shadow: var(--shadow-soft); }
   .eyebrow {
     display: inline-flex; align-items: center; gap: 8px;
     font-size: 13px; color: var(--muted);
@@ -530,7 +536,7 @@ cat > "$repo/index.html" <<HTML
 
 <header class="top">
   <div class="wrap top-inner">
-    <a class="wordmark" href="#top"><span class="mark"></span> Ledge</a>
+    <a class="wordmark" href="#top"><img class="mark" src="icon.png" width="20" height="20" alt=""> Ledge</a>
     <nav>
       <a href="#features">Features</a>
       <a href="#keys" class="hide-sm">Shortcuts</a>
@@ -543,6 +549,7 @@ cat > "$repo/index.html" <<HTML
 <main id="top">
 
 <div class="hero wrap">
+  <img class="app-icon" src="icon.png" width="78" height="78" alt="">
   <span class="eyebrow">Version $version &middot; macOS, Windows, Linux</span>
   <h1>Notes on the edge<br>of your screen.</h1>
   <p class="lede">A small tab sits against the screen edge, above whatever you are
