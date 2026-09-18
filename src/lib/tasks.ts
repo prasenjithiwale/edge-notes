@@ -12,11 +12,13 @@
  */
 import type { Task } from "./ipc";
 import {
+  CLOSED_SECTIONS,
   compareDone,
   compareTasks,
   DONE_WINDOW_MS,
   dueOf,
-  isDone,
+  dueSection,
+  isClosed,
   reminderAt,
   SECTIONS,
   taskSection,
@@ -29,19 +31,20 @@ export interface TaskSection {
 }
 
 /**
- * The visible list: grouped by when each task is due, each group in its own
- * order, and empty groups left out.
+ * The visible list: in-progress tasks first, then grouped by when each task is
+ * due, each group in its own order, and empty groups left out.
  *
- * Completed tasks appear in Done for a day and then stop being shown. They are
- * not deleted — finishing something is not a reason to lose the record — but a
- * list of what is left should not be mostly what is not.
+ * Closed tasks appear in Done or Cancelled for a day and then stop being shown.
+ * They are not deleted — finishing something is not a reason to lose the record,
+ * and neither is deciding against it — but a list of what is left should not be
+ * mostly what is not.
  */
 export function groupTasks(tasks: Task[], now: Date): TaskSection[] {
   const cutoff = now.getTime() - DONE_WINDOW_MS;
   const buckets = new Map<DueSection, Task[]>();
 
   for (const task of tasks) {
-    if (isDone(task) && (task.doneAt ?? 0) < cutoff) {
+    if (isClosed(task) && (task.doneAt ?? 0) < cutoff) {
       continue;
     }
     const kind = taskSection(task, now);
@@ -61,7 +64,9 @@ export function groupTasks(tasks: Task[], now: Date): TaskSection[] {
     return [
       {
         kind,
-        tasks: [...bucket].sort(kind === "done" ? compareDone : compareTasks),
+        tasks: [...bucket].sort(
+          CLOSED_SECTIONS.includes(kind) ? compareDone : compareTasks,
+        ),
       },
     ];
   });
@@ -85,14 +90,25 @@ export function filterTasks(tasks: Task[], query: string): Task[] {
   );
 }
 
-/** How many tasks are still open, for the tab's count. */
+/**
+ * How many tasks are still work, for the tab's count: open and in progress, and
+ * not the ones that closed either way.
+ */
 export function openTaskCount(tasks: Task[]): number {
-  return tasks.filter((task) => !isDone(task)).length;
+  return tasks.filter((task) => !isClosed(task)).length;
 }
 
-/** Open tasks that are due before now: what the tab's count is really about. */
+/**
+ * Open tasks that are due before now: what the tab's count is really about.
+ *
+ * Asked of the date rather than of the section, so a task being worked on now —
+ * which the list lifts out of Overdue and into In progress — is still counted as
+ * late, because it is.
+ */
 export function overdueCount(tasks: Task[], now: Date): number {
-  return tasks.filter((task) => taskSection(task, now) === "overdue").length;
+  return tasks.filter(
+    (task) => !isClosed(task) && dueSection(dueOf(task), now) === "overdue",
+  ).length;
 }
 
 export interface Reminder {
@@ -109,13 +125,16 @@ export interface Reminder {
  * whole-day task. Rust schedules and shows them (`reminders_set`); working out
  * when "the 20th at 2 pm" is stays here, where the timezone is.
  *
+ * Cancelled counts as closed here, as it does everywhere: being reminded about
+ * something you decided not to do is the clearest way for a status to be a lie.
+ *
  * The id carries the due date and time, so moving a task re-arms it and leaving
  * it alone does not.
  */
 export function taskReminders(tasks: Task[]): Reminder[] {
   return tasks.flatMap((task) => {
     const due = dueOf(task);
-    if (isDone(task) || due === null) {
+    if (isClosed(task) || due === null) {
       return [];
     }
     const title = task.title.trim() || "Task";

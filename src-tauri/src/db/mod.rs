@@ -18,7 +18,7 @@ use crate::error::AppResult;
 
 pub use notes::{Note, NoteColor};
 pub use settings::{Settings, SettingsPatch, Theme};
-pub use tasks::{Task, TaskPatch};
+pub use tasks::{Status, Task, TaskPatch};
 
 /// Unix milliseconds. Every write takes its timestamp as an argument so the
 /// repositories stay deterministic under test.

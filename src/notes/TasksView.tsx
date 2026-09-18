@@ -1,18 +1,21 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Check, ChevronRight, Flag, Plus, Repeat as RepeatIcon, Text } from "lucide-react";
+import { Check, ChevronRight, Flag, Plus, Repeat as RepeatIcon, Text, X } from "lucide-react";
 
 import { cx } from "../lib/cx";
-import type { Task } from "../lib/ipc";
+import type { Status, Task } from "../lib/ipc";
 import {
+  CLOSED_SECTIONS,
   dueLabel,
   dueOf,
+  dueSection,
   hasQuickDetails,
-  isDone,
+  isCancelled,
+  isClosed,
+  isInProgress,
   parseTaskText,
   priorityLabel,
   repeatLabel,
   SECTION_LABELS,
-  type DueSection,
 } from "../lib/taskMeta";
 import { filterTasks, groupTasks } from "../lib/tasks";
 import { useNow } from "../lib/useNow";
@@ -31,31 +34,52 @@ interface TasksViewProps {
   query: string;
 }
 
-/** The box. A button rather than an `<input>`: it carries an icon, not a tick glyph. */
+/**
+ * The box. A button rather than an `<input>`: it carries an icon, not a tick
+ * glyph, and it now has four states rather than two.
+ *
+ * It still does one thing — finish this, or unfinish it — because that is the
+ * press people make dozens of times a day and it should not become a menu. The
+ * other two statuses are *shown* here and *set* in the sheet: a half-filled ring
+ * for a task in progress, a struck circle for one that was cancelled. In
+ * progress is `aria-checked="mixed"`, which is exactly what a three-state
+ * checkbox says, and the cancelled box is labelled rather than left to the
+ * shape.
+ */
 function Checkbox({
-  done,
+  status,
   label,
   onToggle,
 }: {
-  done: boolean;
+  status: Status;
   label: string;
   onToggle: () => void;
 }) {
+  const done = status === "done";
+  const cancelled = status === "cancelled";
   return (
     <button
       type="button"
       role="checkbox"
-      aria-checked={done}
+      aria-checked={status === "in_progress" ? "mixed" : done}
       // Named for the task it belongs to: on its own, a box says nothing.
-      aria-label={label}
-      className={styles.box}
+      aria-label={cancelled ? `${label} (cancelled)` : label}
+      className={cx(
+        styles.box,
+        status === "in_progress" && styles.boxDoing,
+        cancelled && styles.boxCancelled,
+      )}
       onClick={(event) => {
         // The row opens the details sheet; the box must not do both.
         event.stopPropagation();
         onToggle();
       }}
     >
-      <Check className={styles.tick} size={11} strokeWidth={3.5} aria-hidden="true" />
+      {cancelled ? (
+        <X className={styles.tick} size={10} strokeWidth={3} aria-hidden="true" />
+      ) : (
+        <Check className={styles.tick} size={11} strokeWidth={3.5} aria-hidden="true" />
+      )}
     </button>
   );
 }
@@ -133,9 +157,14 @@ function QuickPreview({ draft, now }: { draft: string; now: number }) {
  * are fields rather than tokens inside a sentence, and completing one is a
  * property of the task instead of an edit to a paragraph somewhere.
  *
- * A tick made during a visit leaves the task where it is, struck through, rather
- * than moving it to Done under the cursor. Coming back to the tab is a new
- * visit, and by then it has settled.
+ * A task has a status rather than a tick: open, in progress, done or cancelled.
+ * The box still finishes one, because that is the press people make all day; the
+ * other two are set in the sheet, shown in the box's shape, and used to group
+ * the list — In progress at the top, Cancelled at the bottom beside Done.
+ *
+ * A status changed during a visit leaves the row where it is rather than moving
+ * it under the cursor. Coming back to the tab is a new visit, and by then it has
+ * settled.
  */
 export function TasksView({ active, query }: TasksViewProps) {
   const tasks = useTasksStore((state) => state.tasks);
@@ -154,16 +183,27 @@ export function TasksView({ active, query }: TasksViewProps) {
 
   const rootRef = useRef<HTMLDivElement>(null);
   const [focused, setFocused] = useState(false);
-  const [tickedHere, setTickedHere] = useState<ReadonlySet<string>>(new Set());
+  /**
+   * Rows whose status changed during this visit, against the status they had
+   * when it did.
+   *
+   * A row is grouped by the status it was holding, not the one it has now, so
+   * ticking a task does not throw it into Done from under the cursor and
+   * starting one does not tear it out of Today mid-press. Which status it *was*
+   * is what is remembered, rather than a bare "this moved": a task ticked while
+   * in progress belongs back in In progress for the rest of the visit, and
+   * anything less specific would still move it.
+   */
+  const [heldHere, setHeldHere] = useState<ReadonlyMap<string, Status>>(new Map());
 
-  // Each time the tab is shown is a new visit: ticks made last time settle into
-  // Done. Adjusted while rendering, when `active` changes, so the first frame of
-  // the visit is already right.
+  // Each time the tab is shown is a new visit: what was ticked last time settles
+  // into Done. Adjusted while rendering, when `active` changes, so the first
+  // frame of the visit is already right.
   const [seenActive, setSeenActive] = useState(active);
   if (active !== seenActive) {
     setSeenActive(active);
     if (active) {
-      setTickedHere(new Set());
+      setHeldHere(new Map());
     }
   }
 
@@ -172,7 +212,7 @@ export function TasksView({ active, query }: TasksViewProps) {
   if (phase !== seenPhase) {
     setSeenPhase(phase);
     if (phase === "collapsed") {
-      setTickedHere(new Set());
+      setHeldHere(new Map());
     }
   }
 
@@ -211,35 +251,76 @@ export function TasksView({ active, query }: TasksViewProps) {
   const searching = query.trim() !== "";
   const sections = useMemo(() => {
     const at = new Date(now);
-    // A task ticked during this visit is grouped as if it were still open, so
-    // the row under the cursor does not jump to Done the moment it is ticked.
-    const asShown = filterTasks(tasks, query).map((task) =>
-      isDone(task) && tickedHere.has(task.id) ? { ...task, doneAt: null } : task,
-    );
+    // A task whose status changed during this visit is grouped as the status it
+    // had, so the row under the cursor stays where the cursor is.
+    const asShown = filterTasks(tasks, query).map((task) => {
+      const held = heldHere.get(task.id);
+      if (held === undefined || held === task.status) {
+        return task;
+      }
+      // An open status has no closing time, and `groupTasks` reads that time to
+      // decide what has aged out of Done.
+      return { ...task, status: held, doneAt: held === "done" || held === "cancelled" ? task.doneAt : null };
+    });
     return groupTasks(asShown, at);
-  }, [tasks, query, now, tickedHere]);
+  }, [tasks, query, now, heldHere]);
 
   const hasAny = tasks.length > 0;
   const nothingMatches = sections.length === 0;
-  // Everything is done, but there are still tasks: not the same as having none,
-  // and not the same as a search that found nothing.
-  const allClear = !searching && sections.every((section) => section.kind === "done");
+  // Everything is closed, but there are still tasks: not the same as having
+  // none, and not the same as a search that found nothing.
+  const allClear =
+    !searching && sections.every((section) => CLOSED_SECTIONS.includes(section.kind));
+
+  /**
+   * The stored task behind a row, by id.
+   *
+   * A row held in place is grouped from a copy with its `doneAt` cleared, and
+   * that copy cannot be asked whether the task is done: it says "no" precisely
+   * because it is being held where it was. Asking it anyway is what made a
+   * ticked task impossible to untick — the box stayed filled whatever the store
+   * said, so the next press read as a fresh tick. The copy decides one thing
+   * only, which is the section the row is in; everything drawn in the row comes
+   * from here.
+   */
+  const stored = useMemo(() => new Map(tasks.map((task) => [task.id, task])), [tasks]);
+
+  /**
+   * Remember where a row was before its status changed, for the rest of the
+   * visit. Every status change on this screen goes through here — the box and
+   * the sheet's segments alike — because a row that moved would be as surprising
+   * from one as from the other.
+   */
+  const hold = (task: Task) => {
+    setHeldHere((current) =>
+      current.has(task.id) ? current : new Map(current).set(task.id, task.status),
+    );
+  };
 
   const onTick = (task: Task) => {
-    if (!isDone(task)) {
-      setTickedHere((current) => new Set(current).add(task.id));
-    }
+    hold(task);
     void tick(task.id);
   };
 
-  const renderRow = (task: Task, kind: DueSection) => {
-    const ticked = isDone(task) || tickedHere.has(task.id);
+  const renderRow = (shown: Task) => {
+    const task = stored.get(shown.id) ?? shown;
+    const closed = isClosed(task);
     const isOpen = detailsId === task.id;
+    // Asked of the date rather than of the section the row is drawn in: a task
+    // being worked on is listed under In progress and is still late if it is.
+    const overdue = !closed && dueSection(dueOf(task), new Date(now)) === "overdue";
     return (
       <li key={task.id} className={styles.item}>
-        <div className={cx(styles.row, isOpen && styles.rowOpen)}>
+        <div
+          className={cx(
+            styles.row,
+            isOpen && styles.rowOpen,
+            isInProgress(task) && styles.rowDoing,
+            isCancelled(task) && styles.rowCancelled,
+          )}
+        >
           <Checkbox
-            done={ticked}
+            status={task.status}
             label={task.title || "Untitled task"}
             onToggle={() => {
               onTick(task);
@@ -267,11 +348,11 @@ export function TasksView({ active, query }: TasksViewProps) {
                   aria-label={`${task.priority} priority`}
                 />
               )}
-              <span className={cx(styles.title, ticked && styles.ticked)}>
+              <span className={cx(styles.title, closed && styles.ticked)}>
                 {task.title || "Untitled task"}
               </span>
             </span>
-            <Meta task={task} now={now} overdue={kind === "overdue" && !ticked} />
+            <Meta task={task} now={now} overdue={overdue} />
           </button>
           <ChevronRight
             size={13}
@@ -284,6 +365,9 @@ export function TasksView({ active, query }: TasksViewProps) {
           <TaskDetails
             task={task}
             onFocusChange={setFocused}
+            onStatusChange={() => {
+              hold(task);
+            }}
             onClose={() => {
               openDetails(null);
             }}
@@ -355,6 +439,7 @@ export function TasksView({ active, query }: TasksViewProps) {
                     className={cx(
                       styles.heading,
                       section.kind === "overdue" && styles.overdue,
+                      section.kind === "doing" && styles.doing,
                     )}
                     aria-expanded={!folded}
                     onClick={() => {
@@ -373,7 +458,7 @@ export function TasksView({ active, query }: TasksViewProps) {
                 </h3>
                 {!folded && (
                   <ul className={styles.rows}>
-                    {section.tasks.map((task) => renderRow(task, section.kind))}
+                    {section.tasks.map((task) => renderRow(task))}
                   </ul>
                 )}
               </section>

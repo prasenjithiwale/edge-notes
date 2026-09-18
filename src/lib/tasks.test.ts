@@ -13,6 +13,9 @@ function task(fields: Partial<Task> = {}): Task {
     id: `t${String(made)}`,
     title: `task ${String(made)}`,
     notes: "",
+    // A stored task always has both, and Rust keeps them in step: a task with a
+    // time on it closed. Derived here so a fixture can say either.
+    status: fields.doneAt == null ? "open" : "done",
     doneAt: null,
     dueDate: null,
     dueTime: null,
@@ -85,11 +88,69 @@ describe("groupTasks", () => {
     const tasks = [task({ dueDate: "2026-09-14", dueTime: "09:00" })];
     expect(groupTasks(tasks, NOW)[0]?.kind).toBe("overdue");
   });
+
+  /**
+   * In progress comes first because it is where the reader was, and the two
+   * closed sections come last because they are what is already behind them.
+   */
+  it("puts In progress at the top and the closed sections at the bottom", () => {
+    const tasks = [
+      task({ title: "someday" }),
+      task({ title: "cancelled", status: "cancelled", doneAt: NOW.getTime() - 1 }),
+      task({ title: "today", dueDate: "2026-09-14" }),
+      task({ title: "done", doneAt: NOW.getTime() - 1 }),
+      task({ title: "doing", status: "in_progress", dueDate: "2026-09-30" }),
+    ];
+
+    expect(groupTasks(tasks, NOW).map((section) => section.kind)).toEqual([
+      "doing",
+      "today",
+      "none",
+      "done",
+      "cancelled",
+    ]);
+  });
+
+  it("stops showing a cancelled task a day after it was cancelled, as it does a finished one", () => {
+    const old = NOW.getTime() - 25 * 60 * 60 * 1000;
+    const tasks = [
+      task({ title: "just cancelled", status: "cancelled", doneAt: NOW.getTime() - 1 }),
+      task({ title: "cancelled yesterday", status: "cancelled", doneAt: old }),
+    ];
+
+    const sections = groupTasks(tasks, NOW);
+    expect(sections).toHaveLength(1);
+    expect(sections[0]?.tasks.map((entry) => entry.title)).toEqual(["just cancelled"]);
+  });
+
+  /** Both closed sections are histories: newest first, not by priority. */
+  it("orders Cancelled by when each task was cancelled", () => {
+    const tasks = [
+      task({ title: "first", status: "cancelled", doneAt: 1_000, priority: "high" }),
+      task({ title: "second", status: "cancelled", doneAt: 2_000 }),
+    ];
+    const cancelled = groupTasks(tasks, new Date(3_000));
+    expect(cancelled[0]?.tasks.map((entry) => entry.title)).toEqual(["second", "first"]);
+  });
 });
 
 describe("counts", () => {
   it("counts what is still open, whatever it is due", () => {
     const tasks = [task(), task({ dueDate: "2026-09-01" }), task({ doneAt: 1 })];
+    expect(openTaskCount(tasks)).toBe(2);
+  });
+
+  /**
+   * A task in progress is still work and is counted; a cancelled one is not
+   * work and is not, which is the whole difference between it and a finished
+   * one being uncounted for the opposite reason.
+   */
+  it("counts a task in progress and not a cancelled one", () => {
+    const tasks = [
+      task({ status: "in_progress" }),
+      task({ status: "cancelled", doneAt: 1 }),
+      task(),
+    ];
     expect(openTaskCount(tasks)).toBe(2);
   });
 
@@ -102,6 +163,18 @@ describe("counts", () => {
     ];
     expect(overdueCount(tasks, NOW)).toBe(2);
   });
+
+  /**
+   * Asked of the date, not of the section: the list lifts a task in progress out
+   * of Overdue, and it is still late.
+   */
+  it("still counts a late task that is being worked on", () => {
+    const tasks = [
+      task({ status: "in_progress", dueDate: "2026-09-01" }),
+      task({ status: "cancelled", doneAt: 1, dueDate: "2026-09-01" }),
+    ];
+    expect(overdueCount(tasks, NOW)).toBe(1);
+  });
 });
 
 describe("taskReminders", () => {
@@ -111,10 +184,24 @@ describe("taskReminders", () => {
       task({ title: "Whole day", dueDate: "2026-09-20" }),
       task({ title: "No date" }),
       task({ title: "Finished", dueDate: "2026-09-20", doneAt: 1 }),
+      // Being reminded about something you decided not to do is the clearest
+      // way for a status to be a lie.
+      task({
+        title: "Cancelled",
+        dueDate: "2026-09-20",
+        status: "cancelled",
+        doneAt: 1,
+      }),
+      // Still work, so still worth a reminder.
+      task({ title: "Started", dueDate: "2026-09-21", status: "in_progress" }),
     ];
 
     const reminders = taskReminders(tasks);
-    expect(reminders).toHaveLength(2);
+    expect(reminders.map((reminder) => reminder.title)).toEqual([
+      "Call the bank",
+      "Whole day",
+      "Started",
+    ]);
     expect(reminders[0]).toMatchObject({
       title: "Call the bank",
       at: new Date(2026, 8, 20, 14, 0).getTime(),

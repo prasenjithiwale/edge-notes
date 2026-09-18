@@ -16,6 +16,9 @@ function task(fields: Partial<Task> = {}): Task {
     id: `t${String(made)}`,
     title: `task ${String(made)}`,
     notes: "",
+    // A stored task always has both, and Rust keeps them in step: a task with a
+    // time on it closed. Derived here so a fixture can say either.
+    status: fields.doneAt == null ? "open" : "done",
     doneAt: null,
     dueDate: null,
     dueTime: null,
@@ -44,9 +47,10 @@ beforeEach(() => {
       const { id, patch } = args as { id: string; patch: Partial<Task> };
       return Promise.resolve(task({ id, ...patch }));
     }
-    if (command === "tasks_set_done") {
-      const { id, done } = args as { id: string; done: boolean };
-      return Promise.resolve(task({ id, doneAt: done ? 5_000 : null }));
+    if (command === "tasks_set_status") {
+      const { id, status } = args as { id: string; status: Task["status"] };
+      const closed = status === "done" || status === "cancelled";
+      return Promise.resolve(task({ id, status, doneAt: closed ? 5_000 : null }));
     }
     return Promise.resolve(null);
   });
@@ -100,14 +104,62 @@ describe("ticking", () => {
     useTasksStore.setState({ tasks: [task({ id: "a" })] });
     await useTasksStore.getState().tick("a");
 
-    expect(calls("tasks_set_done")).toEqual([{ id: "a", done: true }]);
+    expect(calls("tasks_set_status")).toEqual([{ id: "a", status: "done" }]);
+    expect(useTasksStore.getState().tasks[0]?.status).toBe("done");
     expect(useTasksStore.getState().tasks[0]?.doneAt).toBe(5_000);
   });
 
   it("reopens one that was done", async () => {
     useTasksStore.setState({ tasks: [task({ id: "a", doneAt: 1 })] });
     await useTasksStore.getState().tick("a");
-    expect(calls("tasks_set_done")).toEqual([{ id: "a", done: false }]);
+    expect(calls("tasks_set_status")).toEqual([{ id: "a", status: "open" }]);
+  });
+
+  /** The box finishes whatever is not finished, in progress included. */
+  it("completes a task that is in progress", async () => {
+    useTasksStore.setState({ tasks: [task({ id: "a", status: "in_progress" })] });
+    await useTasksStore.getState().tick("a");
+    expect(calls("tasks_set_status")).toEqual([{ id: "a", status: "done" }]);
+  });
+
+  /** Ticking a cancelled task is somebody saying they did it after all. */
+  it("completes a cancelled task rather than reopening it", async () => {
+    useTasksStore.setState({
+      tasks: [task({ id: "a", status: "cancelled", doneAt: 1 })],
+    });
+    await useTasksStore.getState().tick("a");
+    expect(calls("tasks_set_status")).toEqual([{ id: "a", status: "done" }]);
+  });
+
+  /**
+   * A repeating task that was cancelled is not moved on: it was dropped, and the
+   * next occurrence is not what a tick on it means.
+   */
+  it("does not move a cancelled repeating task on", async () => {
+    useTasksStore.setState({
+      tasks: [
+        task({
+          id: "a",
+          status: "cancelled",
+          doneAt: 1,
+          dueDate: "2026-09-14",
+          repeat: "daily",
+        }),
+      ],
+    });
+    await useTasksStore.getState().tick("a");
+
+    expect(calls("tasks_update")).toEqual([]);
+    expect(calls("tasks_set_status")).toEqual([{ id: "a", status: "done" }]);
+  });
+
+  it("moves a task to any status it is sent to", async () => {
+    useTasksStore.setState({ tasks: [task({ id: "a" })] });
+    await useTasksStore.getState().setStatus("a", "in_progress");
+
+    expect(calls("tasks_set_status")).toEqual([{ id: "a", status: "in_progress" }]);
+    expect(useTasksStore.getState().tasks[0]?.status).toBe("in_progress");
+    expect(useTasksStore.getState().tasks[0]?.doneAt).toBeNull();
   });
 
   /**
@@ -124,7 +176,7 @@ describe("ticking", () => {
 
     await useTasksStore.getState().tick("a");
 
-    expect(calls("tasks_set_done")).toEqual([]);
+    expect(calls("tasks_set_status")).toEqual([]);
     expect(calls("tasks_update")).toEqual([
       { id: "a", patch: { dueDate: "2026-09-15", dueTime: "09:00" } },
     ]);

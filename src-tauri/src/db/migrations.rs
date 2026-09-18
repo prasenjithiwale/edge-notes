@@ -8,7 +8,7 @@ use rusqlite::{Connection, Transaction, params};
 use crate::error::AppResult;
 
 use super::task_import;
-use super::tasks::Task;
+use super::tasks::{Priority, Repeat};
 
 /// A migration is either schema, or a change to the data that needs more than
 /// SQL can say. Both run inside the same transaction as everything else.
@@ -65,6 +65,17 @@ const MIGRATIONS: &[Migration] = &[
     ),
     // v3: move the tasks that are already written into notes.
     Migration::Code(import_tasks_from_notes),
+    // v4: a task has a status, not just a tick. `done_at` keeps its meaning of
+    // when the task stopped being open — which is now either of the two ways
+    // that happens — so everything that already asks "when was this closed"
+    // still gets an answer, and an existing row is read correctly before this
+    // `UPDATE` ever runs: a tick was a completion.
+    Migration::Sql(
+        "
+    ALTER TABLE tasks ADD COLUMN status TEXT NOT NULL DEFAULT 'open';
+    UPDATE tasks SET status = 'done' WHERE done_at IS NOT NULL;
+    ",
+    ),
 ];
 
 /// Lift every `- [ ]` line out of every note and into `tasks`, once.
@@ -100,20 +111,30 @@ fn import_tasks_from_notes(transaction: &Transaction<'_>) -> AppResult<()> {
 
         for (index, imported) in extracted.tasks.into_iter().enumerate() {
             let offset = i64::try_from(index).unwrap_or(0);
-            let task = Task {
-                id: uuid::Uuid::now_v7().to_string(),
-                title: imported.title,
-                notes: String::new(),
-                // The old format recorded that a task was done, never when.
-                done_at: imported.done.then_some(updated_at),
-                due_date: imported.due_date,
-                due_time: imported.due_time,
-                priority: imported.priority,
-                repeat: imported.repeat,
-                created_at: created_at + offset,
-                updated_at,
-            };
-            super::tasks::insert(transaction, &task)?;
+            // Written out here rather than through `tasks::insert`, and with the
+            // columns this step's schema actually has: v4 adds `status`, and a
+            // database on its way from v2 to v4 runs this line before that
+            // column exists. A migration has to keep working against the schema
+            // of its own moment, so it cannot borrow a writer that moves on.
+            transaction.execute(
+                "INSERT INTO tasks
+                   (id, title, notes, done_at, due_date, due_time, priority,
+                    repeat_rule, created_at, updated_at)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+                params![
+                    uuid::Uuid::now_v7().to_string(),
+                    imported.title,
+                    "",
+                    // The old format recorded that a task was done, never when.
+                    imported.done.then_some(updated_at),
+                    imported.due_date,
+                    imported.due_time,
+                    imported.priority.map(Priority::as_str),
+                    imported.repeat.map(Repeat::as_str),
+                    created_at + offset,
+                    updated_at,
+                ],
+            )?;
         }
 
         if task_import::is_leftover_empty(&extracted.content) {
@@ -252,6 +273,45 @@ mod tests {
             .ok()
     }
 
+    /// The upgrade every existing install takes: a v3 database, with tasks that
+    /// know only whether they were ticked, gets a status column that agrees with
+    /// the ticks it already had.
+    #[test]
+    fn gives_existing_tasks_a_status_that_matches_their_tick() {
+        let mut connection = memory();
+        connection
+            .execute_batch(
+                "CREATE TABLE notes (
+                   id TEXT PRIMARY KEY, content TEXT NOT NULL DEFAULT '', color TEXT NOT NULL,
+                   pinned INTEGER NOT NULL DEFAULT 0, sort_order REAL,
+                   created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, deleted_at INTEGER);
+                 CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+                 CREATE TABLE tasks (
+                   id TEXT PRIMARY KEY, title TEXT NOT NULL DEFAULT '',
+                   notes TEXT NOT NULL DEFAULT '', done_at INTEGER, due_date TEXT,
+                   due_time TEXT, priority TEXT, repeat_rule TEXT, sort_order REAL,
+                   created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, deleted_at INTEGER);
+                 INSERT INTO tasks (id, title, done_at, created_at, updated_at)
+                   VALUES ('open', 'Water the plants', NULL, 1000, 1000),
+                          ('shut', 'Pay the bill', 5000, 1000, 5000);
+                 PRAGMA user_version = 3;",
+            )
+            .expect("v3 schema");
+
+        run(&mut connection).expect("migrate");
+
+        let tasks = super::super::tasks::list(&connection).expect("tasks");
+        let status = |id: &str| {
+            tasks
+                .iter()
+                .find(|task| task.id == id)
+                .expect("task")
+                .status
+        };
+        assert_eq!(status("open"), super::super::tasks::Status::Open);
+        assert_eq!(status("shut"), super::super::tasks::Status::Done);
+    }
+
     #[test]
     fn moves_tasks_out_of_notes_and_leaves_the_prose() {
         let mut connection = v1_with_notes(&[(
@@ -267,8 +327,11 @@ remember the receipt
         assert_eq!(tasks.len(), 2);
         assert_eq!(tasks[0].title, "Milk");
         assert_eq!(tasks[0].done_at, None);
+        assert_eq!(tasks[0].status, super::super::tasks::Status::Open);
         assert_eq!(tasks[1].title, "Eggs");
         assert_eq!(tasks[1].done_at, Some(2000));
+        // v4 reads the tick it was imported with: a ticked line was a completion.
+        assert_eq!(tasks[1].status, super::super::tasks::Status::Done);
         assert_eq!(
             note_content(&connection, "n1").as_deref(),
             Some(

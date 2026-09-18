@@ -5,12 +5,20 @@ import {
   tasksDelete,
   tasksList,
   tasksRestore,
-  tasksSetDone,
+  tasksSetStatus,
   tasksUpdate,
+  type Status,
   type Task,
   type TaskPatch,
 } from "../lib/ipc";
-import { isDone, nextOccurrence, parseTaskText, dueOf, type DueSection } from "../lib/taskMeta";
+import {
+  isClosed,
+  nextOccurrence,
+  nextTickStatus,
+  parseTaskText,
+  dueOf,
+  type DueSection,
+} from "../lib/taskMeta";
 
 /** Brief 6.9's undo window, shared with notes: long enough to change your mind. */
 const UNDO_MS = 5_000;
@@ -42,6 +50,7 @@ interface TasksStore {
   setDraft: (text: string) => void;
   add: () => Promise<void>;
   tick: (id: string) => Promise<void>;
+  setStatus: (id: string, status: Status) => Promise<void>;
   patch: (id: string, patch: TaskPatch) => Promise<void>;
   setTitle: (id: string, title: string) => Promise<void>;
   startEditing: (id: string | null) => void;
@@ -62,8 +71,9 @@ export const useTasksStore = create<TasksStore>((set, get) => ({
   draft: "",
   editingId: null,
   detailsId: null,
-  // Done starts folded: a list of what is left should not open on what is not.
-  collapsed: new Set<DueSection>(["done"]),
+  // Done and Cancelled start folded: a list of what is left should not open on
+  // what is not.
+  collapsed: new Set<DueSection>(["done", "cancelled"]),
   pendingUndo: null,
 
   load: async () => {
@@ -110,11 +120,13 @@ export const useTasksStore = create<TasksStore>((set, get) => ({
   },
 
   /**
-   * Tick or untick.
+   * The box: finish a task, or reopen a finished one.
    *
    * A repeating task is never completed: it moves to its next date and stays
    * open, which is what repeating means. Rust does not do this because the next
-   * date is calendar arithmetic in the reader's own timezone.
+   * date is calendar arithmetic in the reader's own timezone. A cancelled task
+   * that repeats is not moved on — it was dropped, and ticking it is somebody
+   * saying they did this one after all.
    */
   tick: async (id) => {
     const task = get().tasks.find((candidate) => candidate.id === id);
@@ -122,17 +134,31 @@ export const useTasksStore = create<TasksStore>((set, get) => ({
       return;
     }
 
-    try {
-      if (!isDone(task) && task.repeat !== null) {
+    if (!isClosed(task) && task.repeat !== null) {
+      try {
         const next = nextOccurrence(dueOf(task), task.repeat, new Date());
         const moved = await tasksUpdate(id, { dueDate: next.date, dueTime: next.time });
         set((state) => ({ tasks: replace(state.tasks, moved) }));
-        return;
+      } catch (error: unknown) {
+        console.error("tasks: tick failed", error);
+        void get().load();
       }
-      const updated = await tasksSetDone(id, !isDone(task));
+      return;
+    }
+    await get().setStatus(id, nextTickStatus(task));
+  },
+
+  /**
+   * Move a task to a status. The one way a status changes here, as `set_status`
+   * is the one way it changes in the database: the time a task closed is Rust's
+   * to stamp, so nothing in the frontend has to keep the two in step.
+   */
+  setStatus: async (id, status) => {
+    try {
+      const updated = await tasksSetStatus(id, status);
       set((state) => ({ tasks: replace(state.tasks, updated) }));
     } catch (error: unknown) {
-      console.error("tasks: tick failed", error);
+      console.error("tasks: status failed", error);
       void get().load();
     }
   },

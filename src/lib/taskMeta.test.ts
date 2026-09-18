@@ -10,6 +10,10 @@ import {
   nextOccurrence,
   parseTaskText,
   reminderAt,
+  isClosed,
+  nextTickStatus,
+  statusLabel,
+  STATUSES,
   taskSection,
 } from "./taskMeta";
 
@@ -23,6 +27,9 @@ function task(fields: Partial<Task> = {}): Task {
     id: `t${String(made)}`,
     title: "",
     notes: "",
+    // A stored task always has both, and Rust keeps them in step: a task with a
+    // time on it closed. Derived here so a fixture can say either.
+    status: fields.doneAt == null ? "open" : "done",
     doneAt: null,
     dueDate: null,
     dueTime: null,
@@ -180,6 +187,48 @@ describe("taskSection", () => {
     expect(taskSection(task({ dueDate: "2026-09-13" }), NOW)).toBe("overdue");
     expect(taskSection(task({ dueDate: "2026-09-13", doneAt: 1 }), NOW)).toBe("done");
     expect(taskSection(task({ doneAt: 1 }), NOW)).toBe("done");
+  });
+
+  /** Status answers first: what is happening beats when it was due. */
+  it("lifts a task that is in progress out of its date section", () => {
+    expect(taskSection(task({ status: "in_progress", dueDate: "2026-09-13" }), NOW)).toBe(
+      "doing",
+    );
+    expect(taskSection(task({ status: "in_progress", dueDate: "2026-09-30" }), NOW)).toBe(
+      "doing",
+    );
+    expect(taskSection(task({ status: "in_progress" }), NOW)).toBe("doing");
+  });
+
+  it("puts a cancelled task in Cancelled rather than Done", () => {
+    expect(
+      taskSection(task({ status: "cancelled", doneAt: 1, dueDate: "2026-09-13" }), NOW),
+    ).toBe("cancelled");
+  });
+});
+
+describe("statuses", () => {
+  it("counts done and cancelled as closed, and the other two as not", () => {
+    expect(isClosed(task())).toBe(false);
+    expect(isClosed(task({ status: "in_progress" }))).toBe(false);
+    expect(isClosed(task({ status: "done", doneAt: 1 }))).toBe(true);
+    expect(isClosed(task({ status: "cancelled", doneAt: 1 }))).toBe(true);
+  });
+
+  /**
+   * Only a finished task reopens: the box is "finish this" for everything else,
+   * a cancelled task included, because ticking one is somebody saying they did
+   * it after all.
+   */
+  it("ticks everything to done except what is already done", () => {
+    expect(nextTickStatus(task())).toBe("done");
+    expect(nextTickStatus(task({ status: "in_progress" }))).toBe("done");
+    expect(nextTickStatus(task({ status: "cancelled", doneAt: 1 }))).toBe("done");
+    expect(nextTickStatus(task({ status: "done", doneAt: 1 }))).toBe("open");
+  });
+
+  it("names each status the way the sheet and the sections do", () => {
+    expect(STATUSES.map(statusLabel)).toEqual(["Open", "In progress", "Done", "Cancelled"]);
   });
 });
 

@@ -1,5 +1,17 @@
-import { useState, type ReactNode } from "react";
-import { CalendarDays, Flag, Repeat as RepeatIcon, Target, Text, Trash2, X } from "lucide-react";
+import { useState, type ComponentType, type ReactNode } from "react";
+import {
+  CalendarDays,
+  Circle,
+  CircleCheck,
+  CircleDot,
+  CircleSlash,
+  Flag,
+  Repeat as RepeatIcon,
+  Target,
+  Text,
+  Trash2,
+  X,
+} from "lucide-react";
 
 import { cx } from "../lib/cx";
 import type { Task, TaskPatch } from "../lib/ipc";
@@ -8,12 +20,15 @@ import {
   dateKey,
   dueLabel,
   dueOf,
-  isDone,
+  isClosed,
   priorityLabel,
   REPEATS,
   repeatLabel,
+  STATUSES,
+  statusLabel,
   type Priority,
   type Repeat,
+  type Status,
 } from "../lib/taskMeta";
 import { useNow } from "../lib/useNow";
 import { usePomodoroStore } from "../store/pomodoro";
@@ -26,6 +41,12 @@ interface TaskDetailsProps {
   onClose: () => void;
   /** Told when a field here has the keyboard, so the panel stays open. */
   onFocusChange: (focused: boolean) => void;
+  /**
+   * Told *before* a status is written, so the list can hold the row where it is
+   * for the rest of the visit. Changing a status here moves the task between
+   * sections, and the sheet is open underneath it.
+   */
+  onStatusChange: () => void;
 }
 
 function Section({
@@ -73,6 +94,18 @@ function PriorityFlag({ priority }: { priority: Priority }) {
 const PRIORITY_CHOICES: (Priority | null)[] = [null, "low", "medium", "high"];
 
 /**
+ * A ring for each status, in the order a task moves through them: empty, half
+ * filled, ticked, struck. The same four shapes the row's box draws, so the
+ * control and the list are plainly about the same thing.
+ */
+const STATUS_ICONS: Record<Status, ComponentType<{ size?: number; strokeWidth?: number }>> = {
+  open: Circle,
+  in_progress: CircleDot,
+  done: CircleCheck,
+  cancelled: CircleSlash,
+};
+
+/**
  * Everything about one task that its row has no space for: title, a notes field,
  * priority, when it is due, whether it repeats — and deleting it.
  *
@@ -81,8 +114,14 @@ const PRIORITY_CHOICES: (Priority | null)[] = [null, "low", "medium", "high"];
  * of a sentence on the way in, and any of them could be broken by editing the
  * words around them.
  */
-export function TaskDetails({ task, onClose, onFocusChange }: TaskDetailsProps) {
+export function TaskDetails({
+  task,
+  onClose,
+  onFocusChange,
+  onStatusChange,
+}: TaskDetailsProps) {
   const patch = useTasksStore((state) => state.patch);
+  const setStatus = useTasksStore((state) => state.setStatus);
   const setTitle = useTasksStore((state) => state.setTitle);
   const remove = useTasksStore((state) => state.remove);
   const setFocusTask = usePomodoroStore((state) => state.setTask);
@@ -128,6 +167,10 @@ export function TaskDetails({ task, onClose, onFocusChange }: TaskDetailsProps) 
   };
 
   const summary = [
+    // Open is the status a task simply has; saying so would be noise. The other
+    // three are something somebody decided, and the foot of the sheet is where
+    // what it amounts to is read back.
+    task.status === "open" ? "" : statusLabel(task.status),
     task.priority === null ? "" : `${priorityLabel(task.priority)} priority`,
     due === null ? "" : dueLabel(due, new Date(now)),
     task.repeat === null ? "" : `Repeats ${task.repeat}`,
@@ -170,6 +213,33 @@ export function TaskDetails({ task, onClose, onFocusChange }: TaskDetailsProps) 
           }
         }}
       />
+
+      <Section icon={<CircleDot size={12} strokeWidth={2} />} label="Status">
+        <div className={cx(styles.segments, styles.statusSegments)}>
+          {STATUSES.map((status) => {
+            const Icon = STATUS_ICONS[status];
+            const selected = task.status === status;
+            return (
+              <button
+                key={status}
+                type="button"
+                className={cx(styles.segment, selected && styles.selected)}
+                aria-pressed={selected}
+                onClick={() => {
+                  if (selected) {
+                    return;
+                  }
+                  onStatusChange();
+                  void setStatus(task.id, status);
+                }}
+              >
+                <Icon size={12} strokeWidth={2} />
+                {statusLabel(status)}
+              </button>
+            );
+          })}
+        </div>
+      </Section>
 
       <Section icon={<Flag size={12} strokeWidth={2} />} label="Priority">
         <div className={styles.segments}>
@@ -286,7 +356,7 @@ export function TaskDetails({ task, onClose, onFocusChange }: TaskDetailsProps) 
         />
       </Section>
 
-      {!isDone(task) && (
+      {!isClosed(task) && (
         <button type="button" className={styles.focusOn} onClick={focusOnThis}>
           <Target size={12} strokeWidth={2} aria-hidden="true" />
           Focus on this

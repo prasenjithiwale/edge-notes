@@ -44,6 +44,57 @@ impl Priority {
     }
 }
 
+/// Where a task is, rather than only whether it is finished.
+///
+/// Four, because they are the four answers to "what is happening with this":
+/// nothing yet, something now, it is finished, it is not going to happen. The
+/// first two are open and the last two are closed, and that split is what the
+/// list, the counts and the reminders are actually asking about.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum Status {
+    #[default]
+    #[serde(rename = "open")]
+    Open,
+    #[serde(rename = "in_progress")]
+    InProgress,
+    #[serde(rename = "done")]
+    Done,
+    #[serde(rename = "cancelled")]
+    Cancelled,
+}
+
+impl Status {
+    pub const ALL: [Self; 4] = [Self::Open, Self::InProgress, Self::Done, Self::Cancelled];
+
+    #[must_use]
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Open => "open",
+            Self::InProgress => "in_progress",
+            Self::Done => "done",
+            Self::Cancelled => "cancelled",
+        }
+    }
+
+    /// Whether a task in this status has stopped being work: done and cancelled
+    /// both leave the list, and both are worth a timestamp.
+    #[must_use]
+    pub fn is_closed(self) -> bool {
+        matches!(self, Self::Done | Self::Cancelled)
+    }
+
+    /// An unreadable status falls back to Open rather than failing the read: a
+    /// task whose status a future version wrote is still a task, and hiding it
+    /// because of one column would be worse than showing it as open.
+    #[must_use]
+    pub fn parse_or_default(value: &str) -> Self {
+        Self::ALL
+            .into_iter()
+            .find(|status| status.as_str() == value)
+            .unwrap_or_default()
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Repeat {
@@ -81,8 +132,13 @@ pub struct Task {
     pub title: String,
     /// A free-text detail field: what the one line of the title has no room for.
     pub notes: String,
-    /// When it was completed, or `None` while it is open. The time is kept, not
-    /// just the fact, so "done today" is a question the list can answer.
+    /// Open, in progress, done or cancelled. The one field that says what is
+    /// happening with the task; `done_at` says when it stopped happening.
+    pub status: Status,
+    /// When it was closed — completed or cancelled — or `None` while it is open.
+    /// The time is kept, not just the fact, so "done today" is a question the
+    /// list can answer, and a cancelled task leaves the list the same way a
+    /// finished one does.
     pub done_at: Option<i64>,
     /// Local `YYYY-MM-DD`, or `None` for a task with no date.
     pub due_date: Option<String>,
@@ -128,10 +184,11 @@ pub struct TaskPatch {
 /// Tasks soft-deleted longer ago than this are purged at startup, as notes are.
 pub const PURGE_AFTER_MS: i64 = 30 * 24 * 60 * 60 * 1000;
 
-const SELECT_COLUMNS: &str =
-    "id, title, notes, done_at, due_date, due_time, priority, repeat_rule, created_at, updated_at";
+const SELECT_COLUMNS: &str = "id, title, notes, status, done_at, due_date, due_time, priority, \
+                              repeat_rule, created_at, updated_at";
 
 type Row = (
+    String,
     String,
     String,
     String,
@@ -156,6 +213,7 @@ fn row_to_task(row: &rusqlite::Row<'_>) -> rusqlite::Result<Row> {
         row.get(7)?,
         row.get(8)?,
         row.get(9)?,
+        row.get(10)?,
     ))
 }
 
@@ -164,13 +222,14 @@ fn build(raw: Row) -> AppResult<Task> {
         id: raw.0,
         title: raw.1,
         notes: raw.2,
-        done_at: raw.3,
-        due_date: raw.4,
-        due_time: raw.5,
-        priority: raw.6.as_deref().map(Priority::parse).transpose()?,
-        repeat: raw.7.as_deref().map(Repeat::parse).transpose()?,
-        created_at: raw.8,
-        updated_at: raw.9,
+        status: Status::parse_or_default(&raw.3),
+        done_at: raw.4,
+        due_date: raw.5,
+        due_time: raw.6,
+        priority: raw.7.as_deref().map(Priority::parse).transpose()?,
+        repeat: raw.8.as_deref().map(Repeat::parse).transpose()?,
+        created_at: raw.9,
+        updated_at: raw.10,
     })
 }
 
@@ -214,6 +273,7 @@ pub fn create(connection: &Connection, patch: &TaskPatch, now: i64) -> AppResult
             id: uuid::Uuid::now_v7().to_string(),
             title: patch.title.clone().unwrap_or_default(),
             notes: patch.notes.clone().unwrap_or_default(),
+            status: Status::Open,
             done_at: None,
             due_date: patch.due_date.clone().flatten(),
             due_time: patch.due_time.clone().flatten(),
@@ -230,13 +290,14 @@ pub fn create(connection: &Connection, patch: &TaskPatch, now: i64) -> AppResult
 pub fn insert(connection: &Connection, task: &Task) -> AppResult<Task> {
     connection.execute(
         "INSERT INTO tasks
-           (id, title, notes, done_at, due_date, due_time, priority, repeat_rule,
-            created_at, updated_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+           (id, title, notes, status, done_at, due_date, due_time, priority,
+            repeat_rule, created_at, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
         params![
             task.id,
             task.title,
             task.notes,
+            task.status.as_str(),
             task.done_at,
             task.due_date,
             task.due_time,
@@ -288,16 +349,29 @@ pub fn update(connection: &Connection, id: &str, patch: &TaskPatch, now: i64) ->
     require(connection, id)
 }
 
-/// Complete a task, or reopen it.
+/// Move a task to a status, and keep `done_at` true to it.
+///
+/// This is the only place a status changes, so the pair cannot drift: closing a
+/// task stamps the time it closed, and reopening one — to open or to in
+/// progress — clears that stamp, because it has not closed. Moving between the
+/// two closed statuses keeps the original time: cancelling something you had
+/// ticked is a correction, not a new event.
 ///
 /// A repeating task is never completed here: the frontend works out its next
 /// date — calendar months and local time are its job — and sends that through
 /// `update` instead, which leaves the task open on a later day.
-pub fn set_done(connection: &Connection, id: &str, done: bool, now: i64) -> AppResult<Task> {
-    require(connection, id)?;
+pub fn set_status(connection: &Connection, id: &str, status: Status, now: i64) -> AppResult<Task> {
+    let existing = require(connection, id)?;
+    let done_at = match (existing.status.is_closed(), status.is_closed()) {
+        (_, false) => None,
+        (true, true) => existing.done_at.or(Some(now)),
+        (false, true) => Some(now),
+    };
+
     connection.execute(
-        "UPDATE tasks SET done_at = ?2, updated_at = ?3 WHERE id = ?1 AND deleted_at IS NULL",
-        params![id, done.then_some(now), now],
+        "UPDATE tasks SET status = ?2, done_at = ?3, updated_at = ?4
+         WHERE id = ?1 AND deleted_at IS NULL",
+        params![id, status.as_str(), done_at, now],
     )?;
     require(connection, id)
 }
@@ -500,6 +574,16 @@ mod tests {
     }
 
     #[test]
+    fn a_new_task_is_open() {
+        let db = db();
+        let task = db
+            .with(|c| create(c, &with_title("Ship it"), NOW))
+            .expect("create");
+        assert_eq!(task.status, Status::Open);
+        assert_eq!(task.done_at, None);
+    }
+
+    #[test]
     fn completing_records_when_and_reopening_clears_it() {
         let db = db();
         let task = db
@@ -507,14 +591,91 @@ mod tests {
             .expect("create");
 
         let done = db
-            .with(|c| set_done(c, &task.id, true, NOW + 5))
+            .with(|c| set_status(c, &task.id, Status::Done, NOW + 5))
             .expect("done");
+        assert_eq!(done.status, Status::Done);
         assert_eq!(done.done_at, Some(NOW + 5));
 
         let open = db
-            .with(|c| set_done(c, &task.id, false, NOW + 6))
+            .with(|c| set_status(c, &task.id, Status::Open, NOW + 6))
             .expect("reopen");
+        assert_eq!(open.status, Status::Open);
         assert_eq!(open.done_at, None);
+    }
+
+    /// In progress is an open status: it has not closed, so it has no closing
+    /// time, and starting work on a task you had ticked takes the tick off.
+    #[test]
+    fn starting_a_task_leaves_it_open() {
+        let db = db();
+        let task = db
+            .with(|c| create(c, &with_title("Draft the email"), NOW))
+            .expect("create");
+
+        let doing = db
+            .with(|c| set_status(c, &task.id, Status::InProgress, NOW + 1))
+            .expect("start");
+        assert_eq!(doing.status, Status::InProgress);
+        assert_eq!(doing.done_at, None);
+
+        db.with(|c| set_status(c, &task.id, Status::Done, NOW + 2))
+            .expect("finish");
+        let restarted = db
+            .with(|c| set_status(c, &task.id, Status::InProgress, NOW + 3))
+            .expect("restart");
+        assert_eq!(restarted.done_at, None);
+    }
+
+    #[test]
+    fn cancelling_closes_a_task_without_completing_it() {
+        let db = db();
+        let task = db
+            .with(|c| create(c, &with_title("Book the venue"), NOW))
+            .expect("create");
+
+        let cancelled = db
+            .with(|c| set_status(c, &task.id, Status::Cancelled, NOW + 4))
+            .expect("cancel");
+        assert_eq!(cancelled.status, Status::Cancelled);
+        assert_eq!(cancelled.done_at, Some(NOW + 4));
+    }
+
+    /// Cancelling something already ticked is a correction to what happened, not
+    /// a second thing happening.
+    #[test]
+    fn moving_between_the_closed_statuses_keeps_the_time_it_closed() {
+        let db = db();
+        let task = db
+            .with(|c| create(c, &with_title("Send the invoice"), NOW))
+            .expect("create");
+        db.with(|c| set_status(c, &task.id, Status::Done, NOW + 5))
+            .expect("done");
+
+        let cancelled = db
+            .with(|c| set_status(c, &task.id, Status::Cancelled, NOW + 900))
+            .expect("cancel");
+        assert_eq!(cancelled.done_at, Some(NOW + 5));
+    }
+
+    /// A status this version does not know is still a task. Reading it as open
+    /// shows it; refusing the row would hide it.
+    #[test]
+    fn an_unknown_status_reads_as_open() {
+        let db = db();
+        let task = db
+            .with(|c| create(c, &with_title("From the future"), NOW))
+            .expect("create");
+        db.with(|c| {
+            c.execute(
+                "UPDATE tasks SET status = 'delegated' WHERE id = ?1",
+                params![task.id],
+            )
+            .map_err(crate::error::AppError::from)
+        })
+        .expect("write an unknown status");
+
+        let read = db.with(|c| get(c, &task.id)).expect("get").expect("task");
+        assert_eq!(read.status, Status::Open);
     }
 
     #[test]
@@ -538,7 +699,10 @@ mod tests {
     #[test]
     fn a_missing_task_is_an_error_rather_than_a_silent_no_op() {
         let db = db();
-        assert!(db.with(|c| set_done(c, "nope", true, NOW)).is_err());
+        assert!(
+            db.with(|c| set_status(c, "nope", Status::Done, NOW))
+                .is_err()
+        );
         assert!(db.with(|c| delete(c, "nope", NOW)).is_err());
         assert!(db.with(|c| restore(c, "nope")).is_err());
     }
@@ -559,7 +723,7 @@ mod tests {
         db.with(|c| delete(c, &old.id, NOW)).expect("delete old");
         db.with(|c| delete(c, &recent.id, NOW + PURGE_AFTER_MS))
             .expect("delete recent");
-        db.with(|c| set_done(c, &finished.id, true, NOW))
+        db.with(|c| set_status(c, &finished.id, Status::Done, NOW))
             .expect("finish");
 
         let purged = db

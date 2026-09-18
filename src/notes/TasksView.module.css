@@ -243,6 +243,36 @@
   background: var(--text-secondary);
 }
 
+/* In progress: the ring filled halfway, drawn rather than ticked, because the
+   task is neither. A solid border and an inner dot read as "started" at 17 px
+   where a spinner or a stripe would read as noise, and the shape survives being
+   printed, screenshotted or seen by someone who cannot tell the colours apart —
+   which is the same reason the priority flags carry weight as well as colour. */
+.boxDoing {
+  border-color: var(--text-secondary);
+}
+
+.boxDoing::before {
+  content: "";
+  position: absolute;
+  inset: 3px;
+  border-radius: 50%;
+  background: var(--text-secondary);
+}
+
+/* Cancelled: a struck circle. The task is closed like a ticked one, so the box
+   is filled like a ticked one, but with the mark that means "not this" — the
+   only two-state thing in the row that has to say which of the two closed it. */
+.boxCancelled {
+  border-color: var(--text-tertiary);
+  background: var(--text-tertiary);
+}
+
+.boxCancelled .tick {
+  transform: scale(1);
+  opacity: 1;
+}
+
 /* The tick is drawn at all times and scaled away when it is not wanted, so
    ticking is a mark appearing rather than a box being swapped. */
 .tick {
@@ -288,11 +318,36 @@
   overflow-wrap: anywhere;
 }
 
-/* A task ticked in this visit stays where it is, struck through, until the next
-   one: the list must not reshuffle under the cursor that just ticked it. */
+/* A task closed in this visit stays where it is, struck through, until the next
+   one: the list must not reshuffle under the cursor that just ticked it.
+   Cancelled is struck through too — both are over — and the box says which. */
 .ticked {
   color: var(--text-tertiary);
   text-decoration: line-through;
+}
+
+/* A row being worked on: a hairline down its leading edge, the one thing in the
+   list that marks a row without taking any of its space. Not a background,
+   which would fight the open sheet's, and not a chip, which would push the
+   title along. */
+.rowDoing::before {
+  content: "";
+  position: absolute;
+  inset: 4px auto 4px 0;
+  width: 2px;
+  border-radius: 1px;
+  background: var(--text-secondary);
+}
+
+/* Cancelled rows are quieter than open ones: still legible, plainly not work. */
+.rowCancelled {
+  opacity: 0.72;
+}
+
+/* The In progress heading earns the same emphasis Overdue has, and for the same
+   reason: it is the section you are meant to look at first. */
+.doing {
+  color: var(--text-primary);
 }
 
 .meta {

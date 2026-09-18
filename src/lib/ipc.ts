@@ -68,6 +68,19 @@ export const REPEATS = ["daily", "weekly", "monthly", "yearly"] as const;
 export type Repeat = (typeof REPEATS)[number];
 
 /**
+ * Where a task is, in the order a task moves through them.
+ *
+ * `open` and `in_progress` are the two open statuses; `done` and `cancelled`
+ * are the two closed ones, and which of the two a task is in matters — a
+ * cancelled task is not a finished one, and a list that pretended otherwise
+ * would quietly claim credit for work nobody did.
+ *
+ * Mirrors `Status` in `db/tasks.rs`, which stores these exact strings.
+ */
+export const STATUSES = ["open", "in_progress", "done", "cancelled"] as const;
+export type Status = (typeof STATUSES)[number];
+
+/**
  * A task, which since v2 of the schema is a row of its own rather than a
  * `- [ ]` line inside a note. Dates are local calendar values, not instants:
  * "the 20th at 2 pm" means that wherever you are.
@@ -77,7 +90,12 @@ export interface Task {
   title: string;
   /** Free text under the title: what one line has no room for. */
   notes: string;
-  /** When it was completed, in Unix milliseconds, or null while it is open. */
+  /** Open, in progress, done or cancelled: what is happening with the task. */
+  status: Status;
+  /**
+   * When it closed — completed or cancelled — in Unix milliseconds, or null
+   * while it is still open. `status` says which of the two closed it.
+   */
   doneAt: number | null;
   /** `YYYY-MM-DD`, local, or null for a task with no date. */
   dueDate: string | null;
@@ -355,12 +373,14 @@ export function tasksUpdate(id: string, patch: TaskPatch): Promise<Task> {
 }
 
 /**
- * Complete a task, or reopen it. A repeating task never comes through here: the
- * store moves it to its next date with `tasksUpdate` instead, because the
- * calendar arithmetic is the frontend's.
+ * Move a task to a status. Rust stamps the time it closed, or clears that stamp
+ * when it opens again, so the two can never disagree.
+ *
+ * A repeating task never comes through here: the store moves it to its next date
+ * with `tasksUpdate` instead, because the calendar arithmetic is the frontend's.
  */
-export function tasksSetDone(id: string, done: boolean): Promise<Task> {
-  return callResult<Task>("tasks_set_done", { id, done });
+export function tasksSetStatus(id: string, status: Status): Promise<Task> {
+  return callResult<Task>("tasks_set_status", { id, status });
 }
 
 export async function tasksDelete(id: string): Promise<void> {

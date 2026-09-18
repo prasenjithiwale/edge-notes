@@ -81,6 +81,14 @@
   background: var(--surface-sunken);
 }
 
+/* Status takes two rows of two rather than one row of four: "In progress" is
+   twice the width of "Done", and a quarter of a 320 px panel is not enough for
+   it at a size anyone would read. Four equal columns would either clip the one
+   label that matters most or shrink all four to fit it. */
+.statusSegments {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
 .segment {
   display: flex;
   align-items: center;

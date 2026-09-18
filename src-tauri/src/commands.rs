@@ -6,8 +6,8 @@ use std::sync::Arc;
 use tauri::{AppHandle, Emitter, Manager, State};
 
 use crate::db::{
-    Database, Note, NoteColor, Settings, SettingsPatch, Task, TaskPatch, notes, now_ms, settings,
-    tasks,
+    Database, Note, NoteColor, Settings, SettingsPatch, Status, Task, TaskPatch, notes, now_ms,
+    settings, tasks,
 };
 use crate::dock::{DOCK_WINDOW_LABEL, Dock, Input, Phase, poller};
 use crate::error::{AppError, AppResult};
@@ -414,14 +414,15 @@ pub fn tasks_update(db: State<'_, Database>, id: String, patch: TaskPatch) -> Ap
     db.with(|connection| tasks::update(connection, &id, &patch, now_ms()))
 }
 
-/// Complete a task, or reopen it.
+/// Move a task to a status: open, in progress, done or cancelled.
 ///
-/// A repeating task is never completed through this: the frontend moves it to
-/// its next date with `tasks_update`, because calendar months and local time are
-/// its department.
+/// The only way a status changes, so the time a task closed is stamped in one
+/// place. A repeating task is never completed through this: the frontend moves
+/// it to its next date with `tasks_update`, because calendar months and local
+/// time are its department.
 #[tauri::command]
-pub fn tasks_set_done(db: State<'_, Database>, id: String, done: bool) -> AppResult<Task> {
-    db.with(|connection| tasks::set_done(connection, &id, done, now_ms()))
+pub fn tasks_set_status(db: State<'_, Database>, id: String, status: Status) -> AppResult<Task> {
+    db.with(|connection| tasks::set_status(connection, &id, status, now_ms()))
 }
 
 #[tauri::command]

@@ -68,7 +68,7 @@ pub fn run() {
             commands::tasks_list,
             commands::tasks_create,
             commands::tasks_update,
-            commands::tasks_set_done,
+            commands::tasks_set_status,
             commands::tasks_delete,
             commands::tasks_restore,
             commands::notes_export,

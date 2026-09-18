@@ -14,7 +14,7 @@ import {
   remaining,
   tallyLabel,
 } from "../lib/pomodoro";
-import { compareTasks, dateKey, isDone } from "../lib/taskMeta";
+import { compareTasks, dateKey, isClosed } from "../lib/taskMeta";
 import { usePomodoroStore } from "../store/pomodoro";
 import { useTasksStore } from "../store/tasks";
 import styles from "./PomodoroView.module.css";
@@ -126,8 +126,8 @@ export function PomodoroView({ active }: PomodoroViewProps) {
   const label = PHASE_LABELS[state.phase];
   const focusing = state.phase === "focus";
 
-  const task = tasks.find((candidate) => candidate.id === taskId && !isDone(candidate));
-  const openTasks = tasks.filter((candidate) => !isDone(candidate)).sort(compareTasks);
+  const task = tasks.find((candidate) => candidate.id === taskId && !isClosed(candidate));
+  const openTasks = tasks.filter((candidate) => !isClosed(candidate)).sort(compareTasks);
 
   // A task ticked or deleted elsewhere stops being this session's, rather than
   // leaving the row naming something that is no longer on the list. Not before

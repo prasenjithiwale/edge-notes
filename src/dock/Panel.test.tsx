@@ -49,6 +49,9 @@ function task(overrides: Partial<Task> = {}): Task {
     id: `task-${String(madeTask)}`,
     title: `task ${String(madeTask)}`,
     notes: "",
+    // A stored task always has both, and Rust keeps them in step: a task with a
+    // time on it closed. Derived here so a fixture can say either.
+    status: overrides.doneAt == null ? "open" : "done",
     doneAt: null,
     dueDate: null,
     dueTime: null,
@@ -146,10 +149,11 @@ beforeEach(() => {
       tasksInDb = tasksInDb.map((entry) => (entry.id === id ? updated : entry));
       return Promise.resolve(updated);
     }
-    if (command === "tasks_set_done") {
-      const { id, done } = args as { id: string; done: boolean };
+    if (command === "tasks_set_status") {
+      const { id, status } = args as { id: string; status: Task["status"] };
       const found = tasksInDb.find((entry) => entry.id === id) ?? task();
-      const updated = { ...found, doneAt: done ? 1_000 : null };
+      const closed = status === "done" || status === "cancelled";
+      const updated = { ...found, status, doneAt: closed ? 1_000 : null };
       tasksInDb = tasksInDb.map((entry) => (entry.id === id ? updated : entry));
       return Promise.resolve(updated);
     }
@@ -689,6 +693,13 @@ describe("the colour palette", () => {
 });
 
 describe("the Tasks tab", () => {
+  /** Today, as the store writes it: these tests run against the real clock. */
+  function todayKey(): string {
+    const now = new Date();
+    const pad = (value: number) => String(value).padStart(2, "0");
+    return `${String(now.getFullYear())}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+  }
+
   async function withTasks(...tasks: Task[]) {
     tasksInDb = tasks;
     await renderPanel();
@@ -716,6 +727,74 @@ describe("the Tasks tab", () => {
     // Search and the colour filter belong to the Notes tab.
     expect(screen.queryByRole("button", { name: "Search notes" })).toBeNull();
     expect(screen.queryByRole("group", { name: "Filter by colour" })).toBeNull();
+  });
+
+  /**
+   * The sheet is where a status other than done is set, and the row has to stay
+   * under the cursor while it happens: the sheet is open below it, and a list
+   * that reshuffled would take the controls away mid-press.
+   */
+  it("starts a task from its sheet and holds the row where it was", async () => {
+    await withTasks(task({ id: "draft", title: "draft the email", dueDate: todayKey() }));
+    await useNotesStore.getState().setView("todo");
+
+    (await screen.findByRole("button", { name: /draft the email/ })).click();
+    const start = await screen.findByRole("button", { name: "In progress" });
+    start.click();
+
+    await waitFor(() => {
+      expect(commandCalls("tasks_set_status")).toEqual([
+        { id: "draft", status: "in_progress" },
+      ]);
+    });
+    const panel = screen.getByRole("tabpanel", { name: "Tasks" });
+    // The box says so at once, in the three-state way a box says it.
+    await waitFor(() => {
+      expect(
+        within(panel).getByRole("checkbox", { name: "draft the email" }).getAttribute(
+          "aria-checked",
+        ),
+      ).toBe("mixed");
+    });
+    // And it is still under Today, where it was pressed. The headings carry
+    // their count, which is what tells them from the sheet's own "Today" chip
+    // and its "In progress" segment.
+    expect(within(panel).getAllByRole("button", { name: "Today1" }).length).toBeGreaterThan(
+      0,
+    );
+    expect(within(panel).queryByRole("button", { name: "In progress1" })).toBeNull();
+
+    // Coming back is a new visit, and by then it has settled.
+    await useNotesStore.getState().setView("notes");
+    await useNotesStore.getState().setView("todo");
+    await waitFor(() => {
+      expect(screen.getAllByRole("button", { name: "In progress1" }).length).toBeGreaterThan(
+        0,
+      );
+    });
+  });
+
+  it("cancels a task, which closes it without counting it as finished", async () => {
+    await withTasks(task({ id: "venue", title: "book the venue" }));
+    await useNotesStore.getState().setView("todo");
+
+    (await screen.findByRole("button", { name: /book the venue/ })).click();
+    (await screen.findByRole("button", { name: "Cancelled" })).click();
+
+    await waitFor(() => {
+      expect(commandCalls("tasks_set_status")).toEqual([
+        { id: "venue", status: "cancelled" },
+      ]);
+    });
+    // The box is not a tick: a cancelled task was not done.
+    await waitFor(() => {
+      const box = screen.getByRole("checkbox", { name: "book the venue (cancelled)" });
+      expect(box.getAttribute("aria-checked")).toBe("false");
+    });
+    // And the tab stops counting it as work.
+    await waitFor(() => {
+      expect(screen.getByRole("tab", { name: "Tasks" })).toBeTruthy();
+    });
   });
 
   it("adds a task without asking which note it belongs to", async () => {
@@ -777,7 +856,7 @@ describe("the Tasks tab", () => {
     milk.click();
 
     await waitFor(() => {
-      expect(commandCalls("tasks_set_done")).toEqual([{ id: "milk", done: true }]);
+      expect(commandCalls("tasks_set_status")).toEqual([{ id: "milk", status: "done" }]);
     });
     const still = screen.getByRole("checkbox", { name: "milk" });
     expect(still.getAttribute("aria-checked")).toBe("true");
@@ -790,6 +869,37 @@ describe("the Tasks tab", () => {
     });
   });
 
+  /**
+   * Reported by the owner: a task marked done could not be undone. A row held
+   * in place is grouped from a copy with its `doneAt` cleared, so that it is
+   * listed among the open tasks rather than jumping to Done under the cursor —
+   * and the box was reading its own state from that copy. It answered "still
+   * open" however the press went, so the tick never came off and the next press
+   * read as another tick.
+   */
+  it("unticks a task it has just ticked", async () => {
+    await withTasks(task({ id: "milk", title: "milk" }));
+    await useNotesStore.getState().setView("todo");
+
+    const box = () => screen.getByRole("checkbox", { name: "milk" });
+    (await screen.findByRole("checkbox", { name: "milk" })).click();
+    await waitFor(() => {
+      expect(box().getAttribute("aria-checked")).toBe("true");
+    });
+
+    box().click();
+    await waitFor(() => {
+      expect(commandCalls("tasks_set_status")).toEqual([
+        { id: "milk", status: "done" },
+        { id: "milk", status: "open" },
+      ]);
+    });
+    // And it reads as open again, rather than as a tick that will not come off.
+    await waitFor(() => {
+      expect(box().getAttribute("aria-checked")).toBe("false");
+    });
+  });
+
   it("never writes a note when a task changes", async () => {
     await withTasks(task({ id: "milk", title: "milk" }));
     await useNotesStore.getState().setView("todo");
@@ -797,7 +907,7 @@ describe("the Tasks tab", () => {
     (await screen.findByRole("checkbox", { name: "milk" })).click();
 
     await waitFor(() => {
-      expect(commandCalls("tasks_set_done")).toHaveLength(1);
+      expect(commandCalls("tasks_set_status")).toHaveLength(1);
     });
     expect(commandCalls("notes_update")).toEqual([]);
   });
@@ -1093,7 +1203,7 @@ describe("task details", () => {
         patch: { dueDate: "2026-09-15", dueTime: null },
       });
     });
-    expect(commandCalls("tasks_set_done")).toEqual([]);
+    expect(commandCalls("tasks_set_status")).toEqual([]);
   });
 
   it("shows the details that matter at a glance on the row", async () => {

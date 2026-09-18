@@ -21,10 +21,18 @@
  *
  * Pure: every function that needs the current time takes it.
  */
-import { PRIORITIES, REPEATS, type Priority, type Repeat, type Task } from "./ipc";
+import {
+  PRIORITIES,
+  REPEATS,
+  STATUSES,
+  type Priority,
+  type Repeat,
+  type Status,
+  type Task,
+} from "./ipc";
 
-export type { Priority, Repeat };
-export { PRIORITIES, REPEATS };
+export type { Priority, Repeat, Status };
+export { PRIORITIES, REPEATS, STATUSES };
 
 /** The when of a task, as the pickers and the labels pass it around. */
 export interface Due {
@@ -38,8 +46,49 @@ export function dueOf(task: Task): Due | null {
   return task.dueDate === null ? null : { date: task.dueDate, time: task.dueTime };
 }
 
+/**
+ * The four statuses in the two pairs that matter.
+ *
+ * Everything that used to ask "is this ticked" is really asking one of these:
+ * the list and the reminders want to know whether a task is still work
+ * (`isClosed`), the box wants to know whether it was finished (`isDone`), and
+ * the row wants to know whether it is being worked on now.
+ */
 export function isDone(task: Task): boolean {
-  return task.doneAt !== null;
+  return task.status === "done";
+}
+
+export function isCancelled(task: Task): boolean {
+  return task.status === "cancelled";
+}
+
+export function isInProgress(task: Task): boolean {
+  return task.status === "in_progress";
+}
+
+/** Done or cancelled: it has stopped being something to do. */
+export function isClosed(task: Task): boolean {
+  return isDone(task) || isCancelled(task);
+}
+
+export const STATUS_LABELS: Record<Status, string> = {
+  open: "Open",
+  in_progress: "In progress",
+  done: "Done",
+  cancelled: "Cancelled",
+};
+
+export function statusLabel(status: Status): string {
+  return STATUS_LABELS[status];
+}
+
+/**
+ * What the box does next. Ticking a finished task reopens it; ticking anything
+ * else — including a cancelled one, which is a task somebody has come back to —
+ * finishes it.
+ */
+export function nextTickStatus(task: Task): Status {
+  return isDone(task) ? "open" : "done";
 }
 
 function pad(value: number): string {
@@ -269,32 +318,51 @@ export function nextOccurrence(due: Due | null, repeat: Repeat, now: Date): Due 
 // Sections, order and labels
 // ---------------------------------------------------------------------------
 
-export type DueSection = "overdue" | "today" | "tomorrow" | "upcoming" | "none" | "done";
+export type DueSection =
+  | "doing"
+  | "overdue"
+  | "today"
+  | "tomorrow"
+  | "upcoming"
+  | "none"
+  | "done"
+  | "cancelled";
 
 /**
- * The order the list shows them in. Done last, and only for what was finished
- * recently: a task list is about what is left, and yesterday's ticks are
- * reassurance, not work.
+ * The order the list shows them in.
+ *
+ * In progress first, because a task somebody has started is the one they are
+ * holding: it is where you were, and a list that made you find it again in
+ * Today is a list you have to read before you can use. The date sections follow,
+ * and the two closed ones come last and only for what closed recently — a task
+ * list is about what is left, and yesterday's ticks are reassurance, not work.
  */
 export const SECTIONS: readonly DueSection[] = [
+  "doing",
   "overdue",
   "today",
   "tomorrow",
   "upcoming",
   "none",
   "done",
+  "cancelled",
 ];
 
 export const SECTION_LABELS: Record<DueSection, string> = {
+  doing: "In progress",
   overdue: "Overdue",
   today: "Today",
   tomorrow: "Tomorrow",
   upcoming: "Upcoming",
   none: "Someday",
   done: "Done",
+  cancelled: "Cancelled",
 };
 
-/** How long a completed task stays in the Done section. */
+/** The sections holding tasks that have closed rather than tasks still to do. */
+export const CLOSED_SECTIONS: readonly DueSection[] = ["done", "cancelled"];
+
+/** How long a closed task stays in its section, finished or cancelled alike. */
 export const DONE_WINDOW_MS = 24 * 60 * 60 * 1000;
 
 /** A task due earlier today at a set time is overdue once that time has passed. */
@@ -315,9 +383,25 @@ export function dueSection(due: Due | null, now: Date): DueSection {
   return due.time !== null && due.time < timeKey(now) ? "overdue" : "today";
 }
 
-/** Which section a task belongs in, completion included. */
+/**
+ * Which section a task belongs in.
+ *
+ * Status decides first and the date only decides for a task that is merely open:
+ * something being worked on now, finished or dropped is no longer a question of
+ * when it was due. An in-progress task keeps its due label in the row, overdue
+ * colour and all, so moving it here costs it nothing.
+ */
 export function taskSection(task: Task, now: Date): DueSection {
-  return isDone(task) ? "done" : dueSection(dueOf(task), now);
+  switch (task.status) {
+    case "done":
+      return "done";
+    case "cancelled":
+      return "cancelled";
+    case "in_progress":
+      return "doing";
+    case "open":
+      return dueSection(dueOf(task), now);
+  }
 }
 
 const PRIORITY_RANK: Record<Priority, number> = { high: 0, medium: 1, low: 2 };
@@ -340,7 +424,10 @@ export function compareTasks(a: Task, b: Task): number {
   return a.createdAt - b.createdAt;
 }
 
-/** Most recently finished first: the Done section is a history, newest at the top. */
+/**
+ * Most recently closed first: Done and Cancelled are histories, newest at the
+ * top.
+ */
 export function compareDone(a: Task, b: Task): number {
   return (b.doneAt ?? 0) - (a.doneAt ?? 0);
 }
