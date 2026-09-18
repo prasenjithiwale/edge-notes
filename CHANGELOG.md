@@ -2,8 +2,10 @@
 
 Every release of Ledge, newest first. Versions follow
 [semantic versioning](https://semver.org); while the version is `0.x`, any release
-may change behaviour. Releases are published on
-[GitHub Releases](https://github.com/prasenjithiwale/edge-notes/releases).
+may change behaviour. Downloads for every platform are at
+<https://prasenjithiwale.github.io/edge-notes-apt/>, which is also where this
+file is published — this repository is private, so its Releases page is not a
+public link.
 
 To release, see "Releasing" in the README.
 

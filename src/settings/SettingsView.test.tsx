@@ -363,14 +363,31 @@ describe("the About section", () => {
     await screen.findByRole("button", { name: "Copied" });
   });
 
-  it("opens the downloads page through the one command that may", async () => {
+  /**
+   * Downloads, the changelog and the issue tracker, each through `open_url` —
+   * the one command allowed to leave the app — and each at an address a reader
+   * can actually open. The source repository is private, so a link into it from
+   * inside the app would be a dead end for everyone but its author.
+   */
+  it("opens the public pages through the one command that may", async () => {
     render(<SettingsView onClose={() => undefined} />);
-    fireEvent.click(await screen.findByRole("button", { name: "Open" }));
+    const opens = await screen.findAllByRole("button", { name: "Open" });
+    expect(opens).toHaveLength(3);
+    for (const button of opens) {
+      fireEvent.click(button);
+    }
 
     await waitFor(() => {
-      const calls = invoke.mock.calls.filter(([command]) => command === "open_url");
-      expect(calls).toHaveLength(1);
-      expect((calls[0]?.[1] as { url: string }).url).toMatch(/^https:\/\//);
+      const urls = invoke.mock.calls
+        .filter(([command]) => command === "open_url")
+        .map(([, args]) => (args as { url: string }).url);
+      expect(urls).toHaveLength(3);
+      expect(urls.every((url) => url.startsWith("https://"))).toBe(true);
+      expect(urls.some((url) => url.endsWith("changelog.html"))).toBe(true);
+      expect(urls.some((url) => url.endsWith("/issues"))).toBe(true);
+      // Never the private one. "edge-notes-apt" is a different repository, and
+      // the boundary after the name is what tells them apart.
+      expect(urls.some((url) => /edge-notes(\/|$)/.test(url))).toBe(false);
     });
   });
 

@@ -545,8 +545,17 @@ const TAB_SIZES: Choice<Settings["tab.size"]>[] = [
   { value: "large", label: "Large" },
 ];
 
-/** Where new versions are published; `open_url` allows http and https only. */
+/**
+ * Where everything public about the app lives; `open_url` allows http and https
+ * only.
+ *
+ * All three are on the published site or the public repository it is served
+ * from, never on the source repository: that one is private, and a link from
+ * inside the app that nobody outside can open is worse than no link.
+ */
 const DOWNLOADS_URL = "https://prasenjithiwale.github.io/edge-notes-apt/";
+const CHANGELOG_URL = "https://prasenjithiwale.github.io/edge-notes-apt/changelog.html";
+const ISSUES_URL = "https://github.com/prasenjithiwale/edge-notes-apt/issues";
 
 /** How long the copy button says so before going back to "Copy". */
 const COPIED_MS = 1_400;
@@ -927,12 +936,46 @@ export function SettingsView({ onClose }: SettingsViewProps) {
           </div>
 
           <div className={styles.row}>
-            <Label text="Downloads and release notes" />
+            <Label text="Downloads" description="New versions, for every platform." />
             <button
               type="button"
               className={styles.action}
               onClick={() => {
                 void openUrl(DOWNLOADS_URL);
+              }}
+            >
+              Open
+            </button>
+          </div>
+
+          <div className={styles.row}>
+            <Label
+              text="What is new"
+              description="Every release, and what changed in it."
+            />
+            <button
+              type="button"
+              className={styles.action}
+              onClick={() => {
+                void openUrl(CHANGELOG_URL);
+              }}
+            >
+              Open
+            </button>
+          </div>
+
+          {/* Under the copy button on purpose: copy the details, then open the
+              place they are pasted. */}
+          <div className={styles.row}>
+            <Label
+              text="Report a problem"
+              description="Say what happened, with the details above."
+            />
+            <button
+              type="button"
+              className={styles.action}
+              onClick={() => {
+                void openUrl(ISSUES_URL);
               }}
             >
               Open

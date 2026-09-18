@@ -20,6 +20,11 @@ shopt -s nullglob
 
 repo=$1
 site=https://prasenjithiwale.github.io/edge-notes-apt
+# Every link on the page has to be one a visitor can actually open. The source
+# repository is private, so the public one this site is served from is where bug
+# reports go, and the changelog is published here rather than linked into a
+# repository nobody outside can read.
+issues=https://github.com/prasenjithiwale/edge-notes-apt/issues
 source_dir=$(cd "$(dirname "$0")/.." && pwd)
 
 # Every published file is named <product>_<version>_<platform>..., so one rule
@@ -323,23 +328,23 @@ features=$(
      are the only colour on screen.</p>"
 )
 
-cat > "$repo/index.html" <<HTML
-<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Ledge — notes on the edge of your screen</title>
-<meta name="description" content="Ledge is a small notes, tasks and focus widget docked to the edge of your screen. Free, local-only, for macOS, Windows, Debian and Ubuntu.">
-<meta property="og:title" content="Ledge — notes on the edge of your screen">
-<meta property="og:description" content="Point at the tab and a panel of colour-coded notes slides out; move away and it slides back. Free, local-only, for macOS, Windows and Linux.">
-<meta property="og:type" content="website">
-<meta property="og:url" content="$site/">
-<meta property="og:image" content="$site/screenshots/hero.png">
-<meta name="twitter:card" content="summary_large_image">
-<link rel="icon" href="icon.png" sizes="128x128" type="image/png">
-<link rel="apple-touch-icon" href="icon.png">
-<style>
+# The stylesheet is a file rather than a <style> block now: there are two pages
+# and they must not drift. The dark palette appears twice inside it, which is why
+# it is a variable — see the comment beside it.
+dark_tokens='    --bg: #131315;
+    --bg-soft: #1b1b1e;
+    --card: #1c1c1f;
+    --fg: #f2f2f3;
+    --muted: #a1a1a6;
+    --faint: #8a8a8f;
+    --code: #232327;
+    --border: rgba(255, 255, 255, .11);
+    --hairline: rgba(255, 255, 255, .07);
+    --shadow: 0 1px 2px rgba(0,0,0,.5), 0 18px 48px rgba(0,0,0,.55);
+    --shadow-soft: 0 1px 2px rgba(0,0,0,.4), 0 8px 24px rgba(0,0,0,.35);
+    --accent: #6f9bff;'
+
+cat > "$repo/style.css" <<CSS
   :root {
     color-scheme: light dark;
     --bg: #fff;
@@ -355,21 +360,16 @@ cat > "$repo/index.html" <<HTML
     --shadow-soft: 0 1px 2px rgba(0,0,0,.04), 0 6px 20px rgba(0,0,0,.06);
     --accent: #2f6df6;
   }
+  /* Dark, twice: for a system that asks for it where the reader has not chosen,
+     and for a reader who has. The :not() is what lets a stored "light" win over
+     the system — a switch that only worked one way would not be a switch. */
   @media (prefers-color-scheme: dark) {
-    :root {
-      --bg: #131315;
-      --bg-soft: #1b1b1e;
-      --card: #1c1c1f;
-      --fg: #f2f2f3;
-      --muted: #a1a1a6;
-      --faint: #8a8a8f;
-      --code: #232327;
-      --border: rgba(255, 255, 255, .11);
-      --hairline: rgba(255, 255, 255, .07);
-      --shadow: 0 1px 2px rgba(0,0,0,.5), 0 18px 48px rgba(0,0,0,.55);
-      --shadow-soft: 0 1px 2px rgba(0,0,0,.4), 0 8px 24px rgba(0,0,0,.35);
-      --accent: #6f9bff;
+    :root:not([data-theme="light"]) {
+$dark_tokens
     }
+  }
+  :root[data-theme="dark"] {
+$dark_tokens
   }
   * { box-sizing: border-box; }
   html { scroll-behavior: smooth; }
@@ -533,21 +533,122 @@ cat > "$repo/index.html" <<HTML
     section.band { padding: 56px 0; }
     .top nav a.hide-sm { display: none; }
   }
-</style>
-</head>
-<body>
 
+  /* The theme switch. One button with both glyphs in it, each shown by the same
+     rules that pick the palette, so the icon can never disagree with the page:
+     a sun to go light while it is dark, a moon to go dark while it is light. */
+  .theme {
+    display: flex; align-items: center; justify-content: center;
+    width: 30px; height: 30px; padding: 0;
+    border: 1px solid var(--border); border-radius: 9px;
+    background: transparent; color: var(--muted); cursor: pointer;
+  }
+  .theme:hover { color: var(--fg); border-color: var(--faint); }
+  .theme svg { width: 15px; height: 15px; }
+  .theme .sun { display: none; }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) .theme .sun { display: block; }
+    :root:not([data-theme="light"]) .theme .moon { display: none; }
+  }
+  :root[data-theme="dark"] .theme .sun { display: block; }
+  :root[data-theme="dark"] .theme .moon { display: none; }
+  :root[data-theme="light"] .theme .sun { display: none; }
+  :root[data-theme="light"] .theme .moon { display: block; }
+
+  /* The changelog page: one column of prose, generated from CHANGELOG.md. */
+  .prose { padding: 56px 0 72px; }
+  .prose h2 {
+    margin: 48px 0 6px; padding-top: 24px; border-top: 1px solid var(--hairline);
+    font-size: 24px;
+  }
+  .prose h2:first-of-type { margin-top: 8px; padding-top: 0; border-top: 0; }
+  .prose .when { color: var(--faint); font-size: 14px; margin: 0 0 18px; }
+  .prose h3 {
+    margin: 26px 0 8px; font-size: 13px; font-weight: 600;
+    letter-spacing: .04em; text-transform: uppercase; color: var(--faint);
+  }
+  .prose p, .prose li { color: var(--muted); }
+  .prose ul { margin: 0 0 14px; padding-left: 20px; }
+  .prose li { margin-bottom: 8px; }
+  .prose li b, .prose p b { color: var(--fg); }
+  .prose .lede { font-size: 17px; }
+CSS
+
+# Shared by both pages: the switch's markup, and the script that remembers it.
+theme_button='<button type="button" class="theme" data-theme-toggle aria-label="Switch between light and dark">
+      <svg class="sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+      <svg class="moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+    </button>'
+theme_script='<script>
+  // Set before anything paints, so a reader who chose light never sees a dark
+  // frame first. Wrapped because storage can throw in a private window, and a
+  // page that will not render is worse than a page that forgot a preference.
+  (function () {
+    var root = document.documentElement;
+    var KEY = "ledge-theme";
+    try {
+      var stored = localStorage.getItem(KEY);
+      if (stored === "light" || stored === "dark") { root.setAttribute("data-theme", stored); }
+    } catch (error) { /* no storage: the system decides */ }
+    document.addEventListener("click", function (event) {
+      var target = event.target;
+      var button = target && target.closest ? target.closest("[data-theme-toggle]") : null;
+      if (!button) { return; }
+      var chosen = root.getAttribute("data-theme");
+      var dark = chosen === "dark" ||
+        (chosen === null && window.matchMedia("(prefers-color-scheme: dark)").matches);
+      var next = dark ? "light" : "dark";
+      root.setAttribute("data-theme", next);
+      try { localStorage.setItem(KEY, next); } catch (error) { /* as above */ }
+    });
+  })();
+</script>'
+
+# The header, for whichever page is being written. Both pages sit at the root, so
+# only the section anchors differ: in-page on the landing page, and a link back to
+# it from anywhere else. Everything else is written once and cannot drift.
+nav_for() {
+  cat <<NAV
 <header class="top">
   <div class="wrap top-inner">
-    <a class="wordmark" href="#top"><img class="mark" src="icon.png" width="20" height="20" alt=""> Ledge</a>
+    <a class="wordmark" href="./"><img class="mark" src="icon.png" width="20" height="20" alt=""> Ledge</a>
     <nav>
-      <a href="#features">Features</a>
-      <a href="#keys" class="hide-sm">Shortcuts</a>
-      <a href="#download">Download</a>
-      <a href="https://github.com/prasenjithiwale/edge-notes" class="hide-sm">Source</a>
+      <a href="$1#features">Features</a>
+      <a href="$1#keys" class="hide-sm">Shortcuts</a>
+      <a href="$1#download">Download</a>
+      <a href="changelog.html">Changelog</a>
+      $theme_button
     </nav>
   </div>
 </header>
+NAV
+}
+
+nav_html=$(nav_for "")
+
+cat > "$repo/index.html" <<HTML
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ledge — notes on the edge of your screen</title>
+<meta name="description" content="Ledge is a small notes, tasks and focus widget docked to the edge of your screen. Free, local-only, for macOS, Windows, Debian and Ubuntu.">
+<meta property="og:title" content="Ledge — notes on the edge of your screen">
+<meta property="og:description" content="Point at the tab and a panel of colour-coded notes slides out; move away and it slides back. Free, local-only, for macOS, Windows and Linux.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="$site/">
+<meta property="og:image" content="$site/screenshots/hero.png">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="icon.png" sizes="128x128" type="image/png">
+<link rel="apple-touch-icon" href="icon.png">
+<link rel="stylesheet" href="style.css">
+$theme_script
+
+</head>
+<body>
+
+$nav_html
 
 <main id="top">
 
@@ -635,16 +736,15 @@ $key_section
 <section class="band">
   <div class="wrap narrow">
     <h2>Open source, closed to contributions</h2>
-    <p>The code is on
-    <a href="https://github.com/prasenjithiwale/edge-notes">GitHub</a> to read,
-    fork and change for your own use. It is not open to contributions: no pull
-    requests, and no feature requests taken as a queue. This is one person's app,
-    built to one set of opinions about what it should be, and keeping it that way
-    is most of why it stays small.</p>
+    <p>Ledge is free and open source, and it is not open to contributions: no
+    pull requests, and no feature requests taken as a queue. This is one person's
+    app, built to one set of opinions about what it should be, and keeping it
+    that way is most of why it stays small and why it does what it does.</p>
     <p>Bug reports are the exception and they are welcome — if something is
-    broken, <a href="https://github.com/prasenjithiwale/edge-notes/issues">open an
-    issue</a> and say what happened. A fork is the right answer to "I would have
-    done this differently", and that is a compliment, not a brush-off.</p>
+    broken, <a href="$issues">open an issue</a> and say what happened, with the
+    version and system from Settings › About. Everything else about a release —
+    what changed, what is known to be broken — is in the
+    <a href="changelog.html">changelog</a>.</p>
   </div>
 </section>
 
@@ -660,7 +760,7 @@ $key_section
     how something behaves. Deleted notes and tasks are kept for thirty days so an
     undo always has something to undo, and every release is listed with its
     changes in the
-    <a href="https://github.com/prasenjithiwale/edge-notes/blob/master/CHANGELOG.md">changelog</a>.</p>
+    <a href="changelog.html">changelog</a>.</p>
   </div>
 </section>
 
@@ -670,9 +770,9 @@ $key_section
   <div class="wrap foot-row">
     <span>Ledge $version</span>
     <span class="spacer"></span>
-    <a href="https://github.com/prasenjithiwale/edge-notes">Source</a>
-    <a href="https://github.com/prasenjithiwale/edge-notes/blob/master/CHANGELOG.md">Changelog</a>
-    <a href="https://github.com/prasenjithiwale/edge-notes/issues">Report a problem</a>
+    <a href="#download">Download</a>
+    <a href="changelog.html">Changelog</a>
+    <a href="$issues">Report a problem</a>
   </div>
 </footer>
 
@@ -682,23 +782,219 @@ HTML
 
 echo "wrote $repo/index.html"
 
+# The changelog is published here, as a page and as the file itself, because the
+# repository it is written in is private: "see the changelog" has to be a link a
+# reader can open. The source of truth stays in the source repository and is
+# copied on every release, so the two cannot drift.
+changelog=$source_dir/CHANGELOG.md
+if [ -f "$changelog" ]; then
+  cp "$changelog" "$repo/CHANGELOG.md"
+
+  # Markdown to HTML, for exactly the dialect the changelog is written in:
+  # headings, bullet lists, links, bold, italic and inline code. Python rather
+  # than sed because inline spans nest inside list items, and a regex pipeline
+  # that gets that right is unreadable by the second rule.
+  CHANGELOG_TITLE="Ledge — changelog" \
+  CHANGELOG_NAV="$(nav_for "./")" \
+  CHANGELOG_SCRIPT="$theme_script" \
+  python3 - "$changelog" "$repo/changelog.html" <<'PYTHON'
+import html
+import os
+import re
+import sys
+
+source, target = sys.argv[1], sys.argv[2]
+lines = open(source, encoding="utf-8").read().splitlines()
+
+
+def inline(text):
+    """Bold, italic, inline code, links and bare <url> autolinks, in that order.
+
+    Code is taken out first and put back last, so a `**` inside a snippet is not
+    read as emphasis — the one nesting rule this dialect needs.
+    """
+    snippets = []
+
+    def stash(match):
+        snippets.append(html.escape(match.group(1)))
+        return "\x00%d\x00" % (len(snippets) - 1)
+
+    text = re.sub(r"`([^`]+)`", stash, text)
+    text = html.escape(text)
+    text = re.sub(r"\[([^\]]+)\]\(([^)]+)\)", r'<a href="\2">\1</a>', text)
+    text = re.sub(r"&lt;(https?://[^&\s]+)&gt;", r'<a href="\1">\1</a>', text)
+    text = re.sub(r"\*\*([^*]+)\*\*", r"<b>\1</b>", text)
+    text = re.sub(r"(?<![\w*])\*([^*]+)\*(?![\w*])", r"<i>\1</i>", text)
+    text = re.sub(r"(?<![\w_])_([^_]+)_(?![\w_])", r"<i>\1</i>", text)
+    return re.sub(r"\x00(\d+)\x00", lambda m: "<code>%s</code>" % snippets[int(m.group(1))], text)
+
+
+out = []
+paragraph = []
+item = []
+in_list = False
+
+
+def flush_paragraph(klass=""):
+    global paragraph
+    if paragraph:
+        attribute = ' class="%s"' % klass if klass else ""
+        out.append("    <p%s>%s</p>" % (attribute, inline(" ".join(paragraph))))
+        paragraph = []
+
+
+def flush_item():
+    global item
+    if item:
+        out.append("      <li>%s</li>" % inline(" ".join(item)))
+        item = []
+
+
+def close_list():
+    global in_list
+    flush_item()
+    if in_list:
+        out.append("    </ul>")
+        in_list = False
+
+
+# Everything above the first version heading is the file talking to whoever
+# maintains it — how to cut a release, where the tags are. The page says its own
+# opening line instead and starts at the first version.
+first_version = next(
+    (index for index, line in enumerate(lines) if line.startswith("## ")), len(lines)
+)
+lines = lines[first_version:]
+
+# A version heading with nothing under it — [Unreleased] between releases — is a
+# section about nothing, and on a page it reads as a release that did not happen.
+pruned = []
+for index, line in enumerate(lines):
+    if line.startswith("## "):
+        rest = lines[index + 1 :]
+        following = next(
+            (later for later in rest if later.strip() != ""), ""
+        )
+        if following.startswith("## ") or following == "":
+            continue
+    pruned.append(line)
+lines = pruned
+
+first_paragraph = True
+for line in lines:
+    stripped = line.strip()
+    if stripped.startswith("# "):
+        # The page has its own title; the file's is not repeated.
+        continue
+    if stripped.startswith("## "):
+        close_list()
+        flush_paragraph("lede" if first_paragraph else "")
+        first_paragraph = False
+        heading = stripped[3:]
+        # "## [0.4.0] - 2026-09-18": the version is the heading, the date sits
+        # under it, because a list of versions is read by version.
+        match = re.match(r"\[([^\]]+)\](?:\s*-\s*(.+))?$", heading)
+        name = match.group(1) if match else heading
+        when = match.group(2) if match and match.group(2) else ""
+        anchor = re.sub(r"[^a-z0-9.]+", "-", name.lower())
+        out.append('    <h2 id="%s">%s</h2>' % (anchor, html.escape(name)))
+        if when:
+            out.append('    <p class="when">%s</p>' % html.escape(when))
+        continue
+    if stripped.startswith("### "):
+        close_list()
+        flush_paragraph()
+        out.append("    <h3>%s</h3>" % inline(stripped[4:]))
+        continue
+    if stripped.startswith("- "):
+        flush_paragraph("lede" if first_paragraph else "")
+        first_paragraph = False
+        flush_item()
+        if not in_list:
+            out.append("    <ul>")
+            in_list = True
+        item.append(stripped[2:])
+        continue
+    if stripped == "":
+        close_list()
+        flush_paragraph("lede" if first_paragraph else "")
+        first_paragraph = False
+        continue
+    # A continuation: of the bullet being read, or of the paragraph.
+    (item if in_list else paragraph).append(stripped)
+
+close_list()
+flush_paragraph()
+
+page = """<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>%(title)s</title>
+<meta name="description" content="Every release of Ledge and what changed in it.">
+<link rel="icon" href="icon.png" sizes="128x128" type="image/png">
+<link rel="stylesheet" href="style.css">
+%(script)s
+</head>
+<body>
+
+%(nav)s
+
+<main class="wrap narrow prose">
+  <h1>Changelog</h1>
+  <p class="lede">Every release of Ledge, newest first, and what changed in it.
+  While the version is 0.x a release may change how something behaves.
+  <a href="./#download">Downloads are here</a>.</p>
+%(body)s
+</main>
+
+<footer>
+  <div class="wrap foot-row">
+    <a href="./">Downloads</a>
+    <span class="spacer"></span>
+    <a href="CHANGELOG.md">This file, as Markdown</a>
+  </div>
+</footer>
+
+</body>
+</html>
+""" % {
+    "title": html.escape(os.environ.get("CHANGELOG_TITLE", "Changelog")),
+    "nav": os.environ.get("CHANGELOG_NAV", ""),
+    "script": os.environ.get("CHANGELOG_SCRIPT", ""),
+    "body": "\n".join(out),
+}
+
+open(target, "w", encoding="utf-8").write(page)
+print("wrote", target)
+PYTHON
+fi
+
 # The repository's own README, for whoever arrives at the GitHub page rather than
 # the site. Generated from the same facts as the page, so the two cannot drift —
 # the old one still named the package `edge-notes` long after it was renamed.
 cat > "$repo/README.md" <<MARKDOWN
 # Ledge downloads
 
-Packages of [Ledge](https://github.com/prasenjithiwale/edge-notes), a notes,
-tasks and focus widget docked to the edge of your screen — for macOS, Windows,
-Debian and Ubuntu.
+Packages of **Ledge**, a notes, tasks and focus widget docked to the edge of
+your screen — for macOS, Windows, Debian and Ubuntu.
 
 **The downloads, with install instructions for each platform, are on the site
 this repository serves: <$site/>**
 
-This repository is the publishing target, not the source. It holds the packages,
-a signed APT index, the public key and a generated landing page; it is written by
-the release workflow in the source repository, and nothing in it is edited by
-hand. An edit made here is overwritten by the next release.
+**Found a bug?** [Open an issue here]($issues) — this is where they are
+tracked. Please say which version (Settings › About in the app) and which
+system. Every release and what changed in it is in
+[CHANGELOG.md](CHANGELOG.md), also published as a page at
+<$site/changelog.html>.
+
+This repository is the publishing target, not the source: it holds the packages,
+a signed APT index, the public key, the changelog and a generated landing page.
+It is written by the release workflow in a separate, private source repository,
+and nothing in it is edited by hand — an edit made here is overwritten by the
+next release. Ledge is not open to contributions; see the site for what that
+means.
 
 ## apt, in short
 

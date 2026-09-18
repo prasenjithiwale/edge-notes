@@ -53,7 +53,9 @@ cask "edge-notes" do
   url "$site/macos/Ledge_#{version}_macOS_universal.dmg"
   name "Ledge"
   desc "Notes widget docked to the edge of the screen"
-  homepage "https://github.com/prasenjithiwale/edge-notes"
+  # The site, not the source repository: that one is private and a cask
+  # homepage is something people click.
+  homepage "https://prasenjithiwale.github.io/edge-notes-apt/"
 
   # Bare symbol, not ">= :monterey": Homebrew 7 deprecated the string form, and
   # this one already means "Monterey or newer" (its comparator defaults to >=).
