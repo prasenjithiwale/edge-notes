@@ -11,6 +11,20 @@ To release, see "Releasing" in the README.
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-09-18
+
+### Changed
+
+- **Every link in the app now goes somewhere you can open.** Settings › About
+  had one link, to the downloads page; it now has three — downloads, what is new
+  in each release, and where to report a problem — and none of them point into
+  the private source repository.
+- **The changelog is published on the downloads site**, at
+  [changelog.html](https://prasenjithiwale.github.io/edge-notes-apt/changelog.html),
+  rather than being a link into a repository nobody outside can read.
+- **The site has a light and dark switch.** It still follows the system by
+  default; the switch is for when you want the other one, and it is remembered.
+
 ## [0.4.0] - 2026-09-18
 
 ### Added
