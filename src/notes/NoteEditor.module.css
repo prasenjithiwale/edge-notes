@@ -25,13 +25,6 @@
   overscroll-behavior: contain;
 }
 
-/* The large panel lays the editor out to fill it; a cap would fight that. */
-.large .body {
-  flex: 1;
-  min-height: 0;
-  max-height: none;
-}
-
 /* Lexical draws the placeholder as a sibling rather than as an attribute, so it
    is positioned over the first line. A placeholder is still text, so it is held
    to the same AA threshold as the rest. */
@@ -40,7 +33,9 @@
   top: 0;
   left: 0;
   pointer-events: none;
+  /* Both spellings, as everywhere else: they are separate properties. */
   user-select: none;
+  -webkit-user-select: none;
   font-size: inherit;
   line-height: 1.5;
   color: inherit;
@@ -143,12 +138,32 @@
   padding: 12px 16px;
 }
 
-/* A column, not the full 700 px the large panel can reach: at 14 px that was
-   over a hundred characters a line, about double what stays readable. */
+/* The large panel lays the editor out to fill it; a cap would fight that. The
+   text is set one step larger, for reading at length.
+ *
+ * The column is a measure, not the full 700 px the panel can reach: at 14 px
+ * that was over a hundred characters a line, about double what stays readable.
+ * It is a gutter *on the editable* rather than a width on this box, and the
+ * editable fills the height rather than stopping at the last line. Both are
+ * about where a press lands. The panel is taller and wider than a note's text,
+ * so a surface that ends with the writing leaves most of the panel dead: a
+ * press there put the caret nowhere, which left the arrow keys as the only way
+ * to reach a line and made a note that was open for writing look like it could
+ * not be written in. Inside the editable — padding included — a press lands on
+ * the nearest line, which is what pressing near text is supposed to do. */
 .large .body {
+  flex: 1;
+  min-height: 0;
+  max-height: none;
   font-size: 14px;
   width: 100%;
-  max-width: var(--reading-measure);
-  align-self: center;
+  --editable-gutter: max(0px, calc((100% - var(--reading-measure)) / 2));
+  --editable-fill: 100%;
+}
+
+/* The placeholder is a sibling of the editable rather than an attribute on it,
+   so it has to be moved into the same column by hand. */
+.large .placeholder {
+  padding-left: var(--editable-gutter);
 }
 

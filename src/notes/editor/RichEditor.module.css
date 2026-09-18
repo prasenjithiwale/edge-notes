@@ -1,8 +1,13 @@
 /* The editable area. It carries the note's own text colour, so what is typed
    looks exactly like what the card and the reader show. */
 .editable {
-  outline: none;
-  min-height: 1.5em;
+  /* How much of its container the writing surface is, which is how much of the
+     panel a press can land in. Only the large panel sets these — it is the one
+     place bigger than the note — and the fallbacks are the card editor, where
+     the surface is the text and there is nothing round it to press. See
+     `NoteEditor.module.css`. */
+  min-height: var(--editable-fill, 1.5em);
+  padding-inline: var(--editable-gutter, 0);
   /* Inherited, so the large panel can raise it from one place. */
   font-size: inherit;
   line-height: 1.5;
@@ -20,6 +25,21 @@
   overflow-wrap: anywhere;
   /* The caret is the note's text colour, not the system's. */
   caret-color: currentcolor;
+}
+
+/* No focus ring on the text itself: the caret is the focus indicator, and a box
+   drawn round the writing is not something a note has.
+   `:focus-visible` is in the selector on purpose. `global.css` draws the accent
+   ring with a bare `:focus-visible`, and a stylesheet imported by a component
+   is bundled *before* it — main.tsx imports `App` above `global.css` — so a
+   plain `.editable { outline: none }` ties on specificity and loses on order.
+   The ring came back on the focused editor and, because Lexical gives a check
+   list item `tabindex="-1"` and focuses it, round the single line the caret was
+   on. Every other suppression in the app already qualifies its selector this
+   way; this one did not. `styles/focusRing.test.ts` now checks that they all
+   do. */
+.editable:focus-visible {
+  outline: none;
 }
 
 .paragraph {
@@ -104,6 +124,15 @@
   margin-left: 0;
   padding-left: 22px;
   list-style-type: none;
+}
+
+/* A check list item is focusable (Lexical puts `tabindex="-1"` on it so the
+   checkbox role can hold the keyboard), and it is focused on the way through a
+   press or an arrow key. A ring round one line of a note is not a focus
+   indicator anyone asked for — the caret is already there. Qualified for the
+   same reason `.editable:focus-visible` is. */
+.checked:focus-visible,
+.unchecked:focus-visible {
   outline: none;
 }
 
