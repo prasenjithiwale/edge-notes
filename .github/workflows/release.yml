@@ -149,6 +149,18 @@ jobs:
         with:
           workspaces: src-tauri
 
+      # SQLCipher builds OpenSSL from source, and OpenSSL's build is Perl. These
+      # steps run in bash, so the MSYS perl that comes with Git for Windows is
+      # first on PATH — and that one is missing Locale::Maketext::Simple, so the
+      # build dies before it compiles a line of C. Strawberry Perl is on the
+      # image and is the one openssl-src expects; `PERL` is what it reads.
+      - name: Point OpenSSL's build at Strawberry Perl
+        run: |
+          perl="C:\\Strawberry\\perl\\bin\\perl.exe"
+          "$perl" -e 'use Locale::Maketext::Simple; print "strawberry perl is complete\n"'
+          echo "PERL=$perl" >> "$GITHUB_ENV"
+          echo "OPENSSL_SRC_PERL=$perl" >> "$GITHUB_ENV"
+
       - name: Install frontend dependencies
         run: npm ci
 

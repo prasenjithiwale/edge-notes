@@ -11,6 +11,16 @@ To release, see "Releasing" in the README.
 
 ## [Unreleased]
 
+## [0.6.1] - 2026-09-18
+
+### Fixed
+
+- **The Windows installers are back.** 0.6.0's encryption work builds OpenSSL
+  from source, and OpenSSL's build is a Perl program: on the Windows build
+  machine it picked up the cut-down Perl that comes with Git rather than the
+  complete one, and stopped before it compiled anything. Nothing about the app
+  changed — 0.6.0 simply never produced a Windows build, so this is that build.
+
 ## [0.6.0] - 2026-09-18
 
 ### Added
