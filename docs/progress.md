@@ -3587,7 +3587,7 @@ and blamed on the Linux placement fix of 15 Sep.
 
 ### What it actually is, measured frame by frame
 
-The screen was recorded with `screencapture -v` while the cursor was warped onto
+The screen was recorded with `screencapture -v` (75 Hz display, ~45 fps capture) while the cursor was warped onto
 the tab (`CGWarpMouseCursorPosition`; no Accessibility permission needed for a
 warp), and the frames were pulled out with `AVAssetReader` and diffed against the
 frame before the open. On this 1920×1080 display, with the dock on the right:
@@ -3630,8 +3630,9 @@ has changed is how much there is to lay out before the first paint.
   panel or the geometry cannot be read, and `apply_rect` then falls back to the
   two calls rather than leaving the window where it was. This is the reserve fix
   CLAUDE.md has been carrying since M0.
-- A resize **while the panel is out** hides the panel for `REVEAL_DELAY` (33 ms,
-  two frames at 60 Hz) so the stale frame is never shown. The collapse back to
+- A resize **while the panel is out** hides the panel for `REVEAL_DELAY` (33 ms:
+  two frames at 60 Hz, two and a half on the 75 Hz display this was measured on)
+  so the stale frame is never shown. The collapse back to
   the tab is deliberately *not* covered: there the stale pixels are the panel's
   own empty margin, and a cover would blink the tab instead — the one thing
   always on screen.

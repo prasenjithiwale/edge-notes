@@ -176,10 +176,11 @@ pub fn set_frame(window: &WebviewWindow, rect: Rect, cover: bool) -> bool {
 /// How long the panel stays invisible while the webview catches up with a
 /// window that has just been resized.
 ///
-/// Measured here on a 60 Hz display: one frame of the collapsed tab, drawn at
-/// the expanded window's top-left corner, is what the window server has to show
-/// while the web process lays out the new size. Two frames of cover is enough,
-/// and it is short enough that the panel behind it has barely started to slide.
+/// Measured here on a 75 Hz display (13.3 ms a frame): one frame of the
+/// collapsed tab, drawn at the expanded window's top-left corner, is what the
+/// window server has to show while the web process lays out the new size. Two
+/// frames of cover is enough at 60 Hz and two and a half here, and it is short
+/// enough that the panel behind it has barely started to slide.
 const REVEAL_DELAY: Duration = Duration::from_millis(33);
 
 /// Put the panel back on screen once the webview has had time to paint.
