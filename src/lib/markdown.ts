@@ -24,8 +24,13 @@ export type Inline =
    * `![alt](url)`: a picture pasted or dropped into the note (idea 17). The
    * bytes are a file in the app data folder and the note holds only this link,
    * so a note is still plain text and still the thing that gets exported.
+   *
+   * `width` is this dialect's one addition to the syntax: `![alt|320](url)` is a
+   * picture 320 logical pixels wide. It goes inside the brackets so that a note
+   * opened in another Markdown app still shows the picture — it reads the whole
+   * `alt|320` as the alt text, which is a worse label and not a lost note.
    */
-  | { kind: "image"; url: string; alt: string };
+  | { kind: "image"; url: string; alt: string; width: number | null };
 
 export type LineKind = "paragraph" | "heading" | "bullet" | "ordered" | "task";
 
@@ -248,7 +253,12 @@ function parseRange(text: string, start: number, end: number, depth: number): In
     const image = imageAt(text, i, end);
     if (image !== null) {
       flushPlain();
-      nodes.push({ kind: "image", url: image.url, alt: image.alt });
+      nodes.push({
+        kind: "image",
+        url: image.url,
+        alt: image.alt,
+        width: image.width,
+      });
       i += image.length;
       continue;
     }
@@ -305,7 +315,7 @@ function imageAt(
   text: string,
   at: number,
   end: number,
-): { url: string; alt: string; length: number } | null {
+): { url: string; alt: string; width: number | null; length: number } | null {
   if (text[at] !== "!" || text[at + 1] !== "[") {
     return null;
   }
@@ -317,12 +327,22 @@ function imageAt(
   if (urlEnd === -1 || urlEnd >= end) {
     return null;
   }
-  const alt = text.slice(at + 2, altEnd);
+  const label = text.slice(at + 2, altEnd);
   const url = text.slice(altEnd + 2, urlEnd);
-  if (url === "" || /\s/.test(url) || alt.includes("[")) {
+  if (url === "" || /\s/.test(url) || label.includes("[")) {
     return null;
   }
-  return { url, alt, length: urlEnd + 1 - at };
+  // `alt|320`: a width only if what follows the last pipe is nothing but digits,
+  // so a caption that happens to contain a pipe stays a caption.
+  const pipe = label.lastIndexOf("|");
+  const tail = pipe === -1 ? "" : label.slice(pipe + 1);
+  const sized = pipe !== -1 && /^[0-9]{1,4}$/.test(tail) && Number(tail) > 0;
+  return {
+    url,
+    alt: sized ? label.slice(0, pipe) : label,
+    width: sized ? Number(tail) : null,
+    length: urlEnd + 1 - at,
+  };
 }
 
 export function parseInline(text: string): Inline[] {

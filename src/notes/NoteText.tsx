@@ -97,6 +97,10 @@ function renderNodes(nodes: Inline[]): ReactNode {
             className={styles.image}
             src={src}
             alt={node.alt}
+            // The width the note stores, capped by the card it is drawn in: a
+            // picture sized in the expanded panel must not overflow a 320 px
+            // card when the same note is read there.
+            style={node.width === null ? undefined : { width: `${String(node.width)}px` }}
             // A picture in a card is a preview of itself; the reader's own
             // width is what decides how big it gets to be.
             loading="lazy"

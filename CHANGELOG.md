@@ -29,6 +29,10 @@ To release, see "Releasing" in the README.
   same thing.
 - **Settings lists all three shortcuts**, each with its own row and its own
   recorder.
+- **Pictures can be resized.** Drag the corner of an image in a note; click the
+  corner to put it back to its natural size, or use ← and → when it has the
+  keyboard. The size is stored in the note itself as `![alt|320](url)`, so it
+  survives export and reads the same in the card and the expanded panel.
 - **An empty line says what `/` does.** Put the caret on a blank line in a note
   and it shows a faded "Type / to add something". The slash menu has been there
   since 0.4.0 and nothing on screen mentioned it.

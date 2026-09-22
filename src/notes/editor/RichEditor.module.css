@@ -244,3 +244,39 @@
   -webkit-user-select: none;
   white-space: nowrap;
 }
+
+/* A picture and the corner that resizes it. The wrapper carries the width, so
+   the image can stay `width: 100%` of whatever the wrapper is. */
+.imageWrap {
+  position: relative;
+  display: inline-block;
+  max-width: 100%;
+  vertical-align: bottom;
+  line-height: 0;
+}
+
+.imageWrap .image {
+  width: 100%;
+  max-height: none;
+}
+
+/* Always drawn, never hover-only: an inactive window on macOS may never see a
+   hover (brief 7.5). Quiet enough to ignore, big enough to hit. */
+.imageHandle {
+  position: absolute;
+  right: 2px;
+  bottom: 2px;
+  width: 14px;
+  height: 14px;
+  padding: 0;
+  border: 1.5px solid var(--surface);
+  border-radius: 4px;
+  background: var(--text-secondary);
+  cursor: nwse-resize;
+  opacity: 0.55;
+}
+
+.imageHandle:hover,
+.imageHandle:focus-visible {
+  opacity: 1;
+}

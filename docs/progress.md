@@ -4065,6 +4065,24 @@ holds it, and the dock tests were run.
 own `focus` event as the fallback: a panel left holding itself open for a picker
 that has gone would be a panel that never closes again.
 
+### A picture has a size, and the size is in the note
+
+`![alt|320](url)`: the width goes inside the brackets, so a note opened in
+another Markdown app shows `alt|320` as a worse label rather than losing the
+picture. A pipe counts as a width only when nothing but digits follows it, so a
+caption with a pipe in it stays a caption — `markdown.test.ts` round-trips both,
+along with `![alt|wide]`, which is a label too.
+
+The drag keeps the width in React state and writes it to the node **once, on
+release**. An `editor.update` per `pointermove` would put a hundred entries in
+the undo history and save the note a hundred times for one drag. A drag that
+ends within three pixels of where it started is a click, and a click on the
+handle puts the picture back to its natural size.
+
+The handle is always drawn rather than shown on hover (brief 7.5: an inactive
+window on macOS may never see one), and ← and → resize it from the keyboard,
+because a picture only a pointer can resize is a picture some people cannot.
+
 ### Nothing accumulates
 
 `images::sweep` runs at startup, after the 30-day purge, and deletes any file no

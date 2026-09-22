@@ -98,7 +98,7 @@ function inlineNodes(nodes: Inline[], marks: Marks): LexicalNode[] {
         return inlineNodes(node.children, { ...marks, strike: true });
       case "image": {
         // The bytes are a file; the note holds the link, and so does the node.
-        return [$createImageNode(node.url, node.alt)];
+        return [$createImageNode(node.url, node.alt, node.width)];
       }
       case "link": {
         // A bare URL, which is the only kind of link the dialect has: the link

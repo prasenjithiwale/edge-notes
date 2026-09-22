@@ -68,6 +68,25 @@ describe("a note survives a trip through the editor", () => {
       "an image with alt text",
       "![the graph](ledge://localhost/0199a000-0000-7000-8000-000000000002.jpg)",
     ],
+    // The dialect's one addition to the image syntax, and the shapes that must
+    // not be read as a width: a caption with a pipe in it, and a pipe with
+    // something that is not a number after it.
+    [
+      "an image with a width",
+      "![|320](ledge://localhost/0199a000-0000-7000-8000-000000000003.png)",
+    ],
+    [
+      "an image with alt text and a width",
+      "![the graph|480](ledge://localhost/0199a000-0000-7000-8000-000000000004.png)",
+    ],
+    [
+      "a caption that has a pipe in it",
+      "![before | after](ledge://localhost/0199a000-0000-7000-8000-000000000005.png)",
+    ],
+    [
+      "a pipe with no number after it",
+      "![alt|wide](ledge://localhost/0199a000-0000-7000-8000-000000000006.png)",
+    ],
     ["something that only looks like an image", "not ![an image really"],
     ["a bang before a bracket", "wow! [not a link] here"],
     // The three levels the dialect writes, and the shapes that look like

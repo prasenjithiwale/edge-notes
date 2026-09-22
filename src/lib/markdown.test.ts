@@ -77,6 +77,35 @@ describe("parseLine", () => {
   });
 });
 
+describe("an image in a line", () => {
+  const URL = "ledge://localhost/0199a000-0000-7000-8000-000000000001.png";
+
+  it("reads the alt text and the dialect's width", () => {
+    expect(parseInline(`![the graph|320](${URL})`)).toEqual([
+      { kind: "image", url: URL, alt: "the graph", width: 320 },
+    ]);
+    expect(parseInline(`![](${URL})`)).toEqual([
+      { kind: "image", url: URL, alt: "", width: null },
+    ]);
+  });
+
+  it("takes a pipe as a width only when a number follows it", () => {
+    // Otherwise a caption with a pipe in it would lose half of itself.
+    expect(parseInline(`![before | after](${URL})`)).toEqual([
+      { kind: "image", url: URL, alt: "before | after", width: null },
+    ]);
+    expect(parseInline(`![alt|wide](${URL})`)).toEqual([
+      { kind: "image", url: URL, alt: "alt|wide", width: null },
+    ]);
+  });
+
+  it("leaves something that is not an image as the text it is", () => {
+    expect(parseInline("wow! [not a link] here")).toEqual([
+      { kind: "text", text: "wow! [not a link] here" },
+    ]);
+  });
+});
+
 describe("parseInline", () => {
   it("leaves plain text alone", () => {
     expect(parseInline("plain")).toEqual([{ kind: "text", text: "plain" }]);
