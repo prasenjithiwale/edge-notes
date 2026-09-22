@@ -4323,6 +4323,44 @@ cannot be removed — a table with no columns is not a table.
 - [ ] A pasted GFM table with `:---:` in it keeps its alignment after a save
 - [ ] A line with pipes in it that is not a table stays text
 
+## The pomodoro on the menu bar (22 Sep 2026)
+
+"When a pomodoro is started a timer should show on the task bar." The tray is
+the other place a widget that spends its life collapsed can say something — the
+red light on the tab says a session *is* running, and this says how much of it
+is left.
+
+### Rust keeps the time, again
+
+The same split as the reminders, for the same reason: **the frontend's clock
+stops**. `PomodoroView` subscribes to a one-second tick only while the Focus tab
+is up, because a collapsed panel's timers are throttled or stopped, and a
+countdown driven from there would lose minutes without knowing. So what the
+frontend sends is the *moment* the phase ends (`focus_timer_set`, one number),
+and `focus.rs` counts down to it on its own thread.
+
+The thread waits on a condvar: a second while something is counting, and
+otherwise until the frontend says something changed. It writes the title only
+when the text differs from what is already there, so a second that reads the
+same is not a call to AppKit.
+
+`label` rounds *up*: the last second shows `0:01` rather than `0:00` twice, and
+a phase that has just started reads its own length rather than one second less.
+Minutes are not wrapped into hours — a phase is minutes long by definition, and
+`90:00` says more in a menu bar than `1:30:00`.
+
+`TrayIcon::set_title` marshals to the main thread itself, so this one does not
+need `run_on_main_thread`. It is **macOS only** in practice: Windows has no tray
+title at all, and Linux shows one only in some panels, so a refusal is logged at
+debug and never retried in a loop.
+
+### Checklist
+
+- [ ] Start a session: the time appears beside the tray icon and counts down
+- [ ] Pause it: the title goes, and the panel still shows the paused time
+- [ ] Let a phase end while the panel is closed: the title clears
+- [ ] Quit: nothing is left behind on the menu bar
+
 ## M0 acceptance checklist
 
 From brief section 12. Run `npm run tauri dev`, then work through these with

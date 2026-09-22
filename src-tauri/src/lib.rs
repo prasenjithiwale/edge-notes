@@ -8,6 +8,7 @@ pub mod db;
 pub mod dock;
 pub mod error;
 pub mod export;
+pub mod focus;
 pub mod images;
 pub mod links;
 pub mod platform;
@@ -110,6 +111,7 @@ pub fn run() {
             commands::tasks_restore,
             commands::notes_export,
             commands::open_url,
+            commands::focus_timer_set,
             commands::reminders_set,
             commands::app_info,
             commands::monitors_list,
@@ -177,6 +179,12 @@ pub fn run() {
             app.manage(commands::Vault::new(database_path.clone(), vault));
             app.manage(commands::QuickCapture::default());
 
+            // The menu-bar countdown runs on its own thread too, for the same
+            // reason: the frontend's clock stops while the panel is collapsed.
+            let focus_timer = focus::FocusTimer::new();
+            focus_timer.spawn(handle.clone());
+            app.manage(Arc::clone(&focus_timer));
+
             // Task reminders run on their own thread; the frontend sends the list.
             let reminders = reminders::Reminders::new(stored.tasks_reminders);
             reminders.spawn(handle.clone());
@@ -238,6 +246,9 @@ pub fn run() {
                             event_handle.try_state::<Arc<reminders::Reminders>>()
                         {
                             reminders.stop();
+                        }
+                        if let Some(timer) = event_handle.try_state::<Arc<focus::FocusTimer>>() {
+                            timer.stop();
                         }
                     }
                     _ => {}

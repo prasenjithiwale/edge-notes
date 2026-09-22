@@ -1545,6 +1545,34 @@ describe("the Focus tab", () => {
     );
   });
 
+  /**
+   * The menu bar is the other place a collapsed widget can say something. Rust
+   * is given the *moment* the phase ends, never a count: this panel's clock
+   * stops while it is collapsed, and a countdown driven from it would lose
+   * minutes without knowing.
+   */
+  it("gives the menu bar the moment the phase ends, and takes it back on pause", async () => {
+    await renderPanel();
+    await useNotesStore.getState().setView("focus");
+    (await screen.findByRole("button", { name: "Start" })).click();
+
+    await waitFor(() => {
+      const sent = commandCalls("focus_timer_set").at(-1) as
+        | { session: { endsAt: number | null } }
+        | undefined;
+      expect(sent?.session.endsAt).toBe(usePomodoroStore.getState().state.endsAt);
+      expect(typeof sent?.session.endsAt).toBe("number");
+    });
+
+    (await screen.findByRole("button", { name: "Pause" })).click();
+    await waitFor(() => {
+      const sent = commandCalls("focus_timer_set").at(-1) as
+        | { session: { endsAt: number | null } }
+        | undefined;
+      expect(sent?.session.endsAt).toBeNull();
+    });
+  });
+
   it("withdraws that reminder when the timer is paused", async () => {
     await renderPanel();
     await useNotesStore.getState().setView("focus");

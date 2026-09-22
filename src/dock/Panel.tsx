@@ -12,6 +12,7 @@ import {
   remindersSet,
   dockToggle,
   NOTE_COLORS,
+  focusTimerSet,
   onImagesDropped,
   onNewNoteRequested,
   onQuitRequested,
@@ -209,6 +210,14 @@ export function Panel({ className }: PanelProps) {
       ),
     [],
   );
+
+  // The tray counts down while a session runs, so it is legible without
+  // opening anything — the tab's red light says *that* one is running, and this
+  // says how much of it is left. Rust is told the moment it ends, not the time
+  // remaining: only one of those survives a panel nobody is looking at.
+  useEffect(() => {
+    void focusTimerSet(pomodoro.endsAt);
+  }, [pomodoro.endsAt]);
 
   // Brief 11: no data loss, flush on quit. Autosave is debounced, so without
   // this the last 400 ms of typing died with the process.

@@ -369,6 +369,18 @@ export function quickCaptureClose(keepOpen: boolean): Promise<void> {
   return call("quick_capture_close", { keepOpen });
 }
 
+/**
+ * What the menu bar counts down to: the moment the running phase ends, or null
+ * while it is paused or idle.
+ *
+ * The frontend computes and Rust keeps time, as with reminders — this panel's
+ * own clock stops while it is collapsed, and a countdown driven from it would
+ * lose minutes without knowing.
+ */
+export function focusTimerSet(endsAt: number | null): Promise<void> {
+  return call("focus_timer_set", { session: { endsAt } });
+}
+
 /** The full list of task reminders; Rust schedules and shows them. */
 export function remindersSet(list: Reminder[]): Promise<void> {
   return call("reminders_set", { list });

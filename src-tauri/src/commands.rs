@@ -237,6 +237,21 @@ pub fn share_sheet(app: AppHandle, text: String, images: Vec<String>) -> AppResu
     Ok(())
 }
 
+/// What the menu bar counts down to: the moment the running phase ends, or
+/// nothing while it is paused.
+///
+/// The frontend computes and Rust keeps time, exactly as for reminders — a
+/// countdown driven from a collapsed panel's throttled clock would lose minutes
+/// without knowing.
+#[tauri::command]
+pub fn focus_timer_set(
+    timer: State<'_, Arc<crate::focus::FocusTimer>>,
+    session: crate::focus::Session,
+) -> AppResult<()> {
+    timer.set(session);
+    Ok(())
+}
+
 /// Write the manual order of the notes list, newest arrangement first.
 ///
 /// The frontend sends the whole visible list rather than one move, because it is

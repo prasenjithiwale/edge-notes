@@ -6,6 +6,7 @@ use std::sync::Arc;
 use tauri::image::Image;
 use tauri::menu::{CheckMenuItem, Menu, MenuEvent, MenuItem, PredefinedMenuItem};
 use tauri::tray::TrayIconBuilder;
+
 use tauri::{AppHandle, Emitter, Manager, Runtime};
 use tauri_plugin_autostart::ManagerExt;
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
@@ -22,6 +23,9 @@ pub const QUIT_REQUESTED_EVENT: &str = "app:quit-requested";
 /// How long Quit waits for that answer. A save is one SQLite write per note
 /// with unsaved text, so this is generous; it only matters if the webview hangs.
 const QUIT_FLUSH_TIMEOUT: std::time::Duration = std::time::Duration::from_millis(1_500);
+
+/// The tray icon's id, so the focus timer can find it again to write a title.
+pub const TRAY_ID: &str = "dock-tray";
 
 const ID_OPEN: &str = "open";
 const ID_NEW: &str = "new";
@@ -257,7 +261,7 @@ pub fn init(app: &AppHandle) -> tauri::Result<()> {
         autostart: launch,
     });
 
-    let mut builder = TrayIconBuilder::with_id("dock-tray")
+    let mut builder = TrayIconBuilder::with_id(TRAY_ID)
         .menu(&menu)
         // Left-clicking opens the menu rather than toggling the panel: the tab is
         // already the way to open by pointing at it.

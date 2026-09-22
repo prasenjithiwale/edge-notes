@@ -11,6 +11,13 @@ To release, see "Releasing" in the README.
 
 ## [Unreleased]
 
+### Added
+
+- **A running pomodoro counts down on the menu bar.** Start a session and the
+  time left appears beside the tray icon, so it is legible without opening
+  anything. It clears when the session is paused or ends. macOS only: Windows
+  has no tray title, and on Linux only some panels show one.
+
 ### Fixed
 
 - **A table keeps its shape when it is saved.** The editor gives every column an
