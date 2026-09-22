@@ -11,6 +11,8 @@ To release, see "Releasing" in the README.
 
 ## [Unreleased]
 
+## [0.7.1] - 2026-09-23
+
 ### Added
 
 - **A running pomodoro counts down on the menu bar, on a lit red field.** Start
