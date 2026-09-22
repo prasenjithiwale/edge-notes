@@ -4362,9 +4362,17 @@ at all. What *can* be coloured is the status bar's own button, through an
 `attributedTitle` — and the button is reachable without any private API:
 `NSApp.windows()` lists an `NSStatusBarWindow`, and the button is inside its
 content view. `platform::macos::set_tray_countdown` walks three levels down for
-it, sets `NSForegroundColorAttributeName` to `systemRedColor`, the menu bar's
-own font so the baseline matches, and an `NSShadow` of the same red at a 3 pt
-blur, which is the glow.
+it, gives it a `NSBackgroundColorAttributeName` of `systemRedColor` with the
+text in white, the menu bar's own font so the baseline matches, and a little
+padding so the field has air in it.
+
+**The lit part is the field, not the glyphs.** The first cut coloured the text
+red instead, which is not what was asked for. A *halo* around the field turned
+out not to be possible: a title's `NSShadow` is drawn behind the glyphs, and the
+glyphs sit on top of the fill, so it never shows — and the only other way, a
+layer shadow on the button, stops the button drawing its title at all. That was
+measured, not assumed: with `setWantsLayer(true)` the countdown vanished from
+the menu bar entirely.
 
 Two things had to be measured rather than assumed, and both were only visible
 in a photograph of the menu bar:
@@ -4373,6 +4381,10 @@ in a photograph of the menu bar:
   first attempt downcast the content view itself, found nothing, fell back to
   the plain title, and produced a countdown in the menu bar's own colour that
   looked exactly like success.
+- **The frontend clears what a test harness sets.** Pretending a session was
+  running from Rust at startup looked broken until the log showed `write
+  Some("25:00")` immediately followed by `write None` — the panel mounts a
+  second later and reports, truthfully, that nothing is running.
 - **An attributed title alone has no width.** The status item measures itself
   from the plain title, so setting only the attributed one left the item with no
   room and the countdown vanished altogether. The plain title goes on first —

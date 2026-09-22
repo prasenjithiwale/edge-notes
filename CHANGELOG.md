@@ -13,12 +13,12 @@ To release, see "Releasing" in the README.
 
 ### Added
 
-- **A running pomodoro counts down on the menu bar, in red.** Start a session
-  and the time left appears beside the tray icon, in the system red with a soft
-  glow behind it, so it is legible without opening anything and reads as a
-  timer rather than as another menu. It clears when the session is paused or
-  ends. macOS only: Windows has no tray title, and on Linux only some panels
-  show one — there it is the plain text.
+- **A running pomodoro counts down on the menu bar, on a lit red field.** Start
+  a session and the time left appears beside the tray icon — white on red, so it
+  reads as a timer rather than as another menu — and it is legible without
+  opening anything. It clears when the session is paused or ends. macOS only:
+  Windows has no tray title, and on Linux only some panels show one, where it is
+  the plain text.
 
 ### Fixed
 

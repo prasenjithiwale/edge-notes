@@ -289,8 +289,8 @@ pub fn share_sheet(window: &WebviewWindow, text: &str, files: &[std::path::PathB
 pub fn set_tray_countdown(text: Option<&str>) -> bool {
     use objc2::rc::Retained;
     use objc2_app_kit::{
-        NSApplication, NSColor, NSFont, NSFontAttributeName, NSForegroundColorAttributeName,
-        NSShadow, NSShadowAttributeName,
+        NSApplication, NSBackgroundColorAttributeName, NSColor, NSFont, NSFontAttributeName,
+        NSForegroundColorAttributeName, NSShadow, NSShadowAttributeName,
     };
     use objc2_foundation::{MainThreadMarker, NSAttributedString, NSDictionary, NSSize, NSString};
 
@@ -320,8 +320,15 @@ pub fn set_tray_countdown(text: Option<&str>) -> bool {
             continue;
         };
 
-        // The same red as the light on the collapsed tab: the system's own, so
-        // it stays legible on a light menu bar and a dark one.
+        // The red is *behind* the time, not on it: a lit field with the time
+        // sitting on it in white, which is the only thing legible on that field
+        // in either menu bar.
+        //
+        // The halo around the field is not possible here. A title's shadow is
+        // drawn behind the glyphs, and the glyphs sit on top of the fill, so it
+        // never shows; and a layer shadow on the button — the only other way —
+        // stops the button drawing its title at all. The shadow that is left
+        // sits under the white digits and softens them against the red.
         let glow = NSShadow::new();
         glow.setShadowColor(Some(&NSColor::systemRedColor()));
         glow.setShadowBlurRadius(3.0);
@@ -330,12 +337,14 @@ pub fn set_tray_countdown(text: Option<&str>) -> bool {
         // The menu bar's own font at its own size, so the countdown sits on the
         // same baseline as everything beside it.
         let font = NSFont::menuBarFontOfSize(0.0);
-        let keys: [&objc2_foundation::NSString; 3] = [
+        let keys: [&objc2_foundation::NSString; 4] = [
             unsafe { NSForegroundColorAttributeName },
+            unsafe { NSBackgroundColorAttributeName },
             unsafe { NSFontAttributeName },
             unsafe { NSShadowAttributeName },
         ];
-        let values: [&objc2::runtime::AnyObject; 3] = [
+        let values: [&objc2::runtime::AnyObject; 4] = [
+            unsafe { &*Retained::as_ptr(&NSColor::whiteColor()).cast() },
             unsafe { &*Retained::as_ptr(&NSColor::systemRedColor()).cast() },
             unsafe { &*Retained::as_ptr(&font).cast() },
             unsafe { &*Retained::as_ptr(&glow).cast() },
@@ -343,8 +352,12 @@ pub fn set_tray_countdown(text: Option<&str>) -> bool {
         let attributes = NSDictionary::from_slices(&keys, &values);
         // SAFETY: the keys are AppKit's own attribute names and each value is
         // the type that key is documented to take.
+        // Padded, so the field has a little air in it rather than being a box
+        // crushed onto the digits. The plain title underneath is unpadded: it
+        // is what sizes the item, and the item has to be at least this wide.
+        let padded = format!(" {text} ");
         let title = unsafe {
-            NSAttributedString::new_with_attributes(&NSString::from_str(text), &attributes)
+            NSAttributedString::new_with_attributes(&NSString::from_str(&padded), &attributes)
         };
         button.setAttributedTitle(&title);
     }
