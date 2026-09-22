@@ -74,8 +74,12 @@ describe("resizing a picture", () => {
     const wrap = handle.parentElement;
     expect(wrap).not.toBeNull();
     withLayout(wrap as Element, 200);
-    const editable = document.querySelector("[contenteditable]");
-    withLayout(editable as Element, 296);
+    // Only the editable root is given a width, exactly as the browser does.
+    // Lexical marks its decorator wrapper `contenteditable="false"`, and that
+    // span is inline, so its `clientWidth` is 0 — the drag's cap used to match
+    // it with a loose `[contenteditable]` selector and clamp every drag to the
+    // minimum width.
+    withLayout(document.querySelector('[contenteditable="true"]') as Element, 296);
 
     fireEvent.pointerDown(handle, { clientX: 200, pointerId: 1 });
     fireEvent.pointerMove(handle, { clientX: 260, pointerId: 1 });
@@ -86,13 +90,32 @@ describe("resizing a picture", () => {
     });
   });
 
+  it("follows the pointer instead of collapsing to the smallest size", async () => {
+    // The regression: with the cap read off the wrong ancestor, every drag
+    // ended at MIN_IMAGE_WIDTH whichever way it was dragged.
+    invoke.mockResolvedValue({ ...note, updatedAt: 2_000 });
+    render(<NoteEditor note={open(note.content)} />);
+
+    const handle = await screen.findByRole("button", { name: "Resize image" });
+    withLayout(handle.parentElement as Element, 280);
+    withLayout(document.querySelector('[contenteditable="true"]') as Element, 296);
+
+    fireEvent.pointerDown(handle, { clientX: 307, pointerId: 1 });
+    fireEvent.pointerMove(handle, { clientX: 220, pointerId: 1 });
+    fireEvent.pointerUp(handle, { clientX: 220, pointerId: 1 });
+
+    await waitFor(() => {
+      expect(saved()).toContain(`![|193](${IMAGE})`);
+    });
+  });
+
   it("puts a picture back to its own size when the corner is clicked", async () => {
     invoke.mockResolvedValue({ ...note, updatedAt: 2_000 });
     render(<NoteEditor note={open(`A picture\n![|120](${IMAGE})`)} />);
 
     const handle = await screen.findByRole("button", { name: "Resize image" });
     withLayout(handle.parentElement as Element, 120);
-    withLayout(document.querySelector("[contenteditable]") as Element, 296);
+    withLayout(document.querySelector('[contenteditable="true"]') as Element, 296);
 
     fireEvent.pointerDown(handle, { clientX: 120, pointerId: 1 });
     fireEvent.pointerUp(handle, { clientX: 120, pointerId: 1 });

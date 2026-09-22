@@ -4083,6 +4083,33 @@ The handle is always drawn rather than shown on hover (brief 7.5: an inactive
 window on macOS may never see one), and ← and → resize it from the keyboard,
 because a picture only a pointer can resize is a picture some people cannot.
 
+### Three ways a handle can be there and still be unreachable
+
+The first resize shipped working in the unit test and not at all on screen, and
+each of the three reasons is invisible to jsdom, which lays nothing out:
+
+1. **It was under the scrollbar.** The editable scrolls, and WebKit paints its
+   scrollbar over the right edge of the content. A picture as wide as the column
+   put its corner underneath, and a press there hit-tests to the scroller. The
+   wrapper is `max-width: calc(100% - 16px)` now.
+2. **It was below the fold.** `max-height: none` let a picture grow taller than
+   the editable, so its bottom — and the handle on it — was painted outside the
+   scroller: visible to the DOM, clipped on screen. `elementsFromPoint` at the
+   handle's own centre returned `SECTION < DIV < BODY`, with neither the button
+   nor the image in the stack. The handle is at the **top** right now, because a
+   picture's top is what you can see whenever you can see the picture at all,
+   and the height is capped again.
+3. **Every drag collapsed to 48 px.** The cap was read from
+   `closest("[contenteditable]")` — which matches Lexical's decorator wrapper,
+   marked `contenteditable="false"`, an inline element whose `clientWidth` is 0.
+   So the cap was the minimum, and the minimum is what every drag got. It is
+   `[contenteditable="true"]` now.
+
+All three were found by mounting the real editor on the dev server and driving
+it in **Safari** — the same WebKit the app's webview is — with `cliclick` for
+the pointer and a readout on the page for the numbers, because the panel itself
+is hidden from screen capture and cannot be photographed.
+
 ### Nothing accumulates
 
 `images::sweep` runs at startup, after the 30-day purge, and deletes any file no

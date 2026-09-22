@@ -67,10 +67,18 @@ function ResizableImage({
   const wrapRef = useRef<HTMLSpanElement>(null);
   const [dragging, setDragging] = useState<number | null>(null);
 
-  /** As wide as the line it sits on: the editable's own content width. */
+  /**
+   * As wide as the line it sits on: the editable's own content width.
+   *
+   * `[contenteditable="true"]`, not `[contenteditable]`. Lexical marks its
+   * decorator wrapper `contenteditable="false"`, so the loose selector matched
+   * that span — an inline element, whose `clientWidth` is 0 — and every drag
+   * clamped to the minimum width instead of following the pointer.
+   */
   const maxWidth = useCallback(() => {
-    const parent = wrapRef.current?.closest<HTMLElement>("[contenteditable]");
-    return Math.max(MIN_IMAGE_WIDTH, parent?.clientWidth ?? 320);
+    const parent = wrapRef.current?.closest<HTMLElement>('[contenteditable="true"]');
+    const width = parent?.clientWidth ?? 0;
+    return Math.max(MIN_IMAGE_WIDTH, width > 0 ? width : 320);
   }, []);
 
   const commit = useCallback(

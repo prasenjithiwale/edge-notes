@@ -250,29 +250,43 @@
 .imageWrap {
   position: relative;
   display: inline-block;
-  max-width: 100%;
+  /* Not `100%`: the editor scrolls, and its scrollbar is painted over the right
+     edge of the content. A picture as wide as the column puts its handle under
+     that scrollbar, and a press there hit-tests to the scroller rather than to
+     the handle — the drag could not start at all. The gap is what keeps the
+     corner reachable. */
+  max-width: calc(100% - 16px);
   vertical-align: bottom;
   line-height: 0;
 }
 
 .imageWrap .image {
   width: 100%;
-  max-height: none;
+  /* Not `none`. The editable scrolls, and a picture taller than it hangs out of
+     the bottom of the scroller — where it is clipped, unseen and un-clickable.
+     The corner used to be down there. */
+  max-height: 320px;
 }
 
 /* Always drawn, never hover-only: an inactive window on macOS may never see a
    hover (brief 7.5). Quiet enough to ignore, big enough to hit. */
+/* Top right, not bottom right. A picture's top is what you can see whenever you
+   can see the picture at all; its bottom may be below the fold of a panel that
+   is only a couple of hundred pixels tall, and a handle down there is painted
+   outside the scroller — present, visible to the DOM, and impossible to press.
+   Only the horizontal movement is read, so which corner it is changes nothing
+   about the drag. */
 .imageHandle {
   position: absolute;
   right: 2px;
-  bottom: 2px;
+  top: 2px;
   width: 14px;
   height: 14px;
   padding: 0;
   border: 1.5px solid var(--surface);
   border-radius: 4px;
   background: var(--text-secondary);
-  cursor: nwse-resize;
+  cursor: nesw-resize;
   opacity: 0.55;
 }
 
