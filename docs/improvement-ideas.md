@@ -31,7 +31,7 @@ brief section 4, it says so, because the project rules require asking first.
 | 14 | Quick capture and clipboard to note | Feature | S–M | High | **Built, 0.7.0** |
 | 15 | Sync across devices, end-to-end encrypted | Feature | L | High |
 | 16 | Tags, and drag to reorder | Feature | M | Medium | **Built, 0.7.0** |
-| 17 | Images and screenshots in notes | Feature | M–L | Medium |
+| 17 | Images and screenshots in notes | Feature | M–L | Medium | **Paste and drop built, 0.7.0** |
 | 18 | Notes pinned to an app or website | Feature | M–L | Medium |
 | 19 | Snooze a note, and calendar export for tasks | Feature | S–M | Medium |
 | 20 | Accessibility, localisation and a diagnostics button | Quality | M | Medium |
@@ -335,6 +335,10 @@ so a move touches one row.
 **Effort** M. **New dependencies** none.
 
 ### 17. Images and screenshots in notes
+
+**Paste and drop built in 0.7.0.** Taking a screenshot straight into a note, and
+OCR, are still open — both are per-platform work, and neither needs a dependency
+decision until someone asks for them. See [progress.md](progress.md).
 
 **What.** Paste or drop an image into a note; take a screenshot straight into a
 new note. Later: search the text inside images (OCR).

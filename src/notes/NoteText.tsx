@@ -6,6 +6,7 @@ import { highlight, languageLabel } from "../lib/code";
 import { cx } from "../lib/cx";
 import { openUrl } from "../lib/ipc";
 import { parseBlocks, parseInline, plainText, type Inline, type Line } from "../lib/markdown";
+import { imageSrc } from "../lib/images";
 import { splitTags } from "../lib/tags";
 import styles from "./NoteText.module.css";
 
@@ -84,6 +85,25 @@ function renderNodes(nodes: Inline[]): ReactNode {
             {node.text}
           </code>
         );
+      case "image": {
+        const src = imageSrc(node.url);
+        if (src === null) {
+          // Not one of ours: show what the note says rather than a broken box.
+          return <Fragment key={index}>{`![${node.alt}](${node.url})`}</Fragment>;
+        }
+        return (
+          <img
+            key={index}
+            className={styles.image}
+            src={src}
+            alt={node.alt}
+            // A picture in a card is a preview of itself; the reader's own
+            // width is what decides how big it gets to be.
+            loading="lazy"
+            draggable={false}
+          />
+        );
+      }
       case "link":
         return (
           <a

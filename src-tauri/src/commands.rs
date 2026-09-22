@@ -158,6 +158,22 @@ pub fn notes_set_pinned(db: State<'_, Database>, id: String, pinned: bool) -> Ap
     db.with(|connection| notes::set_pinned(connection, &id, pinned))
 }
 
+/// Store a pasted or dropped image and return the name the note links to.
+///
+/// The bytes arrive as a raw request body rather than a JSON array of numbers:
+/// a two-megabyte screenshot is about eight megabytes of JSON, and it would be
+/// parsed twice on the way through. What it is gets decided by
+/// `images::sniff` — never by a name or a type the webview supplied.
+#[tauri::command]
+pub fn images_save(app: AppHandle, request: tauri::ipc::Request<'_>) -> AppResult<String> {
+    let tauri::ipc::InvokeBody::Raw(bytes) = request.body() else {
+        return Err(AppError::InvalidImage(
+            "expected the image's bytes".to_owned(),
+        ));
+    };
+    crate::images::save(&app, bytes)
+}
+
 /// Write the manual order of the notes list, newest arrangement first.
 ///
 /// The frontend sends the whole visible list rather than one move, because it is

@@ -36,6 +36,7 @@ import { $createHeadingNode, $isHeadingNode, type HeadingTagType } from "@lexica
 
 import { parseBlocks, parseInline, type Inline, type ListKind } from "../../lib/markdown";
 import { $createCodeNode, $isCodeNode } from "./CodeNode";
+import { $createImageNode } from "./ImageNode";
 
 /** Our list kinds and Lexical's names for the same three things. */
 const LIST_TYPE: Record<ListKind, ListType> = {
@@ -95,6 +96,10 @@ function inlineNodes(nodes: Inline[], marks: Marks): LexicalNode[] {
         return inlineNodes(node.children, { ...marks, italic: true });
       case "strike":
         return inlineNodes(node.children, { ...marks, strike: true });
+      case "image": {
+        // The bytes are a file; the note holds the link, and so does the node.
+        return [$createImageNode(node.url, node.alt)];
+      }
       case "link": {
         // A bare URL, which is the only kind of link the dialect has: the link
         // node's text is the address, so it writes back out as what was typed.

@@ -15,6 +15,7 @@ import { AutoLinkNode, LinkNode } from "@lexical/link";
 import type { EditorThemeClasses, Klass, LexicalNode } from "lexical";
 
 import { CodeNode } from "./CodeNode";
+import { ImageNode } from "./ImageNode";
 import styles from "./RichEditor.module.css";
 
 /**
@@ -32,6 +33,7 @@ export const EDITOR_NODES: Klass<LexicalNode>[] = [
   LinkNode,
   AutoLinkNode,
   CodeNode,
+  ImageNode,
 ];
 
 export const EDITOR_THEME: EditorThemeClasses = {

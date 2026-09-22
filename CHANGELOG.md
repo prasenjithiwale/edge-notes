@@ -35,6 +35,12 @@ To release, see "Releasing" in the README.
   filters by it. Tags are plain text — nothing is stored about them, so export
   and the editor are untouched, and `# heading`, `https://…/#anchor` and
   anything inside code are deliberately not tags.
+- **Pictures in notes.** Paste a screenshot into a note, or drop an image file
+  on the panel and it becomes a note of its own. The file is stored beside the
+  notes and the note itself holds only a link to it, so a note is still plain
+  text — and the picture is served to the panel through the app's own scheme,
+  never from a path the webview names. Files nothing refers to any more are
+  cleaned up at startup.
 - **Drag notes into your own order.** Drop a card where you want it and the list
   stays that way, newest notes still arriving on top. ⌥↑ and ⌥↓ move the card
   the keyboard is on, so it is not a mouse-only feature. Dragging is off while

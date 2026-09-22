@@ -3978,6 +3978,90 @@ element by then and the next press would otherwise move a different note.
 - [ ] Settings › General › Keep my order, off: the list goes back to most
       recently edited first
 
+## Pictures in notes (22 Sep 2026)
+
+Idea 17's first half: paste and drop. Taking a screenshot straight into a note,
+and OCR, are still open — both are per-platform work, and the owner asked for
+the half that needs no dependency first.
+
+### The note holds a link; the bytes are a file
+
+`![](ledge://localhost/<uuid>.png)` in the note, the file in
+`<app data>/images/`. A base64 blob inside the note would have to go through the
+editor, the markdown round trip, the database, export and one day sync, and
+every one of those is worse at carrying a megabyte than the filesystem is.
+
+The webview is given no filesystem permission for any of it:
+
+- **In**: the bytes go to `images_save` as a Tauri **raw request body**, not a
+  JSON array of numbers — a two-megabyte screenshot is about eight megabytes of
+  JSON and would be parsed twice on the way through.
+- **Out**: `register_uri_scheme_protocol("ledge", …)` serves a name, and
+  `images::read` checks that name again before it is joined to anything. The
+  frontend builds the URL with Tauri's `convertFileSrc`, because Windows serves
+  a custom scheme as `http://ledge.localhost` and nothing else in the app should
+  have to know that.
+- **Dropped files**: the paths come from `WindowEvent::DragDrop` and are read
+  **in Rust**. The webview never sees a path and never gets to ask for one to be
+  read; it is told the names of what was stored, which is all it can use.
+
+**What the file is gets decided by its first bytes** (`images::sniff`: PNG, JPEG,
+GIF, WebP), never by a name or a MIME type the webview supplied. A name is
+`<uuid>.<ext>` and is checked against exactly that before any path is built —
+that check is the whole of what keeps a request inside the images folder, and
+`a_name_that_could_climb_out_of_the_folder_is_refused` is the test that says so.
+
+### An image is a node the dialect can write
+
+The rule from 0.2.0 holds: a node the serialiser cannot write back is a way to
+lose a note. So `lib/markdown.ts` parses `![alt](url)` as an inline node,
+`editor/ImageNode.tsx` is a `DecoratorNode` for it, and
+`editor/markdown.test.ts` round-trips a pasted image, an image with alt text,
+and two shapes that only look like one (`not ![an image really`, `wow! [not a
+link] here`) — the same contract every other shape is held to.
+
+The serialiser needed no case of its own: `ImageNode.getTextContent()` returns
+`![alt](url)`, and `runLines` already writes an unknown child's text content.
+
+Inline rather than a block, so pasting into the middle of a sentence puts the
+picture where the caret was and Backspace beside it takes it away. There is no
+toolbar on it — the one thing a picture needs is to be deleted, and the key that
+deletes things already does it.
+
+### Where a drop lands
+
+While the editor is open, its own plugin takes the drop and inserts at the
+caret. With nothing open, the drop makes a **new note holding the picture** and
+opens it, so there is somewhere to type the caption. The two cannot both fire:
+the panel's listener checks `editingId` first, and the plugin only exists while
+an editor does.
+
+### Nothing accumulates
+
+`images::sweep` runs at startup, after the 30-day purge, and deletes any file no
+note mentions. **Soft-deleted notes count**: a note in the archive can be
+restored, and restoring it to a broken image would be a delete that was not
+undone. It looks for the scheme rather than parsing markdown, because the cost
+of missing one is deleting a picture somebody is still using.
+
+### Still open
+
+**Export writes the link, not the picture.** A note exported as text says
+`![](ledge://localhost/…)`, which means nothing outside the app. Copying the
+images beside the text files is the obvious fix and nobody has asked for it yet.
+
+### Checklist
+
+- [ ] Copy a screenshot, open a note, ⌘V: the picture appears where the caret was
+- [ ] Close the note and open it again: the picture is still there
+- [ ] Backspace beside it removes it
+- [ ] Drop an image file on the panel with nothing open: a new note with it
+- [ ] Drop one while a note is open: it goes into that note
+- [ ] Drop a PDF or a text file: nothing happens, and the log says why
+- [ ] Restart: images still load (the sweep kept them)
+- [ ] Delete a note with a picture, empty the archive, restart: the file is gone
+      from `<app data>/images/`
+
 ## M0 acceptance checklist
 
 From brief section 12. Run `npm run tauri dev`, then work through these with

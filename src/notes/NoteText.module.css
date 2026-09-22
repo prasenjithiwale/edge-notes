@@ -291,3 +291,19 @@
 .tag:hover {
   opacity: 1;
 }
+
+/* A pasted picture. It is the note's width and no taller than it is wide, so a
+   screenshot of a whole screen does not turn one card into a page — the reader
+   and the expanded panel give it the room they have. */
+.image {
+  display: block;
+  max-width: 100%;
+  max-height: 240px;
+  width: auto;
+  height: auto;
+  margin: 4px 0;
+  border-radius: 6px;
+  object-fit: contain;
+  /* A picture on a coloured card needs an edge or it floats on the colour. */
+  box-shadow: 0 0 0 1px var(--note-edge, rgb(0 0 0 / 0.08));
+}

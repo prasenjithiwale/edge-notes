@@ -1,8 +1,20 @@
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
-import { $getRoot, COMMAND_PRIORITY_CRITICAL, KEY_DOWN_COMMAND } from "lexical";
+import {
+  $createParagraphNode,
+  $getRoot,
+  $getSelection,
+  $isRangeSelection,
+  COMMAND_PRIORITY_CRITICAL,
+  COMMAND_PRIORITY_LOW,
+  KEY_DOWN_COMMAND,
+  PASTE_COMMAND,
+} from "lexical";
 
 import { formatCommandForKey } from "../formatting";
+import { IMAGE_PREFIX } from "../../lib/images";
+import { imagesSave, onImagesDropped } from "../../lib/ipc";
+import { $createImageNode } from "./ImageNode";
 import { $setFromMarkdown, $toMarkdown } from "./markdown";
 import { runCommand, useToolbarState } from "./toolbar";
 
@@ -159,6 +171,85 @@ export function ShortcutPlugin({ lang }: { lang: string }) {
       ),
     [editor, toolbar, lang],
   );
+
+  return null;
+}
+
+/**
+ * Pictures into the note: pasted from the clipboard, or dropped onto the panel
+ * while this editor is the thing open (idea 17).
+ *
+ * Both paths end in the same place — the bytes are stored by Rust, and what
+ * comes back is a name the note links to. Nothing is ever put in the note that
+ * is not on disk first: an image node pointing at a file that does not exist is
+ * a note with a hole in it.
+ */
+export function ImagePlugin() {
+  const [editor] = useLexicalComposerContext();
+
+  const insert = useCallback(
+    (name: string) => {
+      editor.update(() => {
+        const selection = $getSelection();
+        if ($isRangeSelection(selection)) {
+          selection.insertNodes([$createImageNode(`${IMAGE_PREFIX}${name}`)]);
+          return;
+        }
+        $getRoot().append($createParagraphNode().append($createImageNode(`${IMAGE_PREFIX}${name}`)));
+      });
+    },
+    [editor],
+  );
+
+  useEffect(
+    () =>
+      editor.registerCommand(
+        PASTE_COMMAND,
+        // Lexical's paste command carries a keyboard event too, for the
+        // clipboard-less paste some platforms send; only the real one has data.
+        (event) => {
+          if (!(event instanceof ClipboardEvent)) {
+            return false;
+          }
+          const files = [...(event.clipboardData?.items ?? [])]
+            .filter((item) => item.kind === "file" && item.type.startsWith("image/"))
+            .map((item) => item.getAsFile())
+            .filter((file): file is File => file !== null);
+          if (files.length === 0) {
+            // Text, or something this does not handle: let the editor have it.
+            return false;
+          }
+          event.preventDefault();
+          for (const file of files) {
+            void file
+              .arrayBuffer()
+              .then((bytes) => imagesSave(new Uint8Array(bytes)))
+              .then(insert)
+              .catch((error: unknown) => {
+                console.error("images: could not store what was pasted", error);
+              });
+          }
+          return true;
+        },
+        COMMAND_PRIORITY_LOW,
+      ),
+    [editor, insert],
+  );
+
+  useEffect(() => {
+    // Rust announces a drop wherever it lands on the panel; while the editor is
+    // open, the note being written is where it goes.
+    const unlisten = onImagesDropped((names) => {
+      for (const name of names) {
+        insert(name);
+      }
+    });
+    return () => {
+      void unlisten.then((off) => {
+        off();
+      });
+    };
+  }, [insert]);
 
   return null;
 }

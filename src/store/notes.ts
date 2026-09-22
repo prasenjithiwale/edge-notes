@@ -13,6 +13,7 @@ import {
 } from "../lib/ipc";
 import { refreshArchive } from "./archive";
 import { toggleTaskLine } from "../lib/markdown";
+import { imageMarkdown } from "../lib/images";
 import { isNoteEmpty, sortNotes } from "../lib/notes";
 import { useSettingsStore } from "./settings";
 
@@ -82,6 +83,12 @@ interface NotesStore {
 
   load: () => Promise<void>;
   createNote: () => Promise<void>;
+  /**
+   * A new note holding pictures that were dropped on the panel (idea 17). Only
+   * when no editor is open — while one is, the drop goes into the note being
+   * written, which the editor's own plugin does.
+   */
+  createWithImages: (names: string[]) => Promise<void>;
   setContent: (id: string, content: string) => void;
   setColor: (id: string, color: NoteColor) => Promise<void>;
   setPinned: (id: string, pinned: boolean) => Promise<void>;
@@ -180,6 +187,24 @@ export const useNotesStore = create<NotesStore>((set, get) => ({
     } catch (error: unknown) {
       console.error("notes: create failed", error);
     }
+  },
+
+  createWithImages: async (names) => {
+    if (names.length === 0) {
+      return;
+    }
+    // Everything a new note does, and then the pictures already in it: the
+    // editor opens on a note that is not empty, so it is never discarded on the
+    // way out even if nothing is typed.
+    await get().createNote();
+    const id = get().editingId;
+    if (id === null) {
+      return;
+    }
+    const content = names.map((name) => imageMarkdown(name)).join("\n");
+    get().setContent(id, content);
+    beginEdit(id, content);
+    await get().flush(id);
   },
 
   setContent: (id, content) => {

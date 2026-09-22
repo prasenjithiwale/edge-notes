@@ -30,7 +30,13 @@ import { useNotesStore } from "../store/notes";
 import { useSettingsStore } from "../store/settings";
 import { noteColorStyle } from "./NoteCard";
 import { EDITOR_NODES, EDITOR_THEME } from "./editor/config";
-import { ChangePlugin, FocusPlugin, LoadPlugin, ShortcutPlugin } from "./editor/plugins";
+import {
+  ChangePlugin,
+  FocusPlugin,
+  ImagePlugin,
+  LoadPlugin,
+  ShortcutPlugin,
+} from "./editor/plugins";
 import { LINK_MATCHERS, NOTE_TRANSFORMERS } from "./editor/shortcuts";
 import { SlashMenuPlugin } from "./editor/SlashMenu";
 import editorStyles from "./editor/RichEditor.module.css";
@@ -267,6 +273,7 @@ function NoteEditorBody({ note, large = false }: NoteEditorProps) {
         <LoadPlugin noteId={note.id} content={note.content} />
         <ChangePlugin content={note.content} onChange={onChangeContent} />
         <FocusPlugin />
+        <ImagePlugin />
         <ShortcutPlugin lang={lastLang} />
         <HistoryPlugin />
         <ListPlugin />

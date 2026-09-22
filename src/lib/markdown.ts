@@ -19,7 +19,13 @@ export type Inline =
   | { kind: "bold" | "italic" | "strike"; children: Inline[] }
   /** Between single backticks. Its contents are never parsed further. */
   | { kind: "code"; text: string }
-  | { kind: "link"; url: string };
+  | { kind: "link"; url: string }
+  /**
+   * `![alt](url)`: a picture pasted or dropped into the note (idea 17). The
+   * bytes are a file in the app data folder and the note holds only this link,
+   * so a note is still plain text and still the thing that gets exported.
+   */
+  | { kind: "image"; url: string; alt: string };
 
 export type LineKind = "paragraph" | "heading" | "bullet" | "ordered" | "task";
 
@@ -237,6 +243,16 @@ function parseRange(text: string, start: number, end: number, depth: number): In
       }
     }
 
+    // Before the marker scan, so the `[`, `]` and `_` inside an image's own
+    // syntax are never read as formatting.
+    const image = imageAt(text, i, end);
+    if (image !== null) {
+      flushPlain();
+      nodes.push({ kind: "image", url: image.url, alt: image.alt });
+      i += image.length;
+      continue;
+    }
+
     const url = linkAt(text, i, end);
     if (url !== null) {
       flushPlain();
@@ -276,6 +292,39 @@ function parseRange(text: string, start: number, end: number, depth: number): In
 }
 
 /** Inline formatting within one line. Markers never span lines. */
+/**
+ * `![alt](url)` starting at `at`, or null.
+ *
+ * Written by hand rather than with a regular expression because the parser
+ * scans one index at a time and a sticky regex here would be a second way of
+ * saying where a node starts. Neither part may contain its own closing
+ * character, and the URL may not contain a space: the alternative is a stray
+ * bracket in a sentence swallowing the rest of the line.
+ */
+function imageAt(
+  text: string,
+  at: number,
+  end: number,
+): { url: string; alt: string; length: number } | null {
+  if (text[at] !== "!" || text[at + 1] !== "[") {
+    return null;
+  }
+  const altEnd = text.indexOf("]", at + 2);
+  if (altEnd === -1 || altEnd >= end || text[altEnd + 1] !== "(") {
+    return null;
+  }
+  const urlEnd = text.indexOf(")", altEnd + 2);
+  if (urlEnd === -1 || urlEnd >= end) {
+    return null;
+  }
+  const alt = text.slice(at + 2, altEnd);
+  const url = text.slice(altEnd + 2, urlEnd);
+  if (url === "" || /\s/.test(url) || alt.includes("[")) {
+    return null;
+  }
+  return { url, alt, length: urlEnd + 1 - at };
+}
+
 export function parseInline(text: string): Inline[] {
   return parseRange(text, 0, text.length, 0);
 }
@@ -288,7 +337,13 @@ export function plainText(nodes: Inline[]): string {
         ? node.text
         : node.kind === "link"
           ? node.url
-          : plainText(node.children),
+          : // An image reads as whatever it was given to say, and "Image" when
+            // it was given nothing: a label has to say something.
+            node.kind === "image"
+            ? node.alt === ""
+              ? "Image"
+              : node.alt
+            : plainText(node.children),
     )
     .join("");
 }

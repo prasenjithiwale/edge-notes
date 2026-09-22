@@ -12,6 +12,7 @@ import {
   remindersSet,
   dockToggle,
   NOTE_COLORS,
+  onImagesDropped,
   onNewNoteRequested,
   onQuitRequested,
   onSettingsChanged,
@@ -188,6 +189,23 @@ export function Panel({ className }: PanelProps) {
           void useNotesStore.getState().createNote();
         }),
         "ui:new-note",
+      ),
+    [],
+  );
+
+  // Idea 17: a picture dropped on the panel with nothing open becomes a note of
+  // its own. While the editor is open it takes the drop instead — its own plugin
+  // puts the image where the caret is — so this checks before acting.
+  useEffect(
+    () =>
+      subscription(
+        onImagesDropped((names) => {
+          if (useNotesStore.getState().editingId !== null) {
+            return;
+          }
+          void useNotesStore.getState().createWithImages(names);
+        }),
+        "ui:images-dropped",
       ),
     [],
   );

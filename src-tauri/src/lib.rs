@@ -8,6 +8,7 @@ pub mod db;
 pub mod dock;
 pub mod error;
 pub mod export;
+pub mod images;
 pub mod links;
 pub mod platform;
 pub mod reminders;
@@ -49,6 +50,25 @@ pub fn run() {
     let builder = builder.plugin(tauri_nspanel::init());
 
     builder
+        // The one way the webview sees an image: a name this module wrote,
+        // checked again on the way out, joined to a folder Rust chose. There is
+        // no filesystem permission anywhere near it.
+        .register_uri_scheme_protocol(images::SCHEME, |ctx, request| {
+            let name = request.uri().path().trim_start_matches('/');
+            match images::read(ctx.app_handle(), name) {
+                Some((bytes, mime)) => tauri::http::Response::builder()
+                    .header(tauri::http::header::CONTENT_TYPE, mime)
+                    // The bytes never change under a name: it is a fresh uuid
+                    // every time one is written.
+                    .header(tauri::http::header::CACHE_CONTROL, "max-age=31536000")
+                    .body(bytes)
+                    .unwrap_or_else(|_| tauri::http::Response::new(Vec::new())),
+                None => tauri::http::Response::builder()
+                    .status(tauri::http::StatusCode::NOT_FOUND)
+                    .body(Vec::new())
+                    .unwrap_or_else(|_| tauri::http::Response::new(Vec::new())),
+            }
+        })
         .invoke_handler(tauri::generate_handler![
             commands::app_ready,
             commands::quick_capture_prefill,
@@ -70,6 +90,7 @@ pub fn run() {
             commands::notes_create,
             commands::notes_update,
             commands::notes_set_pinned,
+            commands::images_save,
             commands::notes_reorder,
             commands::notes_delete,
             commands::notes_restore,
@@ -134,6 +155,15 @@ pub fn run() {
                 Ok(count) => log::info!("db: purged {count} expired notes"),
                 Err(error) => log::error!("db: purge failed: {error}"),
             }
+            // And the images no note mentions any more (idea 17). After the
+            // purge, so a note that has just gone for good takes its pictures
+            // with it, and only at startup: it is the one moment when every note
+            // can be read at once and nothing is being typed.
+            match database.with(|connection| images::sweep(&handle, connection)) {
+                Ok(0) => {}
+                Ok(count) => log::info!("images: removed {count} unused files"),
+                Err(error) => log::error!("images: sweep failed: {error}"),
+            }
             let stored = database.with(db::settings::get).unwrap_or_default();
             let placement = stored.placement();
             let timings = stored.timings();
@@ -169,6 +199,32 @@ pub fn run() {
                 match event {
                     WindowEvent::Focused(false) => {
                         dock.input(&event_handle, Input::WindowBlurred);
+                    }
+                    // Idea 17: a picture dropped onto the panel. The paths come
+                    // from the window server, and Rust reads them — the webview
+                    // is only ever told the names of what was stored, which is
+                    // all it can do anything with anyway.
+                    WindowEvent::DragDrop(tauri::DragDropEvent::Drop { paths, .. }) => {
+                        let names: Vec<String> = paths
+                            .iter()
+                            .filter_map(|path| match images::import(&event_handle, path) {
+                                Ok(name) => Some(name),
+                                Err(error) => {
+                                    log::warn!(
+                                        "images: {} was not stored: {error}",
+                                        path.display()
+                                    );
+                                    None
+                                }
+                            })
+                            .collect();
+                        if !names.is_empty() {
+                            if let Err(error) =
+                                tauri::Emitter::emit(&event_handle, "images:dropped", &names)
+                            {
+                                log::error!("images: could not announce the drop: {error}");
+                            }
+                        }
                     }
                     WindowEvent::Destroyed => {
                         dock.stop();

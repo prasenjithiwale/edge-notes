@@ -11,6 +11,7 @@ import { ListItemNode, ListNode, registerCheckList, registerList } from "@lexica
 import { AutoLinkNode, LinkNode } from "@lexical/link";
 
 import { CodeNode } from "./CodeNode";
+import { ImageNode } from "./ImageNode";
 import { HeadingNode } from "@lexical/rich-text";
 
 import { EDITOR_NODES } from "./config";
@@ -210,6 +211,9 @@ describe("the node list", () => {
       LinkNode,
       AutoLinkNode,
       CodeNode,
+      // An image is a node the dialect writes: `![alt](url)`, round-tripped by
+      // `markdown.test.ts` like every other shape.
+      ImageNode,
     ]);
   });
 });

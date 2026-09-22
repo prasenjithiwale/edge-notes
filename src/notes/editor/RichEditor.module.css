@@ -209,3 +209,18 @@
   text-decoration: line-through;
   opacity: var(--note-secondary-opacity);
 }
+
+/* A picture inside the editor. The same size rules as the reader's, so what is
+   written looks like what is read. */
+.image {
+  display: inline-block;
+  max-width: 100%;
+  max-height: 240px;
+  width: auto;
+  height: auto;
+  margin: 2px 0;
+  border-radius: 6px;
+  object-fit: contain;
+  vertical-align: bottom;
+  box-shadow: 0 0 0 1px var(--note-edge, rgb(0 0 0 / 0.08));
+}

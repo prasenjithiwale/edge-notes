@@ -426,6 +426,17 @@ export function notesSetPinned(id: string, pinned: boolean): Promise<Note> {
  * screen. Sent whole rather than as one move, because what is being agreed to is
  * what is on screen — and only ever when nothing is filtered out.
  */
+/**
+ * Store a pasted or dropped image; the name comes back and goes into the note.
+ *
+ * The bytes go as the whole payload rather than inside an object, which is what
+ * Tauri sends as a raw body — a two-megabyte screenshot as a JSON array of
+ * numbers is about eight megabytes of text, parsed twice on the way through.
+ */
+export async function imagesSave(bytes: Uint8Array): Promise<string> {
+  return invoke<string>("images_save", bytes);
+}
+
 export async function notesReorder(ids: string[]): Promise<void> {
   await callResult<null>("notes_reorder", { ids });
 }
@@ -571,6 +582,18 @@ export function onNewNoteRequested(
 export function onQuitRequested(handler: () => void): Promise<UnlistenFn> {
   return listen<null>(QUIT_REQUESTED_EVENT, () => {
     handler();
+  });
+}
+
+/**
+ * Images dropped onto the panel, already stored: the names are all the webview
+ * is told, because the paths were the window server's and were read in Rust.
+ */
+export function onImagesDropped(
+  handler: (names: string[]) => void,
+): Promise<UnlistenFn> {
+  return listen<string[]>("images:dropped", (event) => {
+    handler(event.payload);
   });
 }
 

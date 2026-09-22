@@ -5,6 +5,7 @@ import { LinkNode } from "@lexical/link";
 import { HeadingNode } from "@lexical/rich-text";
 
 import { CodeNode } from "./CodeNode";
+import { ImageNode } from "./ImageNode";
 import { $setFromMarkdown, $toMarkdown } from "./markdown";
 
 let editor: LexicalEditor;
@@ -12,7 +13,7 @@ let editor: LexicalEditor;
 beforeEach(() => {
   editor = createEditor({
     namespace: "test",
-    nodes: [HeadingNode, ListNode, ListItemNode, LinkNode, CodeNode],
+    nodes: [HeadingNode, ListNode, ListItemNode, LinkNode, CodeNode, ImageNode],
     onError: (error) => {
       throw error;
     },
@@ -56,6 +57,19 @@ describe("a note survives a trip through the editor", () => {
     ["a code block with no language", "```\nplain\n```"],
     ["a code block between paragraphs", "before\n```js\nconst a = 1\n```\nafter"],
     ["an empty note", ""],
+    // Idea 17. The note holds the link and nothing else, so the round trip is
+    // the same promise as for every other shape — and a bracket that is not an
+    // image has to stay the text it was.
+    [
+      "a pasted image",
+      "before\n![](ledge://localhost/0199a000-0000-7000-8000-000000000001.png)\nafter",
+    ],
+    [
+      "an image with alt text",
+      "![the graph](ledge://localhost/0199a000-0000-7000-8000-000000000002.jpg)",
+    ],
+    ["something that only looks like an image", "not ![an image really"],
+    ["a bang before a bracket", "wow! [not a link] here"],
     // The three levels the dialect writes, and the shapes that look like
     // headings and are not: a fourth hash, no space after it, and an indented
     // one. Each of those has to come back as the text somebody typed.

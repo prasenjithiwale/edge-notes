@@ -27,6 +27,9 @@ pub enum AppError {
     Io(#[from] std::io::Error),
     #[error("not a web link: {0}")]
     InvalidUrl(String),
+    /// Something was pasted that is not an image this app can store or show.
+    #[error("{0}")]
+    InvalidImage(String),
     #[error("{0}")]
     ShortcutUnavailable(String),
     #[error("launch at login could not be changed: {0}")]
@@ -53,6 +56,7 @@ impl AppError {
             Self::Tauri(_) => "tauri",
             Self::Io(_) => "io",
             Self::InvalidUrl(_) => "invalid_url",
+            Self::InvalidImage(_) => "invalid_image",
             Self::ShortcutUnavailable(_) => "shortcut_unavailable",
             Self::Autostart(_) => "autostart",
             Self::Locked(_) => "locked",
