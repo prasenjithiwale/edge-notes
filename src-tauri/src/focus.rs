@@ -127,10 +127,33 @@ impl FocusTimer {
     }
 }
 
+/// Put the countdown on the menu bar.
+///
+/// On macOS it goes on as an **attributed** title, which is the only way it can
+/// be red: Tauri's tray takes a plain string and keeps its `NSStatusItem`
+/// private. That has to happen on the main thread, and it falls back to the
+/// plain title if the status bar's button cannot be found — a countdown in the
+/// wrong colour beats no countdown.
+///
 /// Windows has no tray title at all and Linux only shows one in some panels, so
-/// a failure here is logged once by the caller's own path and never retried in
-/// a loop.
+/// a refusal is logged at debug and never retried in a loop.
 fn write(app: &AppHandle, title: Option<&str>) {
+    // The plain title first, always: it is what gives the status item its
+    // width. An attributed title on its own colours text the item has left no
+    // room for, and the countdown disappears altogether.
+    plain(app, title);
+
+    #[cfg(target_os = "macos")]
+    {
+        let owned = title.map(str::to_owned);
+        let _ = app.run_on_main_thread(move || {
+            // Then the colour, over the top of the text already measured.
+            let _ = crate::platform::macos::set_tray_countdown(owned.as_deref());
+        });
+    }
+}
+
+fn plain(app: &AppHandle, title: Option<&str>) {
     let Some(tray) = app.tray_by_id(TRAY_ID) else {
         return;
     };

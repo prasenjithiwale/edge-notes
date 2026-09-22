@@ -53,10 +53,23 @@ objc2-app-kit = { version = "0.3", default-features = false, features = [
   "NSView",
   "NSResponder",
   "NSGraphics",
+  # The menu-bar countdown's colour. Tauri keeps its tray's `NSStatusItem`
+  # private and its `set_title` takes a plain string, so the red is an
+  # attributed title set on the status bar's own button.
+  "NSApplication",
+  "NSButton",
+  "NSControl",
+  "NSColor",
+  "NSFont",
+  "NSShadow",
+  "NSStatusBarButton",
+  "NSWindow",
 ] }
 objc2-foundation = { version = "0.3", default-features = false, features = [
   "std",
   "NSArray",
+  "NSAttributedString",
+  "NSDictionary",
   "NSString",
   "NSURL",
   "NSGeometry",

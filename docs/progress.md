@@ -4354,9 +4354,35 @@ need `run_on_main_thread`. It is **macOS only** in practice: Windows has no tray
 title at all, and Linux shows one only in some panels, so a refusal is logged at
 debug and never retried in a loop.
 
+### Red, which Tauri's tray cannot do
+
+Asked for as "glowing red". `TrayIcon::set_title` takes a plain `&str`, and
+Tauri keeps its `NSStatusItem` private, so the colour cannot come from the API
+at all. What *can* be coloured is the status bar's own button, through an
+`attributedTitle` — and the button is reachable without any private API:
+`NSApp.windows()` lists an `NSStatusBarWindow`, and the button is inside its
+content view. `platform::macos::set_tray_countdown` walks three levels down for
+it, sets `NSForegroundColorAttributeName` to `systemRedColor`, the menu bar's
+own font so the baseline matches, and an `NSShadow` of the same red at a 3 pt
+blur, which is the glow.
+
+Two things had to be measured rather than assumed, and both were only visible
+in a photograph of the menu bar:
+
+- **The content view is not the button.** It is an `NSStatusBarContentView`; the
+  first attempt downcast the content view itself, found nothing, fell back to
+  the plain title, and produced a countdown in the menu bar's own colour that
+  looked exactly like success.
+- **An attributed title alone has no width.** The status item measures itself
+  from the plain title, so setting only the attributed one left the item with no
+  room and the countdown vanished altogether. The plain title goes on first —
+  it is also the whole of the behaviour on Windows and Linux — and the colour
+  is laid over the text already measured.
+
 ### Checklist
 
-- [ ] Start a session: the time appears beside the tray icon and counts down
+- [ ] Start a session: the time appears beside the tray icon in red and counts
+      down
 - [ ] Pause it: the title goes, and the panel still shows the paused time
 - [ ] Let a phase end while the panel is closed: the title clears
 - [ ] Quit: nothing is left behind on the menu bar

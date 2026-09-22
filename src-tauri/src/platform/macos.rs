@@ -272,3 +272,104 @@ pub fn share_sheet(window: &WebviewWindow, text: &str, files: &[std::path::PathB
     }
     true
 }
+
+/// The menu-bar countdown, in red, with a soft glow behind it.
+///
+/// Tauri's tray takes a plain string and keeps its `NSStatusItem` private, so
+/// the colour cannot come from `set_title`. What can be coloured is the status
+/// bar's own button, through an attributed title — and the button is reachable
+/// without any private API: the status item owns a window whose content view
+/// *is* that button, and `NSApp.windows` lists it.
+///
+/// `None` clears it. Returns false when the button could not be found, so the
+/// caller can fall back to the plain title rather than showing nothing.
+///
+/// Must run on the main thread; the caller marshals.
+#[must_use]
+pub fn set_tray_countdown(text: Option<&str>) -> bool {
+    use objc2::rc::Retained;
+    use objc2_app_kit::{
+        NSApplication, NSColor, NSFont, NSFontAttributeName, NSForegroundColorAttributeName,
+        NSShadow, NSShadowAttributeName,
+    };
+    use objc2_foundation::{MainThreadMarker, NSAttributedString, NSDictionary, NSSize, NSString};
+
+    let Some(mtm) = MainThreadMarker::new() else {
+        return false;
+    };
+    let app = NSApplication::sharedApplication(mtm);
+
+    let mut found = false;
+    for window in app.windows() {
+        let Some(view) = window.contentView() else {
+            continue;
+        };
+        // The status item's window holds an `NSStatusBarContentView`, and the
+        // button is inside *that* — the content view itself is not the button,
+        // which is what the first attempt assumed and why the countdown came
+        // out in the menu bar's own colour.
+        let Some(button) = find_status_button(&view, 3) else {
+            continue;
+        };
+        found = true;
+
+        let Some(text) = text else {
+            // An empty attributed string rather than a nil one: the button keeps
+            // whatever it was last given, so clearing has to say so.
+            button.setAttributedTitle(&NSAttributedString::new());
+            continue;
+        };
+
+        // The same red as the light on the collapsed tab: the system's own, so
+        // it stays legible on a light menu bar and a dark one.
+        let glow = NSShadow::new();
+        glow.setShadowColor(Some(&NSColor::systemRedColor()));
+        glow.setShadowBlurRadius(3.0);
+        glow.setShadowOffset(NSSize::new(0.0, 0.0));
+
+        // The menu bar's own font at its own size, so the countdown sits on the
+        // same baseline as everything beside it.
+        let font = NSFont::menuBarFontOfSize(0.0);
+        let keys: [&objc2_foundation::NSString; 3] = [
+            unsafe { NSForegroundColorAttributeName },
+            unsafe { NSFontAttributeName },
+            unsafe { NSShadowAttributeName },
+        ];
+        let values: [&objc2::runtime::AnyObject; 3] = [
+            unsafe { &*Retained::as_ptr(&NSColor::systemRedColor()).cast() },
+            unsafe { &*Retained::as_ptr(&font).cast() },
+            unsafe { &*Retained::as_ptr(&glow).cast() },
+        ];
+        let attributes = NSDictionary::from_slices(&keys, &values);
+        // SAFETY: the keys are AppKit's own attribute names and each value is
+        // the type that key is documented to take.
+        let title = unsafe {
+            NSAttributedString::new_with_attributes(&NSString::from_str(text), &attributes)
+        };
+        button.setAttributedTitle(&title);
+    }
+    found
+}
+
+/// The status bar's button, somewhere under `view`.
+///
+/// Depth-limited rather than unbounded: it is two levels down in every macOS
+/// this has been seen on, and a view tree is not something to walk for ever on
+/// a timer that ticks once a second.
+#[cfg(target_os = "macos")]
+fn find_status_button(
+    view: &objc2_app_kit::NSView,
+    depth: usize,
+) -> Option<objc2::rc::Retained<objc2_app_kit::NSStatusBarButton>> {
+    use objc2_app_kit::NSStatusBarButton;
+
+    if let Some(button) = view.downcast_ref::<NSStatusBarButton>() {
+        return Some(button.retain());
+    }
+    if depth == 0 {
+        return None;
+    }
+    view.subviews()
+        .iter()
+        .find_map(|child| find_status_button(&child, depth - 1))
+}
