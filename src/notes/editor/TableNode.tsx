@@ -1,4 +1,4 @@
-import { useCallback, useState, type ReactNode } from "react";
+import { Fragment, useCallback, type ReactNode } from "react";
 import { Minus, Plus } from "lucide-react";
 import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
 import {
@@ -29,7 +29,6 @@ function Cell({
   label,
   onChange,
   onEnter,
-  onFocus,
 }: {
   value: string;
   head: boolean;
@@ -37,7 +36,6 @@ function Cell({
   label: string;
   onChange: (value: string) => void;
   onEnter: () => void;
-  onFocus: () => void;
 }) {
   return (
     <input
@@ -46,7 +44,6 @@ function Cell({
       value={value}
       aria-label={label}
       spellCheck
-      onFocus={onFocus}
       onChange={(event) => {
         onChange(event.target.value);
       }}
@@ -73,12 +70,6 @@ function Cell({
  */
 function TableGrid({ nodeKey, table }: { nodeKey: NodeKey; table: Table }) {
   const [editor] = useLexicalComposerContext();
-  // Which cell the caret is in, so "Remove row" has something to mean. The
-  // controls are all in the footer rather than one per row: a button in the
-  // grid's last column is off the right-hand edge of a 320 px panel as soon as
-  // the table is wide enough to scroll, and a control that can be clipped is a
-  // control that is not there (see the image handle, 0.7.0).
-  const [at, setAt] = useState<{ row: number; column: number }>({ row: -1, column: 0 });
 
   const write = useCallback(
     (next: Table) => {
@@ -131,19 +122,11 @@ function TableGrid({ nodeKey, table }: { nodeKey: NodeKey; table: Table }) {
     });
   };
 
-  const removeFocusedRow = () => {
-    const index = at.row === -1 ? table.rows.length - 1 : at.row;
-    if (index < 0) {
-      return;
-    }
-    write({ ...table, rows: table.rows.filter((_, i) => i !== index) });
-    setAt((held) => ({ ...held, row: -1 }));
+  const removeRow = (index: number) => {
+    write({ ...table, rows: table.rows.filter((_, at) => at !== index) });
   };
 
-  const removeFocusedColumn = () => {
-    removeColumn(Math.min(at.column, table.header.length - 1));
-    setAt((held) => ({ ...held, column: 0 }));
-  };
+  const columns = table.header.length;
 
   return (
     <div
@@ -169,12 +152,38 @@ function TableGrid({ nodeKey, table }: { nodeKey: NodeKey; table: Table }) {
       onCompositionEnd={stopEditingEvent}
     >
       <div className={styles.scroller}>
+        {/* One grid, so every button lines up with the row or column it acts
+            on without anything having to be measured. The gutter is the last
+            column and the strips are the first and last rows. */}
         <div
           className={styles.grid}
-          style={{
-            gridTemplateColumns: `repeat(${String(table.header.length)}, minmax(64px, 1fr))`,
-          }}
+          style={{ gridTemplateColumns: `repeat(${String(columns)}, minmax(64px, 1fr)) 22px` }}
         >
+          {table.header.map((_, column) => (
+            <button
+              key={`x${String(column)}`}
+              type="button"
+              className={styles.edge}
+              aria-label={`Remove column ${String(column + 1)}`}
+              title="Remove this column"
+              disabled={columns <= 1}
+              onClick={() => {
+                removeColumn(column);
+              }}
+            >
+              <Minus size={12} strokeWidth={2} />
+            </button>
+          ))}
+          <button
+            type="button"
+            className={styles.edge}
+            aria-label="Add column"
+            title="Add a column"
+            onClick={addColumn}
+          >
+            <Plus size={12} strokeWidth={2} />
+          </button>
+
           {table.header.map((cell, column) => (
             <Cell
               key={`h${String(column)}`}
@@ -182,65 +191,57 @@ function TableGrid({ nodeKey, table }: { nodeKey: NodeKey; table: Table }) {
               head
               align={table.align[column] ?? null}
               label={`Column ${String(column + 1)} heading`}
-              onFocus={() => {
-                setAt({ row: -1, column });
-              }}
               onChange={(value) => {
                 setCell(-1, column, value);
               }}
               onEnter={addRow}
             />
           ))}
-          {table.rows.map((row, rowIndex) =>
-            row.map((cell, column) => (
-              <Cell
-                key={`${String(rowIndex)}:${String(column)}`}
-                value={cell}
-                head={false}
-                align={table.align[column] ?? null}
-                label={`Row ${String(rowIndex + 1)}, column ${String(column + 1)}`}
-                onFocus={() => {
-                  setAt({ row: rowIndex, column });
+          <span className={styles.corner} />
+
+          {table.rows.map((row, rowIndex) => (
+            <Fragment key={rowIndex}>
+              {row.map((cell, column) => (
+                <Cell
+                  key={column}
+                  value={cell}
+                  head={false}
+                  align={table.align[column] ?? null}
+                  label={`Row ${String(rowIndex + 1)}, column ${String(column + 1)}`}
+                  onChange={(value) => {
+                    setCell(rowIndex, column, value);
+                  }}
+                  onEnter={addRow}
+                />
+              ))}
+              <button
+                type="button"
+                className={styles.edge}
+                aria-label={`Remove row ${String(rowIndex + 1)}`}
+                title="Remove this row"
+                onClick={() => {
+                  removeRow(rowIndex);
                 }}
-                onChange={(value) => {
-                  setCell(rowIndex, column, value);
-                }}
-                onEnter={addRow}
-              />
-            )),
-          )}
+              >
+                <Minus size={12} strokeWidth={2} />
+              </button>
+            </Fragment>
+          ))}
+
+          {/* Sticky to the left, so the way to add a row is still on screen
+              when a wide table has been scrolled sideways. */}
+          <button
+            type="button"
+            className={styles.addRow}
+            style={{ gridColumn: `1 / -1` }}
+            aria-label="Add row"
+            title="Add a row"
+            onClick={addRow}
+          >
+            <Plus size={12} strokeWidth={2} />
+            Row
+          </button>
         </div>
-      </div>
-      <div className={styles.foot}>
-        <button type="button" className={styles.footTool} onClick={addRow}>
-          <Plus size={12} strokeWidth={2} />
-          Row
-        </button>
-        <button type="button" className={styles.footTool} onClick={addColumn}>
-          <Plus size={12} strokeWidth={2} />
-          Column
-        </button>
-        <span className={styles.spacer} />
-        <button
-          type="button"
-          className={styles.footTool}
-          onClick={removeFocusedRow}
-          disabled={table.rows.length === 0}
-          title="Remove the row the caret is in"
-        >
-          <Minus size={12} strokeWidth={2} />
-          Row
-        </button>
-        <button
-          type="button"
-          className={styles.footTool}
-          onClick={removeFocusedColumn}
-          disabled={table.header.length <= 1}
-          title="Remove the column the caret is in"
-        >
-          <Minus size={12} strokeWidth={2} />
-          Column
-        </button>
       </div>
     </div>
   );

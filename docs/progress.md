@@ -4259,6 +4259,25 @@ this file and both hit again:
 Verified in Safari, the same WebKit the webview is: typing in a cell reaches the
 note's text, and "+ Row" adds a row to it.
 
+### The card drew it in words, which read as losing it
+
+The first cut showed a table on a card as its heading row joined with `·`,
+reasoning that a grid does not fit in a two-line preview. What that actually
+looked like was a note that had swallowed its own table: press Done and the
+rows are gone. The card draws the real table now, clamped to
+`CARD_TABLE_ROWS` (two) body rows, and **outside the card's two-line clamp** —
+the clamp is for a run of words, and it had cut the table down to half of its
+heading.
+
+### The controls moved to the grid's edges
+
+Asked for, and better than the footer they replaced: a `−` over every column
+and at the end of every row, a `+` at each far end. They are cells of the *same
+grid* as the table, so each one lines up with what it acts on without anything
+being measured, and the "Add row" strip is `position: sticky; left: 0` so it is
+still on screen when a wide table has been scrolled sideways. The last column
+cannot be removed — a table with no columns is not a table.
+
 ### Checklist
 
 - [ ] `/table` inserts a grid, and there is a paragraph after it to carry on in

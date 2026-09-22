@@ -51,37 +51,51 @@
   outline-offset: -2px;
 }
 
-.foot {
+/* The controls at the grid's edges: a minus at the end of every row and over
+   every column, a plus at each far end. Always drawn, never hover-only — an
+   inactive window on macOS may never see a hover (brief 7.5). */
+.edge {
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 4px 6px;
-  border-top: 1px solid var(--border);
-}
-
-.footTool {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 2px 6px;
+  justify-content: center;
+  min-height: 18px;
+  padding: 0;
   border: none;
-  border-radius: 999px;
-  background: transparent;
-  color: var(--text-secondary);
-  font-size: 11px;
+  background: var(--surface);
+  color: var(--text-tertiary);
 }
 
-.footTool:hover:not(:disabled) {
+.edge:hover:not(:disabled) {
   background: var(--surface-sunken);
   color: var(--text-primary);
 }
 
-.footTool:disabled {
-  opacity: 0.4;
+.edge:disabled {
+  opacity: 0.3;
 }
 
-/* Adding on the left, removing on the right, with air between them: the two
-   pairs do opposite things and should not be next to each other. */
-.spacer {
-  flex: 1;
+/* The corner where the column strip meets the row gutter: nothing acts there. */
+.corner {
+  background: var(--surface);
+}
+
+/* Sticky, so the way to add a row is still on screen when a wide table has
+   been scrolled sideways. */
+.addRow {
+  position: sticky;
+  left: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 3px;
+  border: none;
+  background: var(--surface);
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+
+.addRow:hover {
+  background: var(--surface-sunken);
+  color: var(--text-primary);
 }

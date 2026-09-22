@@ -5,7 +5,7 @@ import { IconButton } from "../components/IconButton";
 import { cx } from "../lib/cx";
 import type { Note } from "../lib/ipc";
 import { cardPreview, parseInline, plainText } from "../lib/markdown";
-import { FlowText, InlineText, LineRow, NoteLines } from "./NoteText";
+import { FlowText, InlineText, LineRow, NoteLines, NoteTable } from "./NoteText";
 import styles from "./NoteCard.module.css";
 
 interface NoteCardProps {
@@ -55,22 +55,43 @@ function Body({ note, onToggleTask }: Pick<NoteCardProps, "note" | "onToggleTask
       )}
       {body.length > 0 &&
         (layout === "flow" ? (
-          <div className={styles.preview}>
-            <FlowText lines={body.map((line) => line.text)} />
-          </div>
+          body.some((line) => line.table !== undefined) ? (
+            // A table is drawn rather than described, and outside the two-line
+            // clamp: the clamp is for a run of words, and it cut the table down
+            // to half of its heading row.
+            <div className={styles.rows}>
+              {body.map((line) =>
+                line.table === undefined ? (
+                  <div key={line.index} className={styles.preview}>
+                    <FlowText lines={[line.text]} />
+                  </div>
+                ) : (
+                  <NoteTable key={line.index} table={line.table} />
+                ),
+              )}
+            </div>
+          ) : (
+            <div className={styles.preview}>
+              <FlowText lines={body.map((line) => line.text)} />
+            </div>
+          )
         ) : (
           <div className={styles.rows}>
-            {body.map((line) => (
-              <LineRow
-                key={line.index}
-                line={line}
-                code={line.code}
-                className={styles.row}
-                onToggle={() => {
-                  onToggleTask(line.index);
-                }}
-              />
-            ))}
+            {body.map((line) =>
+              line.table === undefined ? (
+                <LineRow
+                  key={line.index}
+                  line={line}
+                  code={line.code}
+                  className={styles.row}
+                  onToggle={() => {
+                    onToggleTask(line.index);
+                  }}
+                />
+              ) : (
+                <NoteTable key={line.index} table={line.table} />
+              ),
+            )}
             {hidden > 0 && (
               <div className={cx(styles.row, styles.more)}>{`${String(hidden)} more`}</div>
             )}

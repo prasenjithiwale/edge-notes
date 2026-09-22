@@ -34,7 +34,10 @@ To release, see "Releasing" in the README.
   ordinary Markdown pipe table, so a note with a table in it still exports,
   still pastes into another Markdown app, and is still plain text in the
   database — and it arrives as a real table when the note is shared as rich
-  text. Alignment written by another app (`:---:`) is kept.
+  text. Alignment written by another app (`:---:`) is kept. The card draws the
+  table too — the first cut described it in words, which made saving a table
+  look like losing it. Rows and columns are added and removed from buttons at
+  the grid's own edges.
 - **Share a note.** A Share button in the note's header offers three ways out:
   **Copy as rich text**, which is what Apple Notes, OneNote, Mail and Word
   actually read — headings, lists, links and the pictures themselves all arrive

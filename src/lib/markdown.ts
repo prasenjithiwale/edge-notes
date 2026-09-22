@@ -458,6 +458,9 @@ export function parseBlocks(content: string): Block[] {
 /** Brief 6.8: the preview is clamped to two lines. */
 export const PREVIEW_LINES = 2;
 
+/** How many body rows of a table a card shows before the reader is needed. */
+export const CARD_TABLE_ROWS = 2;
+
 /**
  * A checklist shows more rows than a paragraph preview, because its items can be
  * ticked from the card and two would rarely be the ones that matter.
@@ -479,6 +482,12 @@ export interface CardLine extends Line {
    * code block is that its text is exact.
    */
   code: boolean;
+  /**
+   * The table this line stands for, when the note has one. A card draws it
+   * rather than describing it: a note whose whole content is a table showed
+   * nothing of the table at all, which read as the table having been lost.
+   */
+  table?: Table;
 }
 
 export interface CardPreview {
@@ -508,15 +517,19 @@ export function cardPreview(content: string): CardPreview {
       continue;
     }
     if (block.kind === "table") {
-      // A card is two lines wide; a table is not going to fit in one. The
-      // header row is what says what the table is about, so that is what the
-      // preview shows, as plain text rather than as a grid.
+      // Drawn, not described. The card clamps how many rows it shows, which is
+      // `CARD_TABLE_ROWS`; the text is the header row, for a preview that has
+      // no room to draw anything and for an accessible name.
       const heading = block.table.header.filter((cell) => cell !== "").join(" · ");
       lines.push({
         ...parseLine(""),
         text: heading === "" ? "Table" : heading,
         index: block.from,
         code: false,
+        table: {
+          ...block.table,
+          rows: block.table.rows.slice(0, CARD_TABLE_ROWS),
+        },
       });
       continue;
     }

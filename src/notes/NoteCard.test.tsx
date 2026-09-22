@@ -31,6 +31,26 @@ afterEach(() => {
   cleanup();
 });
 
+/**
+ * The regression: a note whose content is a table showed only its heading row
+ * as a line of words, so saving a table looked like losing it.
+ */
+describe("a note with a table", () => {
+  it("draws the table on the card", () => {
+    const { container } = render(
+      <NoteCard
+        note={note({ id: "t", content: "Costs\n| Day | Cost |\n| --- | --- |\n| Mon | 12 |" })}
+        onOpen={() => undefined}
+        onUnpin={() => undefined}
+        onExpand={() => undefined}
+        onToggleTask={() => undefined}
+      />,
+    );
+    expect(container.querySelectorAll("table")).toHaveLength(1);
+    expect(container.textContent).toContain("Mon");
+  });
+});
+
 describe("an unpinned card", () => {
   it("opens the editor when the card is clicked (brief 6.8)", () => {
     const onOpen = vi.fn();
