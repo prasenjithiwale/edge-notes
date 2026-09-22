@@ -93,29 +93,34 @@ function ResizableImage({
     const start = wrapRef.current?.getBoundingClientRect().width ?? MIN_IMAGE_WIDTH;
     const startX = event.clientX;
     const cap = maxWidth();
-    const handle = event.currentTarget;
-    handle.setPointerCapture(event.pointerId);
+
+    // On `window`, and without `setPointerCapture`. The first version captured
+    // the pointer and listened on the handle itself, which gave the drag two
+    // ways to do nothing at all: `setPointerCapture` throws where the pointer id
+    // is not one that element can capture — and it was called *before* the move
+    // and up listeners were attached, so the press ended there — and a listener
+    // on the handle dies the moment Lexical re-renders the decorator, which a
+    // press inside the editable can cause. Window listeners need no capability,
+    // cannot be refused, and outlive the element.
+    const at = (moved: PointerEvent) =>
+      Math.round(Math.min(cap, Math.max(MIN_IMAGE_WIDTH, start + moved.clientX - startX)));
 
     const move = (moved: PointerEvent) => {
-      setDragging(
-        Math.round(Math.min(cap, Math.max(MIN_IMAGE_WIDTH, start + moved.clientX - startX))),
-      );
+      setDragging(at(moved));
     };
     const up = (ended: PointerEvent) => {
-      handle.removeEventListener("pointermove", move);
-      handle.removeEventListener("pointerup", up);
-      handle.removeEventListener("pointercancel", up);
-      const final = Math.round(
-        Math.min(cap, Math.max(MIN_IMAGE_WIDTH, start + ended.clientX - startX)),
-      );
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+      window.removeEventListener("pointercancel", up);
+      const final = at(ended);
       setDragging(null);
       // A drag that ends where it started is a click, and a click on the handle
       // is how a picture goes back to its natural size.
       commit(Math.abs(final - start) < 3 ? null : final);
     };
-    handle.addEventListener("pointermove", move);
-    handle.addEventListener("pointerup", up);
-    handle.addEventListener("pointercancel", up);
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+    window.addEventListener("pointercancel", up);
   };
 
   const nudge = (by: number) => {
@@ -130,6 +135,12 @@ function ResizableImage({
     <span
       ref={wrapRef}
       className={styles.imageWrap}
+      draggable={false}
+      onDragStart={(event) => {
+        // Everything inside a contenteditable is draggable to WebKit, and a
+        // native drag swallows the pointer stream this resize is made of.
+        event.preventDefault();
+      }}
       style={shown === null ? undefined : { width: `${String(shown)}px` }}
     >
       <img className={styles.image} src={src} alt={alt} draggable={false} />
@@ -222,7 +233,8 @@ export class ImageNode extends DecoratorNode<ReactNode> {
   }
 
   getTextContent(): string {
-    return imageMarkdownOf(this.__alt, this.__url, this.__width);
+    const latest = this.getLatest();
+    return imageMarkdownOf(latest.__alt, latest.__url, latest.__width);
   }
 
   isInline(): true {
