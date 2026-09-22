@@ -29,6 +29,9 @@ To release, see "Releasing" in the README.
   same thing.
 - **Settings lists all three shortcuts**, each with its own row and its own
   recorder.
+- **An empty line says what `/` does.** Put the caret on a blank line in a note
+  and it shows a faded "Type / to add something". The slash menu has been there
+  since 0.4.0 and nothing on screen mentioned it.
 - **`#tags`.** Write `#work` in a note and it becomes a chip under the colour
   dots; press it to see only those notes, press it again to clear. A tag is
   drawn as a tag wherever the note is shown, and pressing one in the text

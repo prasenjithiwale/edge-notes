@@ -34,6 +34,7 @@ import {
   ChangePlugin,
   FocusPlugin,
   ImagePlugin,
+  LineHintPlugin,
   LoadPlugin,
   ShortcutPlugin,
 } from "./editor/plugins";
@@ -274,6 +275,7 @@ function NoteEditorBody({ note, large = false }: NoteEditorProps) {
         <ChangePlugin content={note.content} onChange={onChangeContent} />
         <FocusPlugin />
         <ImagePlugin />
+        <LineHintPlugin />
         <ShortcutPlugin lang={lastLang} />
         <HistoryPlugin />
         <ListPlugin />

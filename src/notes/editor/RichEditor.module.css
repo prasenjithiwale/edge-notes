@@ -224,3 +224,23 @@
   vertical-align: bottom;
   box-shadow: 0 0 0 1px var(--note-edge, rgb(0 0 0 / 0.08));
 }
+
+/* The empty line the caret is on says what `/` does. Drawn on `::after` and
+   taken out of the flow, because `::before` is what holds a blank line's height
+   and an inline hint before the caret would push the caret along the line.
+   Not selectable, in both spellings (brief 7.5): it is not part of the note. */
+.paragraph[data-line-hint] {
+  position: relative;
+}
+
+.paragraph[data-line-hint]::after {
+  content: attr(data-line-hint);
+  position: absolute;
+  top: 0;
+  inset-inline-start: 0;
+  color: var(--text-tertiary);
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-select: none;
+  white-space: nowrap;
+}

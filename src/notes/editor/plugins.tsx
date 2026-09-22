@@ -2,8 +2,13 @@ import { useCallback, useEffect, useRef } from "react";
 import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
 import {
   $getRoot,
+  $getSelection,
+  $isParagraphNode,
+  $isRangeSelection,
+  BLUR_COMMAND,
   COMMAND_PRIORITY_CRITICAL,
   COMMAND_PRIORITY_LOW,
+  FOCUS_COMMAND,
   KEY_DOWN_COMMAND,
   PASTE_COMMAND,
 } from "lexical";
@@ -239,6 +244,103 @@ export function ImagePlugin() {
       });
     };
   }, [insert]);
+
+  return null;
+}
+
+/**
+ * What an empty line says when the caret is on it (idea: the slash menu was
+ * there from 0.4.0 and nothing on screen mentioned it).
+ */
+const LINE_HINT = "Type / to add something";
+
+/**
+ * The paragraph the hint belongs on, or null. Call inside a read.
+ *
+ * Three things have to be true: the caret is on a line, that line is an empty
+ * paragraph, and it is not the whole note — a note with nothing in it already
+ * has the editor's own placeholder, and two hints on one line is one too many.
+ */
+export function $hintedKey(): string | null {
+  const selection = $getSelection();
+  if (!$isRangeSelection(selection) || !selection.isCollapsed()) {
+    return null;
+  }
+  const node = selection.anchor.getNode();
+  const block = $isParagraphNode(node) ? node : node.getTopLevelElement();
+  if (!$isParagraphNode(block) || block.getChildrenSize() !== 0) {
+    return null;
+  }
+  if (block.getPreviousSibling() === null && block.getNextSibling() === null) {
+    return null;
+  }
+  return block.getKey();
+}
+
+/**
+ * The hint itself, written onto the paragraph's own element as an attribute and
+ * drawn by CSS.
+ *
+ * An update listener and the DOM, deliberately — not a node transform and not an
+ * `editor.update`. Registering a transform commits an update, which fires the
+ * listeners, which is exactly the loop that froze the app in 0.2.0. Nothing here
+ * touches the editor state at all, so there is nothing to loop on.
+ */
+export function LineHintPlugin() {
+  const [editor] = useLexicalComposerContext();
+
+  useEffect(() => {
+    let marked: HTMLElement | null = null;
+    const clear = () => {
+      marked?.removeAttribute("data-line-hint");
+      marked = null;
+    };
+    const apply = () => {
+      editor.getEditorState().read(() => {
+        const key = $hintedKey();
+        const element = key === null ? null : editor.getElementByKey(key);
+        if (element === null) {
+          clear();
+          return;
+        }
+        if (marked !== element) {
+          clear();
+          marked = element;
+        }
+        element.setAttribute("data-line-hint", LINE_HINT);
+      });
+    };
+
+    const unregister = [
+      editor.registerUpdateListener(apply),
+      // The hint is about where the caret is, so it goes with the caret: an
+      // unfocused editor showing it would be a line claiming to be the one being
+      // typed on.
+      editor.registerCommand(
+        BLUR_COMMAND,
+        () => {
+          clear();
+          return false;
+        },
+        COMMAND_PRIORITY_LOW,
+      ),
+      editor.registerCommand(
+        FOCUS_COMMAND,
+        () => {
+          apply();
+          return false;
+        },
+        COMMAND_PRIORITY_LOW,
+      ),
+    ];
+    apply();
+    return () => {
+      for (const off of unregister) {
+        off();
+      }
+      clear();
+    };
+  }, [editor]);
 
   return null;
 }
