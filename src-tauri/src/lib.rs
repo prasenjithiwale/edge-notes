@@ -12,6 +12,7 @@ pub mod images;
 pub mod links;
 pub mod platform;
 pub mod reminders;
+pub mod share;
 pub mod tray;
 
 use std::sync::Arc;
@@ -92,6 +93,10 @@ pub fn run() {
             commands::notes_update,
             commands::notes_set_pinned,
             commands::images_save,
+            commands::share_copy_rich,
+            commands::share_copy_text,
+            commands::share_sheet,
+            commands::share_sheet_supported,
             commands::notes_reorder,
             commands::notes_delete,
             commands::notes_restore,

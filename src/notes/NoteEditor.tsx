@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 
 import { IconButton } from "../components/IconButton";
+import { ShareMenu } from "./ShareMenu";
 import { cx } from "../lib/cx";
 import { CLASSIC_COLORS, NOTE_COLORS, type Note, type NoteColor } from "../lib/ipc";
 import { prefersReducedMotion } from "../lib/motion";
@@ -231,6 +232,7 @@ function NoteEditorBody({ note, large = false }: NoteEditorProps) {
               <LockOpen size={16} strokeWidth={1.75} />
             )}
           </IconButton>
+          <ShareMenu content={note.content} />
           <IconButton
             label="Delete note"
             className={styles.footerButton}

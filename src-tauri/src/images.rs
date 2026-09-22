@@ -100,6 +100,16 @@ pub fn import(app: &AppHandle, path: &std::path::Path) -> AppResult<String> {
     save(app, &bytes)
 }
 
+/// The file behind a name, for handing to something outside this app (the
+/// share sheet). `None` for anything that is not a name this module wrote.
+pub fn path(app: &AppHandle, name: &str) -> Option<std::path::PathBuf> {
+    if !is_safe_name(name) {
+        return None;
+    }
+    let path = dir(app).ok()?.join(name);
+    path.is_file().then_some(path)
+}
+
 /// The bytes behind a name, and what to call them. `None` for anything that is
 /// not a name this module could have written.
 pub fn read(app: &AppHandle, name: &str) -> Option<(Vec<u8>, &'static str)> {

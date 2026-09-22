@@ -183,6 +183,60 @@ pub fn images_save(app: AppHandle, request: tauri::ipc::Request<'_>) -> AppResul
     crate::images::save(&app, bytes)
 }
 
+/// One note on the clipboard as rich text and plain text together, so whatever
+/// it is pasted into takes the best of the two it understands.
+#[tauri::command]
+pub fn share_copy_rich(app: AppHandle, html: String, text: String) -> AppResult<()> {
+    crate::share::copy_rich(&app, &html, &text)
+}
+
+/// One note on the clipboard as the Markdown it is stored as.
+#[tauri::command]
+pub fn share_copy_text(app: AppHandle, text: String) -> AppResult<()> {
+    crate::share::copy_text(&app, &text)
+}
+
+/// Whether this platform has a share sheet at all, so the menu can leave the
+/// item out rather than offer one that does nothing.
+#[tauri::command]
+#[must_use]
+pub const fn share_sheet_supported() -> bool {
+    crate::share::sheet_supported()
+}
+
+/// macOS's own share sheet, with the note's text and the files of its pictures.
+///
+/// `images` are names, not paths: they are checked against the one folder this
+/// app writes to, exactly as the image protocol checks them, so the webview
+/// cannot name a file it was not given.
+#[tauri::command]
+pub fn share_sheet(app: AppHandle, text: String, images: Vec<String>) -> AppResult<()> {
+    if !crate::share::sheet_supported() {
+        return Err(AppError::Share("this system has no share sheet".to_owned()));
+    }
+    let files: Vec<std::path::PathBuf> = images
+        .iter()
+        .filter_map(|name| crate::images::path(&app, name))
+        .collect();
+    let window = app
+        .get_webview_window(crate::dock::DOCK_WINDOW_LABEL)
+        .ok_or(AppError::WindowNotFound(crate::dock::DOCK_WINDOW_LABEL))?;
+
+    // AppKit, so the main thread — an Objective-C call from the poll thread or
+    // from a command's own thread aborts the process (see `apply_rect`).
+    app.run_on_main_thread(move || {
+        #[cfg(target_os = "macos")]
+        if !crate::platform::macos::share_sheet(&window, &text, &files) {
+            log::error!("share: the sheet could not be shown");
+        }
+        #[cfg(not(target_os = "macos"))]
+        {
+            let _ = (&window, &text, &files);
+        }
+    })?;
+    Ok(())
+}
+
 /// Write the manual order of the notes list, newest arrangement first.
 ///
 /// The frontend sends the whole visible list rather than one move, because it is

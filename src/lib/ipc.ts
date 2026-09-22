@@ -446,6 +446,26 @@ export async function imagesSave(bytes: Uint8Array): Promise<string> {
   return invoke<string>("images_save", bytes);
 }
 
+/** One note on the clipboard as rich text and plain text at once. */
+export async function shareCopyRich(html: string, text: string): Promise<void> {
+  await callResult<null>("share_copy_rich", { html, text });
+}
+
+/** One note on the clipboard as the Markdown it is stored as. */
+export async function shareCopyText(text: string): Promise<void> {
+  await callResult<null>("share_copy_text", { text });
+}
+
+/** Whether this system has a share sheet to offer (macOS today). */
+export function shareSheetSupported(): Promise<boolean> {
+  return callResult<boolean>("share_sheet_supported");
+}
+
+/** The system share sheet, with the note's text and its pictures' files. */
+export async function shareSheet(text: string, images: string[]): Promise<void> {
+  await callResult<null>("share_sheet", { text, images });
+}
+
 export async function notesReorder(ids: string[]): Promise<void> {
   await callResult<null>("notes_reorder", { ids });
 }

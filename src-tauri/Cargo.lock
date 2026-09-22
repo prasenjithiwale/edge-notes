@@ -2192,6 +2192,9 @@ version = "0.7.0"
 dependencies = [
  "keyring",
  "log",
+ "objc2",
+ "objc2-app-kit",
+ "objc2-foundation",
  "rusqlite",
  "serde",
  "serde_json",

@@ -29,6 +29,15 @@ To release, see "Releasing" in the README.
   same thing.
 - **Settings lists all three shortcuts**, each with its own row and its own
   recorder.
+- **Share a note.** A Share button in the note's header offers three ways out:
+  **Copy as rich text**, which is what Apple Notes, OneNote, Mail and Word
+  actually read — headings, lists, links and the pictures themselves all arrive
+  intact, because the images travel embedded rather than as links only this app
+  can follow; **Copy as Markdown**, the note exactly as it is stored, for
+  Obsidian, Bear or an editor; and on macOS **Share…**, the system's own list of
+  apps, which is the only way to reach Messages or AirDrop. The plain-text
+  flavour goes on the clipboard beside the rich one, so an app that takes no
+  formatting still gets something readable.
 - **Pictures can be resized.** Drag the corner of an image in a note; click the
   corner to put it back to its natural size, or use ← and → when it has the
   keyboard. The size is stored in the note itself as `![alt|320](url)`, so it

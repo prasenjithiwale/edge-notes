@@ -209,3 +209,66 @@ fn reveal_after_resize(window: &WebviewWindow) -> bool {
         .map_err(|error| log::error!("macos: failed to start the reveal: {error}"))
         .is_ok()
 }
+
+/// macOS's own share sheet: the list of apps the system keeps, anchored to the
+/// panel (`NSSharingServicePicker`).
+///
+/// The items are what the receiving apps actually want — the note's text, plus
+/// the files of any pictures in it. Notes, Mail and Messages all take that
+/// pairing; handing them a blob of HTML instead would put tags in a message.
+///
+/// The caller holds the panel open while this is up (`Input::SetModal`): the
+/// picker takes focus, and a blur with the cursor elsewhere is how the panel
+/// decides everyone has left.
+///
+/// Returns false if the window is not there to anchor to, so the caller can say
+/// so instead of appearing to have done something.
+pub fn share_sheet(window: &WebviewWindow, text: &str, files: &[std::path::PathBuf]) -> bool {
+    use objc2::AllocAnyThread;
+    use objc2::rc::Retained;
+    use objc2::runtime::AnyObject;
+    use objc2_app_kit::{NSSharingServicePicker, NSView};
+    use objc2_foundation::{NSArray, NSPoint, NSRect, NSRectEdge, NSSize, NSString, NSURL};
+
+    let Ok(view) = window.ns_view() else {
+        log::error!("macos: no view to anchor the share sheet to");
+        return false;
+    };
+    if view.is_null() {
+        return false;
+    }
+
+    let mut items: Vec<Retained<AnyObject>> = Vec::new();
+    if !text.trim().is_empty() {
+        let string = NSString::from_str(text);
+        items.push(unsafe { Retained::cast_unchecked(string) });
+    }
+    for file in files {
+        let Some(path) = file.to_str() else {
+            continue;
+        };
+        let url = NSURL::fileURLWithPath(&NSString::from_str(path));
+        items.push(unsafe { Retained::cast_unchecked(url) });
+    }
+    if items.is_empty() {
+        return false;
+    }
+
+    // SAFETY: the view pointer is the window's own, this runs on the main
+    // thread (the caller marshals it), and the items are all objects the picker
+    // is documented to take.
+    unsafe {
+        let view: &NSView = &*view.cast::<NSView>();
+        let array = NSArray::from_retained_slice(&items);
+        let picker = NSSharingServicePicker::initWithItems(NSSharingServicePicker::alloc(), &array);
+        // Anchored to the panel's leading edge rather than to a control: the
+        // button that opened it is a webview pixel, not a view AppKit knows.
+        let bounds = view.bounds();
+        let anchor = NSRect::new(
+            NSPoint::new(bounds.origin.x, bounds.origin.y),
+            NSSize::new(bounds.size.width.min(8.0), bounds.size.height),
+        );
+        picker.showRelativeToRect_ofView_preferredEdge(anchor, view, NSRectEdge::MinX);
+    }
+    true
+}

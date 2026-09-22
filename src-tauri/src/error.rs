@@ -30,6 +30,9 @@ pub enum AppError {
     /// Something was pasted that is not an image this app can store or show.
     #[error("{0}")]
     InvalidImage(String),
+    /// The clipboard or the share sheet refused a note.
+    #[error("{0}")]
+    Share(String),
     #[error("{0}")]
     ShortcutUnavailable(String),
     #[error("launch at login could not be changed: {0}")]
@@ -57,6 +60,7 @@ impl AppError {
             Self::Io(_) => "io",
             Self::InvalidUrl(_) => "invalid_url",
             Self::InvalidImage(_) => "invalid_image",
+            Self::Share(_) => "share",
             Self::ShortcutUnavailable(_) => "shortcut_unavailable",
             Self::Autostart(_) => "autostart",
             Self::Locked(_) => "locked",

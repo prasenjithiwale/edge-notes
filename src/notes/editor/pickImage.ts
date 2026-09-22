@@ -1,4 +1,5 @@
-import { dockSetModal, imagesSave } from "../../lib/ipc";
+import { imagesSave } from "../../lib/ipc";
+import { withModal } from "../../lib/modal";
 
 /** What the picker will offer, and what `images::sniff` will accept. */
 const ACCEPT = "image/png,image/jpeg,image/gif,image/webp";
@@ -11,12 +12,16 @@ const ACCEPT = "image/png,image/jpeg,image/gif,image/webp";
  * permission — the webview reads the bytes the user handed it and passes them to
  * the same command a paste uses.
  *
- * **The panel is told a picker is up first.** The picker takes focus, and a blur
- * with the cursor away from the panel is how the panel knows everyone has left
- * (brief 6.3) — without this it would slide shut and take the editor, and the
- * caret the image was going to land at, with it.
+ * **The panel is held open while the picker is up** (`withModal`). The picker
+ * takes focus, and a blur with the cursor away from the panel is how the panel
+ * knows everyone has left (brief 6.3) — without this it would slide shut and
+ * take the editor, and the caret the image was going to land at, with it.
  */
 export async function pickImages(): Promise<string[]> {
+  return withModal(pick);
+}
+
+async function pick(): Promise<string[]> {
   const input = document.createElement("input");
   input.type = "file";
   input.accept = ACCEPT;
@@ -25,7 +30,6 @@ export async function pickImages(): Promise<string[]> {
   input.style.display = "none";
   document.body.append(input);
 
-  void dockSetModal(true);
   try {
     const files = await new Promise<File[]>((resolve) => {
       // `cancel` fires when the picker is dismissed; `focus` on the window is
@@ -64,6 +68,5 @@ export async function pickImages(): Promise<string[]> {
     return names;
   } finally {
     input.remove();
-    void dockSetModal(false);
   }
 }

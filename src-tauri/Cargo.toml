@@ -42,6 +42,25 @@ tauri-plugin-clipboard-manager = "2.3.3"
 [target.'cfg(target_os = "macos")'.dependencies]
 tauri-nspanel = { git = "https://github.com/ahkohd/tauri-nspanel", rev = "c9ec2130422200f0863b23dfdad02b133a529b07" }
 keyring = { version = "3.6.3", features = ["apple-native"] }
+# AppKit's own share sheet (`NSSharingServicePicker`), for "Share…". Both crates
+# are already in the build — Tauri and tao are built on them — so this declares
+# what is there rather than adding anything to it, and only the classes named
+# here are compiled in. Isolated in platform/macos.rs like everything else.
+objc2 = "0.6"
+objc2-app-kit = { version = "0.3", default-features = false, features = [
+  "std",
+  "NSSharingService",
+  "NSView",
+  "NSResponder",
+  "NSGraphics",
+] }
+objc2-foundation = { version = "0.3", default-features = false, features = [
+  "std",
+  "NSArray",
+  "NSString",
+  "NSURL",
+  "NSGeometry",
+] }
 
 [target.'cfg(target_os = "windows")'.dependencies]
 keyring = { version = "3.6.3", features = ["windows-native"] }

@@ -32,7 +32,7 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: ledge: http://ledge.localhost https://ledge.localhost"
+      "csp": "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: ledge: http://ledge.localhost https://ledge.localhost; connect-src 'self' ipc: http://ipc.localhost ledge: http://ledge.localhost https://ledge.localhost"
     }
   },
   "bundle": {

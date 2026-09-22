@@ -4136,6 +4136,73 @@ images beside the text files is the obvious fix and nobody has asked for it yet.
 - [ ] Delete a note with a picture, empty the archive, restart: the file is gone
       from `<app data>/images/`
 
+## Sharing a note (22 Sep 2026)
+
+Asked for as "a note should be shareable to accepted formats for popular apps
+like apple notes, onedrive". The four decisions that shaped it were the owner's:
+rich text *and* Markdown *and* the macOS share sheet, with pictures embedded.
+
+### The format question answers itself
+
+Apple Notes and OneNote do not read Markdown. What they read — and what Mail,
+Word, Slack and every other place a note might land read — is **HTML on the
+clipboard**. So the note is rendered twice: `lib/noteHtml.ts` writes the HTML,
+and the plain text goes on the clipboard beside it in the same write, so an app
+that takes no formatting still gets something readable rather than a page of
+tags. `tauri-plugin-clipboard-manager`'s `write_html(html, alt)` is exactly that
+pair.
+
+`noteToHtml` is a second rendering of the *same parse*: `lib/markdown.ts` is
+still the only thing that decides what a note says. Two choices inside it are
+worth writing down:
+
+- **A checklist becomes `☐`/`☑` in a `<ul>`**, not `<input type="checkbox">`. A
+  checkbox pasted into Notes arrives disabled or not at all; a box someone can
+  see and tick by hand beats one that is there and dead.
+- **A picture that cannot travel says `[image]`** rather than arriving as a
+  broken-image icon in someone else's note. Nothing is invented and nothing is
+  silently dropped.
+
+### The pictures have to go with it
+
+A note holds `ledge://localhost/<name>`, which means nothing outside this app.
+So anything shared carries the bytes: `buildShare` fetches each picture through
+the app's own scheme and inlines it as a `data:` URI, which is what makes a note
+arrive *complete* in Notes or Mail. That needed one CSP entry — `connect-src`
+for the `ledge` scheme — and no new command: the protocol handler was already
+there for drawing them.
+
+The share sheet gets the files instead, as `NSURL`s beside the text, because
+that is the pairing Notes, Mail and Messages take. Handing them HTML would put
+tags in a message.
+
+### AppKit, and the blur that is not a departure
+
+`NSSharingServicePicker`, in `platform/macos.rs` with everything else macOS.
+`objc2` and `objc2-app-kit` are declared dependencies now — both were already
+compiled into the build (Tauri and tao are built on them), so this names what is
+there rather than adding to it, and only the classes listed in the feature list
+come in.
+
+It is a window, so it blurs the panel — the same problem the file picker had,
+and the same answer: `Input::SetModal`, now behind a shared `lib/modal.ts` that
+both callers use. The release is the part that matters, so it happens when the
+work finishes, when the window is focused again, *and* on a timeout: a panel
+holding itself open for a sheet that has gone would never close again.
+
+### Checklist
+
+- [ ] Share › Copy as rich text, then ⌘V into Apple Notes: headings, lists and
+      the picture all arrive
+- [ ] The same paste into Mail and into a plain-text field (the second should be
+      readable text, not tags)
+- [ ] Share › Copy as Markdown, pasted into an editor, is the note byte for byte
+- [ ] Share… opens the system sheet, and the panel is still there when it closes
+      — including when it is dismissed without choosing anything
+- [ ] Sharing a note with two pictures carries both
+- [ ] A note whose picture file is missing shares as `[image]` rather than
+      failing
+
 ## M0 acceptance checklist
 
 From brief section 12. Run `npm run tauri dev`, then work through these with
