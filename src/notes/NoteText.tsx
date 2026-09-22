@@ -6,6 +6,7 @@ import { highlight, languageLabel } from "../lib/code";
 import { cx } from "../lib/cx";
 import { openUrl } from "../lib/ipc";
 import { parseBlocks, parseInline, plainText, type Inline, type Line } from "../lib/markdown";
+import { splitTags } from "../lib/tags";
 import styles from "./NoteText.module.css";
 
 /**
@@ -16,11 +17,49 @@ function stop(event: MouseEvent) {
   event.stopPropagation();
 }
 
+/**
+ * `#tags` inside a run of plain text (idea 16).
+ *
+ * Not an inline node in `markdown.ts`: the parser's nodes are what the editor
+ * writes back, and a node the serialiser would have to reproduce is a way to
+ * lose a note. A tag is plain text that is *drawn* differently, so nothing about
+ * what is stored changes.
+ *
+ * Each one is a real button, because `.openable .text :is(a, button)` is what
+ * lets something inside a card keep its own click; the panel reads `data-tag`
+ * from it rather than every card threading a callback down to here.
+ */
+function renderText(text: string, key: number): ReactNode {
+  const parts = splitTags(text);
+  if (parts.length === 1) {
+    return <Fragment key={key}>{text}</Fragment>;
+  }
+  return (
+    <Fragment key={key}>
+      {parts.map((part, index) =>
+        typeof part === "string" ? (
+          <Fragment key={index}>{part}</Fragment>
+        ) : (
+          <button
+            key={index}
+            type="button"
+            className={styles.tag}
+            data-tag={part.tag}
+            title={`Filter by #${part.tag}`}
+          >
+            {`#${part.tag}`}
+          </button>
+        ),
+      )}
+    </Fragment>
+  );
+}
+
 function renderNodes(nodes: Inline[]): ReactNode {
   return nodes.map((node, index) => {
     switch (node.kind) {
       case "text":
-        return <Fragment key={index}>{node.text}</Fragment>;
+        return renderText(node.text, index);
       case "bold":
         return (
           <strong key={index} className={styles.bold}>

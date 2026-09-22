@@ -4,6 +4,7 @@ import {
   notesCreate,
   notesDelete,
   notesList,
+  notesReorder,
   notesRestore,
   notesSetPinned,
   notesUpdate,
@@ -40,6 +41,15 @@ const savedContent = new Map<string, string>();
  */
 let editBaseline: { id: string; content: string } | null = null;
 
+/**
+ * The list in the order it is meant to be in. The manual order is a setting, and
+ * this is the only thing that reads it, so the store and `db::notes::list`
+ * cannot end up sorting differently (idea 16).
+ */
+function sorted(notes: Note[]): Note[] {
+  return sortNotes(notes, useSettingsStore.getState().settings["notes.manualOrder"]);
+}
+
 function beginEdit(id: string, content: string) {
   editBaseline = { id, content };
 }
@@ -67,6 +77,8 @@ interface NotesStore {
   query: string;
   /** Palette id, or null for "All" (brief 6.7). */
   colorFilter: NoteColor | null;
+  /** A `#tag` the notes must carry, without the hash, or null for all (idea 16). */
+  tagFilter: string | null;
 
   load: () => Promise<void>;
   createNote: () => Promise<void>;
@@ -105,6 +117,13 @@ interface NotesStore {
   closeSearch: () => void;
   setQuery: (query: string) => void;
   setColorFilter: (color: NoteColor | null) => void;
+  setTagFilter: (tag: string | null) => void;
+  /**
+   * Put the list in the order `ids` gives, and keep it that way. The first call
+   * is what turns the manual order on — dragging a card is someone saying where
+   * it goes, and asking them to find a setting first would be asking twice.
+   */
+  reorder: (ids: string[]) => Promise<void>;
 }
 
 export const useNotesStore = create<NotesStore>((set, get) => ({
@@ -117,6 +136,7 @@ export const useNotesStore = create<NotesStore>((set, get) => ({
   searching: false,
   query: "",
   colorFilter: null,
+  tagFilter: null,
 
   load: async () => {
     try {
@@ -125,7 +145,7 @@ export const useNotesStore = create<NotesStore>((set, get) => ({
       for (const note of notes) {
         savedContent.set(note.id, note.content);
       }
-      set({ notes: sortNotes(notes), loaded: true });
+      set({ notes: sorted(notes), loaded: true });
     } catch (error: unknown) {
       console.error("notes: load failed", error);
       set({ loaded: true });
@@ -209,7 +229,7 @@ export const useNotesStore = create<NotesStore>((set, get) => ({
         const notes = state.notes.map((note) =>
           note.id === id ? { ...note, pinned: value } : note,
         );
-        return { notes: state.editingId === null ? sortNotes(notes) : notes };
+        return { notes: state.editingId === null ? sorted(notes) : notes };
       });
     };
 
@@ -321,7 +341,7 @@ export const useNotesStore = create<NotesStore>((set, get) => ({
 
     await get().flush(editingId);
     // Safe to re-sort now that the cursor has left.
-    set((state) => ({ notes: sortNotes(state.notes) }));
+    set((state) => ({ notes: sorted(state.notes) }));
   },
 
   remove: async (id) => {
@@ -368,7 +388,7 @@ export const useNotesStore = create<NotesStore>((set, get) => ({
       const restored = await notesRestore(pending.note.id);
       refreshArchive();
       savedContent.set(restored.id, restored.content);
-      set((state) => ({ notes: sortNotes([...state.notes, restored]) }));
+      set((state) => ({ notes: sorted([...state.notes, restored]) }));
     } catch (error: unknown) {
       console.error("notes: restore failed", error);
     }
@@ -434,5 +454,39 @@ export const useNotesStore = create<NotesStore>((set, get) => ({
   setColorFilter: (color) => {
     // Clicking the selected dot again clears the filter (brief 6.7).
     set((state) => ({ colorFilter: state.colorFilter === color ? null : color }));
+  },
+
+  setTagFilter: (tag) => {
+    // Pressing the selected chip again clears it, as the colour dots do.
+    set((state) => ({
+      tagFilter:
+        state.tagFilter !== null && tag !== null && state.tagFilter.toLowerCase() === tag.toLowerCase()
+          ? null
+          : tag,
+    }));
+  },
+
+  reorder: async (ids) => {
+    const position = new Map(ids.map((id, index) => [id, index]));
+    // Optimistic, and with the same numbers Rust is about to store, so the list
+    // does not jump between the drop and the write landing.
+    set((state) => ({
+      notes: sortNotes(
+        state.notes.map((note) => {
+          const index = position.get(note.id);
+          return index === undefined ? note : { ...note, sortOrder: index };
+        }),
+        true,
+      ),
+    }));
+    try {
+      await notesReorder(ids);
+      await useSettingsStore.getState().patch({ "notes.manualOrder": true });
+    } catch (error: unknown) {
+      console.error("notes: reorder failed", error);
+      // Whatever is stored is the truth; a failed write must not leave the list
+      // showing an order nothing has.
+      await get().load();
+    }
   },
 }));

@@ -158,6 +158,16 @@ pub fn notes_set_pinned(db: State<'_, Database>, id: String, pinned: bool) -> Ap
     db.with(|connection| notes::set_pinned(connection, &id, pinned))
 }
 
+/// Write the manual order of the notes list, newest arrangement first.
+///
+/// The frontend sends the whole visible list rather than one move, because it is
+/// what is on screen that is being agreed to — and it only sends it when nothing
+/// is filtered out, so an order written here is the order of every note.
+#[tauri::command]
+pub fn notes_reorder(db: State<'_, Database>, ids: Vec<String>) -> AppResult<()> {
+    db.with(|connection| notes::reorder(connection, &ids))
+}
+
 /// Soft delete, so the undo toast can put it straight back.
 #[tauri::command]
 pub fn notes_delete(db: State<'_, Database>, id: String) -> AppResult<()> {

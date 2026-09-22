@@ -29,6 +29,18 @@ To release, see "Releasing" in the README.
   same thing.
 - **Settings lists all three shortcuts**, each with its own row and its own
   recorder.
+- **`#tags`.** Write `#work` in a note and it becomes a chip under the colour
+  dots; press it to see only those notes, press it again to clear. A tag is
+  drawn as a tag wherever the note is shown, and pressing one in the text
+  filters by it. Tags are plain text — nothing is stored about them, so export
+  and the editor are untouched, and `# heading`, `https://…/#anchor` and
+  anything inside code are deliberately not tags.
+- **Drag notes into your own order.** Drop a card where you want it and the list
+  stays that way, newest notes still arriving on top. ⌥↑ and ⌥↓ move the card
+  the keyboard is on, so it is not a mouse-only feature. Dragging is off while
+  the list is filtered or searched — the order would only be of what you can
+  see. "Keep my order" in Settings › General turns it back to most recently
+  edited first.
 
 ### Changed
 

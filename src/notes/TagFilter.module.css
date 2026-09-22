@@ -1,0 +1,34 @@
+/* Under the colour dots, on the same 12 px gutter. Wraps rather than scrolls:
+   a row that scrolls sideways hides the tag you were looking for. */
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 6px;
+  box-sizing: border-box;
+  padding: 0 12px 6px;
+  flex: none;
+}
+
+/* Chips are fully rounded (brief 7.1), and neutral: a tag is not a colour. */
+.chip {
+  border: none;
+  border-radius: 999px;
+  background: var(--surface-sunken);
+  color: var(--text-secondary);
+  font-size: 11px;
+  line-height: 1;
+  height: 20px;
+  padding: 0 8px;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chipSelected {
+  background: var(--surface);
+  color: var(--text-primary);
+  font-weight: 600;
+  box-shadow: inset 0 0 0 1px var(--text-tertiary);
+}

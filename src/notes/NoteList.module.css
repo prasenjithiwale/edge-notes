@@ -11,3 +11,37 @@
   min-height: 0;
   overscroll-behavior: contain;
 }
+
+/* A card's slot while the list can be rearranged. The wrapper exists so the
+   drop line has somewhere to be drawn that is not the card's own border. */
+.slot {
+  position: relative;
+  border-radius: 10px;
+}
+
+/* The card being carried stays visible — a card that vanishes takes the sense
+   of where it came from with it — but plainly lifted out of the list. */
+.dragging {
+  opacity: 0.4;
+}
+
+/* Where it would land. Drawn in the text colour, not the accent: the accent is
+   focus rings and Keep open (brief 7.1). */
+.dropBefore::before,
+.dropAfter::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--text-primary);
+}
+
+.dropBefore::before {
+  top: -5px;
+}
+
+.dropAfter::after {
+  bottom: -5px;
+}

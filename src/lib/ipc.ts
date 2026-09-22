@@ -59,6 +59,12 @@ export interface Note {
   /** Unix milliseconds. */
   createdAt: number;
   updatedAt: number;
+  /**
+   * Where the note sits in the manual order, or null for one that has never
+   * been dragged. Only read when `notes.manualOrder` is on, where a null sorts
+   * to the top — a note written since the last drag belongs where it was made.
+   */
+  sortOrder: number | null;
 }
 
 export const PRIORITIES = ["high", "medium", "low"] as const;
@@ -192,6 +198,8 @@ export interface Settings {
   "notes.lastColor": NoteColor;
   /** The language the editor writes after a new code fence; "" for none. */
   "notes.lastCodeLang": string;
+  /** The list is in the order the cards were dragged into (idea 16). */
+  "notes.manualOrder": boolean;
   "shortcut.newNote": string;
   /** Quick capture, and a note from the clipboard. Empty means "not bound". */
   "shortcut.quickCapture": string;
@@ -411,6 +419,15 @@ export function notesUpdate(
 
 export function notesSetPinned(id: string, pinned: boolean): Promise<Note> {
   return callResult<Note>("notes_set_pinned", { id, pinned });
+}
+
+/**
+ * Write the manual order: the whole visible list, in the order it is now on
+ * screen. Sent whole rather than as one move, because what is being agreed to is
+ * what is on screen — and only ever when nothing is filtered out.
+ */
+export async function notesReorder(ids: string[]): Promise<void> {
+  await callResult<null>("notes_reorder", { ids });
 }
 
 export async function notesDelete(id: string): Promise<void> {

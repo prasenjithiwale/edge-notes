@@ -70,6 +70,7 @@ pub fn run() {
             commands::notes_create,
             commands::notes_update,
             commands::notes_set_pinned,
+            commands::notes_reorder,
             commands::notes_delete,
             commands::notes_restore,
             commands::archive_list,

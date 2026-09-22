@@ -86,6 +86,10 @@ pub struct Settings {
     /// a fence with no language.
     #[serde(rename = "notes.lastCodeLang")]
     pub notes_last_code_lang: String,
+    /// Not in brief 9.2: the notes list is in the order the cards were dragged
+    /// into, rather than most recently edited first (idea 16).
+    #[serde(rename = "notes.manualOrder")]
+    pub notes_manual_order: bool,
     #[serde(rename = "shortcut.newNote")]
     pub shortcut_new_note: String,
     /// Not in brief 9.2: quick capture, and a note from the clipboard (brief 14).
@@ -192,6 +196,9 @@ impl Default for Settings {
             theme: Theme::System,
             notes_last_color: NoteColor::Yellow,
             notes_last_code_lang: String::new(),
+            // Recency until something is dragged: the order a widget shows by
+            // default should be the one nobody had to arrange.
+            notes_manual_order: false,
             shortcut_new_note: "CmdOrCtrl+Alt+N".to_owned(),
             // Beside the new-note one. Not ⌥⌘Space: that is macOS's own Finder
             // search, and the system takes it first, so the default would be a
@@ -247,6 +254,8 @@ pub struct SettingsPatch {
     pub notes_last_color: Option<NoteColor>,
     #[serde(rename = "notes.lastCodeLang")]
     pub notes_last_code_lang: Option<String>,
+    #[serde(rename = "notes.manualOrder")]
+    pub notes_manual_order: Option<bool>,
     #[serde(rename = "shortcut.newNote")]
     pub shortcut_new_note: Option<String>,
     #[serde(rename = "shortcut.quickCapture")]
@@ -277,6 +286,16 @@ pub struct SettingsPatch {
     pub focus_today: Option<u32>,
     #[serde(rename = "focus.streak")]
     pub focus_streak: Option<u32>,
+}
+
+/// Just the one flag the notes repository needs, so `list` can decide its own
+/// ORDER BY without reading (and parsing) every setting on every load.
+pub fn manual_order(connection: &Connection) -> AppResult<bool> {
+    read(
+        connection,
+        "notes.manualOrder",
+        Settings::default().notes_manual_order,
+    )
 }
 
 fn read<T: for<'de> Deserialize<'de>>(
@@ -333,6 +352,7 @@ pub fn get(connection: &Connection) -> AppResult<Settings> {
             "notes.lastCodeLang",
             defaults.notes_last_code_lang,
         )?,
+        notes_manual_order: read(connection, "notes.manualOrder", defaults.notes_manual_order)?,
         shortcut_new_note: read(connection, "shortcut.newNote", defaults.shortcut_new_note)?,
         shortcut_quick_capture: read(
             connection,
@@ -436,6 +456,9 @@ pub fn update(connection: &Connection, patch: &SettingsPatch) -> AppResult<Setti
                 .filter(|c| !c.is_whitespace())
                 .collect::<String>(),
         )?;
+    }
+    if let Some(value) = patch.notes_manual_order {
+        write(connection, "notes.manualOrder", &value)?;
     }
     if let Some(value) = &patch.shortcut_new_note {
         write(connection, "shortcut.newNote", value)?;

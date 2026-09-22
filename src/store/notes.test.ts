@@ -16,6 +16,7 @@ function note(overrides: Partial<Note> & { id: string }): Note {
     pinned: false,
     createdAt: 1_000,
     updatedAt: 1_000,
+    sortOrder: null,
     ...overrides,
   };
 }

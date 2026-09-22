@@ -30,7 +30,7 @@ brief section 4, it says so, because the project rules require asking first.
 | 13 | Real full-text search | Feature | M | High |
 | 14 | Quick capture and clipboard to note | Feature | S–M | High | **Built, 0.7.0** |
 | 15 | Sync across devices, end-to-end encrypted | Feature | L | High |
-| 16 | Tags, and drag to reorder | Feature | M | Medium |
+| 16 | Tags, and drag to reorder | Feature | M | Medium | **Built, 0.7.0** |
 | 17 | Images and screenshots in notes | Feature | M–L | Medium |
 | 18 | Notes pinned to an app or website | Feature | M–L | Medium |
 | 19 | Snooze a note, and calendar export for tasks | Feature | S–M | Medium |
@@ -317,6 +317,10 @@ data model was built for it: UUID v7 ids, `updated_at` and soft-delete tombstone
 **Effort** L. **New dependencies** depend on the level; all need approval.
 
 ### 16. Tags, and drag to reorder
+
+**Built in 0.7.0** — tags parsed out of the note text, never stored; the manual
+order in the `sort_order` column brief 14.4 reserved. See
+[progress.md](progress.md).
 
 **What.** `#tags` in note text become filter chips beside the colours; cards can
 be dragged into a manual order.

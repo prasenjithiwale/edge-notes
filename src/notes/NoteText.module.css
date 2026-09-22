@@ -274,3 +274,20 @@
 .h3:not(:first-child) {
   margin-top: 8px;
 }
+
+/* A tag is a word in the note that happens to be a filter, so it reads as text
+   first: the note's own ink, a little quieter, on the same wash the inline code
+   uses. No accent — that is for focus rings and Keep open (brief 7.1). */
+.tag {
+  border: none;
+  padding: 0 4px;
+  border-radius: 4px;
+  font: inherit;
+  color: inherit;
+  opacity: var(--note-secondary-opacity, 0.72);
+  background: var(--code-inline-bg);
+}
+
+.tag:hover {
+  opacity: 1;
+}

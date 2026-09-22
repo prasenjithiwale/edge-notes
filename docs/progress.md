@@ -3888,6 +3888,96 @@ text still in it, because that text is the only copy of what was typed.
       clipboard in it
 - [ ] A shortcut another app owns is refused, and the old one still works
 
+## Tags, and an order you arrange yourself (22 Sep 2026)
+
+Idea 16, in the same 0.7.0 as quick capture.
+
+### A tag is something the note says, not something the app keeps
+
+There is no tags table, no column and no migration. `lib/tags.ts` reads `#work`
+out of the note text on the way to the screen, and that is the whole of the
+storage design: export, sync and the editor's markdown round trip cannot be
+affected by a feature that never writes anything.
+
+What the parser *refuses* is where the work is. Three shapes are not tags, and
+each would otherwise put a chip on the filter row for something nobody tagged:
+
+- **`# heading`** — the dialect's heading needs the space, so requiring a letter
+  or digit straight after the hash rules it out.
+- **`https://example.com/#anchor`** — the hash there follows a word character,
+  so the match is anchored to the start of a line, a space or an opening bracket.
+- **`` `#!/bin/sh` ``, and fenced blocks** — code is blanked before the scan.
+
+Case is not part of a tag (`#Work` and `#work` are one), and the first spelling
+written is the one shown, because that is the one somebody chose.
+
+### Drawn as a tag, and a tag you can press
+
+`NoteText` splits a run of plain text around its tags and draws each as a
+**button**, not a span, because `.openable .text :is(a, button)` is already what
+lets something inside a card keep its own click out of the card's covering
+button. Pressing one filters by it.
+
+The click is answered by **one listener on the panel**, reading `data-tag` off
+whatever was pressed — in a card, in the reader, in the expanded panel alike.
+The alternative was threading a callback through five components to reach a run
+of text inside a line inside a block.
+
+It is deliberately not an inline node in `lib/markdown.ts`. The parser's nodes
+are what the editor writes back, and a node the serialiser would have to
+reproduce is a way to lose a note.
+
+### The order is one decision, made in the SQL
+
+`sort_order` (REAL, reserved since the first migration) finally has a writer.
+`notes.manualOrder` decides which ORDER BY `db::notes::list` uses, and
+`db::settings::manual_order` is a one-key read so the list does not parse every
+setting on every load. The frontend's `sortNotes(notes, manual)` mirrors it, and
+the store has a single `sorted()` that reads the setting — the two sorts cannot
+drift, which they must not, because the store re-sorts after every edit and SQL
+sorts on every load.
+
+A null `sort_order` sorts **first** (`COALESCE(sort_order, -1e18)`), so a note
+written since the last arrangement is at the top where it was just made, rather
+than at the bottom where a `NULLS LAST` would have put it.
+
+`notes::reorder` rewrites the whole list rather than giving the moved row a
+midpoint between its neighbours. The first drag has no values to sit between —
+every row is null until something writes one — so a midpoint needs a backfill
+too, and that is two paths to keep in step instead of one. The ceiling is
+recorded in a `ponytail:` comment at the function.
+
+Two things it does not do: it does not touch `updated_at` (arranging is not
+editing, and bumping it would reorder the list the drag just arranged), and it
+is **not offered while the list is filtered or searched** — an order written
+from a filtered list is an order for the cards you can see, with the rest put
+somewhere nobody asked for.
+
+### The gesture, and the way without a mouse
+
+A card is dragged by itself. A grip would be another control on every card, and
+one that appears on hover is one macOS may never show (brief 7.5). The drop line
+is drawn in `--text-primary`, not the accent, which is still only focus rings
+and Keep open.
+
+⌥↑ and ⌥↓ move the card the keyboard is on, through the same `reorder`. The
+focus is put back on the moved card after the re-render, because it is a new
+element by then and the next press would otherwise move a different note.
+
+### Checklist
+
+- [ ] Write `#work` in a note: a chip appears under the dots, pressing it shows
+      only that note, pressing it again clears
+- [ ] Press the `#work` *in the note text*: same filter
+- [ ] A note with `# Heading`, a URL with a `#anchor` and a fenced block with
+      `#!/bin/sh` add no chips
+- [ ] Drag a card above another: it stays there after a restart
+- [ ] ⌥↓ on a focused card moves it down and keeps the focus on it
+- [ ] With a colour or a search active, cards cannot be dragged
+- [ ] A new note appears at the top even after arranging
+- [ ] Settings › General › Keep my order, off: the list goes back to most
+      recently edited first
+
 ## M0 acceptance checklist
 
 From brief section 12. Run `npm run tauri dev`, then work through these with

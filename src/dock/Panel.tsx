@@ -19,6 +19,7 @@ import {
   type SecurityStatus,
 } from "../lib/ipc";
 import { facetColors, filterNotes } from "../lib/notes";
+import { facetTags } from "../lib/tags";
 import { openTaskCount, taskReminders } from "../lib/tasks";
 import { isRunning } from "../lib/pomodoro";
 import { useTasksStore } from "../store/tasks";
@@ -28,6 +29,7 @@ import { ArchiveView } from "../notes/ArchiveView";
 import { LockedView } from "../notes/LockedView";
 import { QuickCapture } from "../notes/QuickCapture";
 import { ColorFilter } from "../notes/ColorFilter";
+import { TagFilter } from "../notes/TagFilter";
 import { EmptyState } from "../notes/EmptyState";
 import { NoteEditor } from "../notes/NoteEditor";
 import { NoteList } from "../notes/NoteList";
@@ -128,6 +130,9 @@ export function Panel({ className }: PanelProps) {
   const setQuery = useNotesStore((state) => state.setQuery);
   const closeSearch = useNotesStore((state) => state.closeSearch);
   const setColorFilter = useNotesStore((state) => state.setColorFilter);
+  const tagFilter = useNotesStore((state) => state.tagFilter);
+  const setTagFilter = useNotesStore((state) => state.setTagFilter);
+  const reorder = useNotesStore((state) => state.reorder);
 
   const loadArchive = useArchiveStore((state) => state.load);
   const archived = useArchiveStore((state) => state.items.length);
@@ -243,16 +248,37 @@ export function Panel({ className }: PanelProps) {
     () => facetColors(queryMatches, NOTE_COLORS, colorFilter),
     [queryMatches, colorFilter],
   );
-  const visible = useMemo(
-    () => filterNotes(queryMatches, { color: colorFilter }),
-    [queryMatches, colorFilter],
+  // Tags come from the query matches for the same reason the dots do: filtering
+  // to one tag must not take away the chips needed to switch to another.
+  const tags = useMemo(
+    () => facetTags(queryMatches, tagFilter),
+    [queryMatches, tagFilter],
   );
+  const visible = useMemo(
+    () => filterNotes(queryMatches, { color: colorFilter, tag: tagFilter }),
+    [queryMatches, colorFilter, tagFilter],
+  );
+  /**
+   * Arranging is only offered when the list on screen is the whole list. A drop
+   * inside a filtered list would write an order for the cards it can see and
+   * quietly decide where everything else went.
+   */
+  const canReorder =
+    query.trim() === "" && colorFilter === null && tagFilter === null;
 
   // The keydown listener is registered once, so it reads the current value
   // through a ref rather than closing over a stale one. Written in an effect,
   // because a ref must not be touched during render.
   const settingsOpenRef = useRef(false);
   const archiveOpenRef = useRef(false);
+  /** What ⌥↑/⌥↓ would rearrange: the visible ids, and whether it may. */
+  const orderRef = useRef<{ ids: string[]; enabled: boolean }>({
+    ids: [],
+    enabled: false,
+  });
+  useEffect(() => {
+    orderRef.current = { ids: visible.map((note) => note.id), enabled: canReorder };
+  }, [visible, canReorder]);
   useEffect(() => {
     settingsOpenRef.current = showSettings;
     archiveOpenRef.current = showArchive;
@@ -298,6 +324,40 @@ export function Panel({ className }: PanelProps) {
       if (event.key === "ArrowDown" || event.key === "ArrowUp") {
         // Inside a text field the arrows belong to the caret.
         if (isTextField(event.target) || notesStore.view === "focus") {
+          return;
+        }
+        // ⌥ with the arrow moves the card instead of the focus, so the list can
+        // be arranged without a mouse — dragging is the gesture, not the only
+        // way (brief 7.5: nothing essential may be pointer-only).
+        if (event.altKey) {
+          if (notesStore.view !== "notes" || !orderRef.current.enabled) {
+            return;
+          }
+          const focused = document.activeElement;
+          const card =
+            focused instanceof HTMLElement
+              ? focused.closest<HTMLElement>("[data-note-id]")
+              : null;
+          const id = card?.dataset.noteId;
+          if (id === undefined) {
+            return;
+          }
+          const ids = [...orderRef.current.ids];
+          const from = ids.indexOf(id);
+          const to = from + (event.key === "ArrowDown" ? 1 : -1);
+          if (from === -1 || to < 0 || to >= ids.length) {
+            return;
+          }
+          event.preventDefault();
+          ids.splice(to, 0, ...ids.splice(from, 1));
+          void notesStore.reorder(ids);
+          // The card is a new element after the re-render, so the focus has to
+          // be put back on it or the next press would move a different note.
+          requestAnimationFrame(() => {
+            panelRef.current
+              ?.querySelector<HTMLElement>(`[data-note-id="${id}"] [data-card]`)
+              ?.focus();
+          });
           return;
         }
         // Each list tab has its own kind of row; the movement is the same.
@@ -490,6 +550,16 @@ export function Panel({ className }: PanelProps) {
       className={cx(className, styles.panel)}
       data-slide="true"
       data-panel=""
+      // A `#tag` drawn in a note is a button carrying `data-tag`, and this is
+      // the one listener that answers all of them — in a card, in the reader and
+      // in the expanded panel alike. The alternative was threading a callback
+      // through five components to reach a run of text.
+      onClick={(event) => {
+        const tag = (event.target as HTMLElement).closest<HTMLElement>("[data-tag]");
+        if (tag?.dataset.tag !== undefined) {
+          setTagFilter(tag.dataset.tag);
+        }
+      }}
     >
       <header className={styles.header}>
         {searching ? (
@@ -591,6 +661,10 @@ export function Panel({ className }: PanelProps) {
                 />
               )}
 
+              {tags.length > 0 && (
+                <TagFilter tags={tags} selected={tagFilter} onSelect={setTagFilter} />
+              )}
+
               {/* Nothing until the first load resolves, so the panel never flashes
               an empty state on the way in. */}
               {!loaded ? null : isEmpty ? (
@@ -616,6 +690,13 @@ export function Panel({ className }: PanelProps) {
                   }}
                   onExpand={openExpanded}
                   onToggleTask={toggleTask}
+                  onReorder={
+                    canReorder
+                      ? (ids) => {
+                          void reorder(ids);
+                        }
+                      : undefined
+                  }
                 />
               )}
             </div>

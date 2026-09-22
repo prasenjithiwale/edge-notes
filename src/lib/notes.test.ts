@@ -30,6 +30,7 @@ function note(overrides: Partial<Note> = {}): Note {
     pinned: false,
     createdAt: 1_760_000_000_000,
     updatedAt: 1_760_000_000_000,
+    sortOrder: null,
     ...overrides,
   };
 }
@@ -56,10 +57,44 @@ describe("sortNotes", () => {
     expect(sortNotes([second, first]).map((n) => n.id)).toEqual(["bbb", "aaa"]);
   });
 
+  /**
+   * Idea 16. The manual order has to mean the same thing here as in
+   * `db::notes::list`, because both sort the same list — the store re-sorts
+   * after every edit and SQL sorts on every load.
+   */
+  it("follows the dragged order when asked, with a new note still on top", () => {
+    const dragged = note({ id: "a", updatedAt: 1_000, sortOrder: 0 });
+    const also = note({ id: "b", updatedAt: 9_000, sortOrder: 1 });
+    const fresh = note({ id: "c", updatedAt: 5_000, sortOrder: null });
+
+    expect(sortNotes([also, fresh, dragged], true).map((n) => n.id)).toEqual([
+      "c",
+      "a",
+      "b",
+    ]);
+    // Without it, nothing changes: recency decides.
+    expect(sortNotes([also, fresh, dragged]).map((n) => n.id)).toEqual(["b", "c", "a"]);
+  });
+
+  it("still puts pinned notes above the arrangement", () => {
+    const pinned = note({ id: "a", sortOrder: 9, pinned: true });
+    const first = note({ id: "b", sortOrder: 0 });
+    expect(sortNotes([first, pinned], true).map((n) => n.id)).toEqual(["a", "b"]);
+  });
+
   it("does not mutate its input", () => {
     const input = [note({ id: "a", updatedAt: 1 }), note({ id: "b", updatedAt: 2 })];
     sortNotes(input);
     expect(input.map((n) => n.id)).toEqual(["a", "b"]);
+  });
+});
+
+describe("filterNotes by tag", () => {
+  it("keeps only the notes carrying the tag, however it was capitalised", () => {
+    const work = note({ id: "a", content: "ship it #Work" });
+    const home = note({ id: "b", content: "milk #home" });
+    expect(filterNotes([work, home], { tag: "work" }).map((n) => n.id)).toEqual(["a"]);
+    expect(filterNotes([work, home], { tag: null }).map((n) => n.id)).toEqual(["a", "b"]);
   });
 });
 

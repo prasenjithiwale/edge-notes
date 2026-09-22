@@ -4,6 +4,7 @@
  * rows) is derived with the formatting in `markdown.ts`.
  */
 import type { Note } from "./ipc";
+import { hasTag } from "./tags";
 
 /** A note with nothing but whitespace is discarded when the editor closes. */
 export function isNoteEmpty(content: string): boolean {
@@ -15,11 +16,21 @@ export function isNoteEmpty(content: string): boolean {
  * so two notes saved in the same millisecond keep a stable order instead of
  * flickering. Mirrors the ORDER BY in the notes repository — the list is sorted
  * in both places, and they must agree or a reload would reshuffle the panel.
+ *
+ * With `manual`, the order is the one the cards were dragged into (idea 16): a
+ * note with no `sortOrder` has never been dragged and sorts to the top, which is
+ * where a note written since the last arrangement was made.
  */
-export function sortNotes(notes: Note[]): Note[] {
+export function sortNotes(notes: Note[], manual = false): Note[] {
   return [...notes].sort((a, b) => {
     if (a.pinned !== b.pinned) {
       return a.pinned ? -1 : 1;
+    }
+    if (manual) {
+      const byOrder = (a.sortOrder ?? -Infinity) - (b.sortOrder ?? -Infinity);
+      if (byOrder !== 0) {
+        return byOrder;
+      }
     }
     return byRecentEdit(a, b);
   });
@@ -35,6 +46,8 @@ function byRecentEdit(a: Note, b: Note): number {
 export interface NoteFilter {
   /** Palette id, or null for "All". */
   color?: string | null;
+  /** A `#tag` the note must carry, without the hash, or null for all tags. */
+  tag?: string | null;
   /** Free text; matched case-insensitively against the whole note. */
   query?: string;
 }
@@ -42,12 +55,16 @@ export interface NoteFilter {
 export function filterNotes(notes: Note[], filter: NoteFilter): Note[] {
   const query = filter.query?.trim().toLowerCase() ?? "";
   const color = filter.color ?? null;
+  const tag = filter.tag ?? null;
 
   return notes.filter((note) => {
     if (color !== null && note.color !== color) {
       return false;
     }
     if (query.length > 0 && !note.content.toLowerCase().includes(query)) {
+      return false;
+    }
+    if (tag !== null && !hasTag(note, tag)) {
       return false;
     }
     return true;

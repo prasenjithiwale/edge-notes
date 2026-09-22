@@ -33,6 +33,7 @@ function note(overrides: Partial<Note> & { id: string }): Note {
     pinned: false,
     createdAt: 1_760_000_000_000,
     updatedAt: 1_760_000_000_000,
+    sortOrder: null,
     ...overrides,
   };
 }
@@ -79,6 +80,7 @@ const SETTINGS: Settings = {
   theme: "system",
   "notes.lastColor": "yellow",
   "notes.lastCodeLang": "",
+  "notes.manualOrder": false,
   "shortcut.newNote": "CmdOrCtrl+Alt+N",
   "shortcut.quickCapture": "CmdOrCtrl+Alt+Space",
   "shortcut.clipboardNote": "CmdOrCtrl+Alt+V",

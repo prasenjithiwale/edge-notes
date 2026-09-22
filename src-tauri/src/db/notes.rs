@@ -87,7 +87,7 @@ impl NoteColor {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Note {
     pub id: String,
@@ -99,14 +99,19 @@ pub struct Note {
     /// Unix milliseconds.
     pub created_at: i64,
     pub updated_at: i64,
+    /// Where the note sits in the manual order (brief 14.4's reserved column),
+    /// or `None` for one that has never been dragged. Only read when
+    /// `notes.manualOrder` is on; a null sorts to the top, which is where a note
+    /// made since the last drag belongs.
+    pub sort_order: Option<f64>,
 }
 
 /// Notes soft-deleted longer ago than this are purged at startup (brief 9.1).
 pub const PURGE_AFTER_MS: i64 = 30 * 24 * 60 * 60 * 1000;
 
-const SELECT_COLUMNS: &str = "id, content, color, pinned, created_at, updated_at";
+const SELECT_COLUMNS: &str = "id, content, color, pinned, created_at, updated_at, sort_order";
 
-type Row = (String, String, String, bool, i64, i64);
+type Row = (String, String, String, bool, i64, i64, Option<f64>);
 
 fn row_to_note(row: &rusqlite::Row<'_>) -> rusqlite::Result<Row> {
     Ok((
@@ -116,6 +121,7 @@ fn row_to_note(row: &rusqlite::Row<'_>) -> rusqlite::Result<Row> {
         row.get(3)?,
         row.get(4)?,
         row.get(5)?,
+        row.get(6)?,
     ))
 }
 
@@ -127,15 +133,27 @@ fn build(raw: Row) -> AppResult<Note> {
         pinned: raw.3,
         created_at: raw.4,
         updated_at: raw.5,
+        sort_order: raw.6,
     })
 }
 
 /// Active notes: pinned first, then most recently edited (brief 6.8, and the
-/// `pinned` column brief 9.1 reserved for exactly this).
+/// `pinned` column brief 9.1 reserved for exactly this) — or in the order the
+/// cards were dragged into, once `notes.manualOrder` is on.
+///
+/// The setting is read here rather than passed in so that every caller, and the
+/// frontend's `sortNotes`, cannot disagree about the order: there is one answer
+/// and this is where it is decided. A null `sort_order` sorts first, so a note
+/// written since the last drag is at the top where it was just created.
 pub fn list(connection: &Connection) -> AppResult<Vec<Note>> {
+    let order = if crate::db::settings::manual_order(connection)? {
+        "pinned DESC, COALESCE(sort_order, -1e18) ASC, updated_at DESC, id DESC"
+    } else {
+        "pinned DESC, updated_at DESC, id DESC"
+    };
     let sql = format!(
         "SELECT {SELECT_COLUMNS} FROM notes WHERE deleted_at IS NULL
-         ORDER BY pinned DESC, updated_at DESC, id DESC"
+         ORDER BY {order}"
     );
     let mut statement = connection.prepare(&sql)?;
     let rows = statement.query_map([], row_to_note)?;
@@ -167,6 +185,9 @@ pub fn create(connection: &Connection, color: NoteColor, now: i64) -> AppResult<
         pinned: false,
         created_at: now,
         updated_at: now,
+        // Null until something is dragged, and null sorts to the top of the
+        // manual order: a note just created belongs where it was created.
+        sort_order: None,
     };
     connection.execute(
         "INSERT INTO notes (id, content, color, created_at, updated_at)
@@ -218,6 +239,27 @@ pub fn set_pinned(connection: &Connection, id: &str, pinned: bool) -> AppResult<
         return Err(AppError::NoteNotFound(id.to_owned()));
     }
     get(connection, id)?.ok_or_else(|| AppError::NoteNotFound(id.to_owned()))
+}
+
+/// Write the manual order: `ids` in the order they are now on screen.
+///
+/// The whole list is rewritten rather than one row given a fractional value
+/// between its new neighbours, because the first drag has no values to sit
+/// between — every note's `sort_order` is null until something writes one — and
+/// a backfill plus a midpoint is two paths to keep in step instead of one.
+/// `updated_at` is left alone: arranging is not editing, and bumping it would
+/// reorder the list the drag just arranged.
+///
+/// ponytail: rewrites every row in the list on each drop. The panel holds tens
+/// of notes, so this is a handful of microseconds; if a list ever runs to
+/// thousands, give the moved row a midpoint and keep this as the backfill.
+pub fn reorder(connection: &Connection, ids: &[String]) -> AppResult<()> {
+    let mut statement = connection
+        .prepare("UPDATE notes SET sort_order = ?2 WHERE id = ?1 AND deleted_at IS NULL")?;
+    for (position, id) in ids.iter().enumerate() {
+        statement.execute(params![id, position as f64])?;
+    }
+    Ok(())
 }
 
 /// Soft delete: the row stays so undo is instant and sync can see the tombstone.
@@ -279,6 +321,50 @@ mod tests {
         }
         assert!(NoteColor::parse("magenta").is_err());
         assert!(NoteColor::parse("Yellow").is_err());
+    }
+
+    /// Idea 16. The order is one decision, made in the SQL: nothing is manual
+    /// until the setting says so, and then it is exactly what was dragged.
+    #[test]
+    fn the_manual_order_is_what_was_written_and_a_new_note_is_still_on_top() {
+        let c = db();
+        let first = create(&c, NoteColor::Teal, T0).expect("first");
+        let second = create(&c, NoteColor::Blue, T0 + 1).expect("second");
+        let third = create(&c, NoteColor::Pink, T0 + 2).expect("third");
+
+        // Recency until something is dragged.
+        let ids: Vec<String> = list(&c).expect("list").into_iter().map(|n| n.id).collect();
+        assert_eq!(
+            ids,
+            vec![third.id.clone(), second.id.clone(), first.id.clone()]
+        );
+
+        reorder(&c, &[first.id.clone(), third.id.clone(), second.id.clone()]).expect("reorder");
+        crate::db::settings::update(
+            &c,
+            &crate::db::settings::SettingsPatch {
+                notes_manual_order: Some(true),
+                ..Default::default()
+            },
+        )
+        .expect("settings");
+
+        let listed = list(&c).expect("list");
+        let ids: Vec<String> = listed.iter().map(|n| n.id.clone()).collect();
+        assert_eq!(
+            ids,
+            vec![first.id.clone(), third.id.clone(), second.id.clone()]
+        );
+        assert_eq!(listed[0].sort_order, Some(0.0));
+
+        // Arranging is not editing: the timestamps are where they were.
+        assert_eq!(listed[0].updated_at, T0);
+
+        // A note written since the last drag has no place in the order yet, and
+        // the top is where it was just made.
+        let fresh = create(&c, NoteColor::Mint, T0 + 3).expect("fresh");
+        let ids: Vec<String> = list(&c).expect("list").into_iter().map(|n| n.id).collect();
+        assert_eq!(ids[0], fresh.id);
     }
 
     #[test]

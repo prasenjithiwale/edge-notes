@@ -21,6 +21,7 @@ import {
 } from "../lib/ipc";
 import { copyText } from "../lib/clipboard";
 import { useDockStore } from "../store/dock";
+import { useNotesStore } from "../store/notes";
 import { applyPanelTranslucency, applyTabSize, useSettingsStore } from "../store/settings";
 import styles from "./SettingsView.module.css";
 import {
@@ -948,6 +949,20 @@ export function SettingsView({ onClose }: SettingsViewProps) {
       )}
 
       <Group title="General">
+        <SwitchSetting
+          label="Keep my order"
+          description="Notes stay where they are dragged, instead of the most recently edited first."
+          checked={settings["notes.manualOrder"]}
+          onChange={(checked) => {
+            void patch({ "notes.manualOrder": checked }).then(() => {
+              // The list is sorted in the store as well as in SQL, so it has to
+              // be asked again — nothing else would tell it the rule changed.
+              void useNotesStore.getState().load();
+            });
+          }}
+          {...fieldProps}
+        />
+
         <SwitchSetting
           label="Task reminders"
           description="A notification when a task falls due."

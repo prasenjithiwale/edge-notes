@@ -42,6 +42,7 @@ const note = {
   pinned: false,
   createdAt: 1_000,
   updatedAt: 1_000,
+  sortOrder: null,
 };
 
 /**
