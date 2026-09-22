@@ -342,6 +342,15 @@ export function dockToggle(): Promise<void> {
 }
 
 /** Grow the open panel for an expanded note, or return it to normal. */
+/**
+ * A picker of ours is in front of the panel. It is not the interaction lock: a
+ * blur clears that, and this is here exactly because the blur a picker causes
+ * has to be ignored — the panel must still be there when the picker goes.
+ */
+export function dockSetModal(value: boolean): Promise<void> {
+  return call("dock_set_modal", { value });
+}
+
 export function dockSetLarge(value: boolean): Promise<void> {
   return call("dock_set_large", { value });
 }

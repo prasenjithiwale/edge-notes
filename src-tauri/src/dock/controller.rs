@@ -61,6 +61,15 @@ pub enum Input {
     },
     SetKeepOpen(bool),
     SetInteractionLock(bool),
+    /// A window of *our own* is up in front of the panel — the file picker that
+    /// adds an image is the only one so far.
+    ///
+    /// It is not the interaction lock, because the two answer different
+    /// questions. The lock says a field of ours has focus, which is why a blur
+    /// clears it: another app has focus, so ours cannot. This says the focus
+    /// went to something the user opened *from* the panel, so a blur means
+    /// nothing at all and the panel must still be there when they come back.
+    SetModal(bool),
     AnimationDone(Phase),
     Toggle,
     WindowBlurred,
@@ -168,6 +177,8 @@ pub struct DockController {
     phase: Phase,
     keep_open: bool,
     interaction_lock: bool,
+    /// A picker or panel of ours is in front; see `Input::SetModal`.
+    modal: bool,
     /// Opened by shortcut or tray: does not auto-close on cursor leave (6.3).
     opened_by_shortcut: bool,
     /// When the panel was last opened deliberately, so a blur that arrives in the
@@ -204,6 +215,7 @@ impl DockController {
             phase: Phase::Collapsed,
             keep_open: false,
             interaction_lock: false,
+            modal: false,
             opened_by_shortcut: false,
             opened_deliberately_at: None,
             press: None,
@@ -290,6 +302,7 @@ impl DockController {
             Input::Cursor { x, y } => self.on_cursor(x, y, now),
             Input::SetKeepOpen(value) => self.on_keep_open(value, now),
             Input::SetInteractionLock(value) => self.on_interaction_lock(value, now),
+            Input::SetModal(value) => self.on_modal(value, now),
             Input::AnimationDone(phase) => self.on_animation_done(phase),
             Input::Toggle => self.on_toggle(now),
             Input::WindowBlurred => self.on_blur(now),
@@ -362,7 +375,7 @@ impl DockController {
     }
 
     fn should_close(&self, now: Instant) -> bool {
-        if self.keep_open || self.interaction_lock || self.opened_by_shortcut {
+        if self.keep_open || self.interaction_lock || self.modal || self.opened_by_shortcut {
             return false;
         }
         let Some(left) = self.leave_since else {
@@ -457,6 +470,19 @@ impl DockController {
         vec![Action::EmitState(self.state())]
     }
 
+    /// The panel stays out while a picker of ours is up, and the close delay
+    /// starts again when it goes — the same shape as the interaction lock, so a
+    /// cancelled picker behaves like a field that lost focus.
+    fn on_modal(&mut self, value: bool, now: Instant) -> Vec<Action> {
+        self.modal = value;
+        if !value && !self.cursor_is_inside() {
+            // Restart the close delay rather than closing on a stale timestamp,
+            // exactly as releasing the interaction lock does.
+            self.leave_since = Some(now);
+        }
+        Vec::new()
+    }
+
     fn on_interaction_lock(&mut self, value: bool, now: Instant) -> Vec<Action> {
         self.interaction_lock = value;
         if !value && !self.cursor_is_inside() {
@@ -516,6 +542,11 @@ impl DockController {
 
     fn on_blur(&mut self, now: Instant) -> Vec<Action> {
         if self.keep_open || !self.phase.is_expanded() {
+            return Vec::new();
+        }
+        if self.modal {
+            // The focus went to a picker the user opened from this panel. It is
+            // the one blur that is not somebody leaving.
             return Vec::new();
         }
         if self
@@ -1400,6 +1431,44 @@ mod tests {
         c.handle(Input::WindowBlurred, ms(t0, 200));
         assert_eq!(c.phase(), Phase::Open);
         c.tick(ms(t0, 600));
+        assert_eq!(c.phase(), Phase::Closing);
+    }
+
+    /// The file picker that adds an image is our own window, and while it is up
+    /// the panel has no focus and the cursor is nowhere near it. Both of those
+    /// normally mean "gone"; neither does here.
+    #[test]
+    fn a_picker_of_ours_holds_the_panel_open_through_a_blur() {
+        let mut c = controller();
+        let t0 = Instant::now();
+        hover_open(&mut c, t0);
+        c.handle(Input::SetInteractionLock(true), ms(t0, 150));
+
+        c.handle(Input::SetModal(true), ms(t0, 200));
+        c.handle(
+            Input::Cursor {
+                x: AWAY.0,
+                y: AWAY.1,
+            },
+            ms(t0, 250),
+        );
+        c.handle(Input::WindowBlurred, ms(t0, 300));
+        c.tick(ms(t0, 1_500));
+        assert_eq!(c.phase(), Phase::Open, "the picker is still up");
+
+        // Cancelled or finished. The editor underneath still holds the
+        // interaction lock — it never stopped being open — so the panel is
+        // still there, which is the whole point of coming back to it.
+        c.handle(Input::SetModal(false), ms(t0, 2_000));
+        c.tick(ms(t0, 2_600));
+        assert_eq!(c.phase(), Phase::Open);
+
+        // And when the editor does close, the delay runs from then rather than
+        // from a timestamp taken before the picker was ever opened.
+        c.handle(Input::SetInteractionLock(false), ms(t0, 3_000));
+        c.tick(ms(t0, 3_200));
+        assert_eq!(c.phase(), Phase::Open, "the close delay starts again");
+        c.tick(ms(t0, 3_500));
         assert_eq!(c.phase(), Phase::Closing);
     }
 

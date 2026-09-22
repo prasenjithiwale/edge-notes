@@ -35,8 +35,9 @@ To release, see "Releasing" in the README.
   filters by it. Tags are plain text — nothing is stored about them, so export
   and the editor are untouched, and `# heading`, `https://…/#anchor` and
   anything inside code are deliberately not tags.
-- **Pictures in notes.** Paste a screenshot into a note, or drop an image file
-  on the panel and it becomes a note of its own. The file is stored beside the
+- **Pictures in notes.** Type `/image` in a note to pick a file, paste a
+  screenshot straight in, or drop an image file on the panel and it becomes a
+  note of its own. The file is stored beside the
   notes and the note itself holds only a link to it, so a note is still plain
   text — and the picture is served to the panel through the app's own scheme,
   never from a path the webview names. Files nothing refers to any more are

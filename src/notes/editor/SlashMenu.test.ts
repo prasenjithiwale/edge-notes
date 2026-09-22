@@ -17,6 +17,9 @@ describe("the slash menu's blocks", () => {
       "bullet",
       "ordered",
       "codeblock",
+      // A picture is storable since 0.7.0: `![alt](url)`, round-tripped like
+      // every other shape.
+      "image",
       "bold",
       "italic",
       "strike",
@@ -33,9 +36,11 @@ describe("the slash menu's blocks", () => {
   });
 
   it("shows the key for everything that has one", () => {
-    // "Text" is the only command with no shortcut of its own.
+    // "Text" and "Image" are the two with no shortcut: one is the way back from
+    // the others, and the other opens a picker rather than changing the line.
     expect(BLOCKS.filter((block) => block.shortcut === null).map((b) => b.command)).toEqual([
       "text",
+      "image",
     ]);
     expect(BLOCKS.find((block) => block.command === "bold")?.shortcut).toMatch(/B$/);
   });
@@ -65,6 +70,8 @@ describe("the slash menu's blocks", () => {
     expect(first("strong")).toBe("Bold");
     expect(first("em")).toBe("Italic");
     expect(first("mono")).toBe("Code");
+    expect(first("picture")).toBe("Image");
+    expect(first("screenshot")).toBe("Image");
   });
 
   /** Two different things are called code; both should be findable. */

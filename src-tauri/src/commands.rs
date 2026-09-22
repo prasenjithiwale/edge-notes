@@ -66,6 +66,15 @@ pub fn dock_set_interaction_lock(
     Ok(())
 }
 
+/// A picker of ours is in front of the panel, or is no longer. Not the
+/// interaction lock: a blur clears that one, and this exists precisely because
+/// the blur it causes must be ignored.
+#[tauri::command]
+pub fn dock_set_modal(app: AppHandle, dock: State<'_, Arc<Dock>>, value: bool) -> AppResult<()> {
+    dock.input(&app, Input::SetModal(value));
+    Ok(())
+}
+
 #[tauri::command]
 pub fn dock_animation_done(
     app: AppHandle,

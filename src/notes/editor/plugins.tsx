@@ -1,10 +1,7 @@
 import { useCallback, useEffect, useRef } from "react";
 import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
 import {
-  $createParagraphNode,
   $getRoot,
-  $getSelection,
-  $isRangeSelection,
   COMMAND_PRIORITY_CRITICAL,
   COMMAND_PRIORITY_LOW,
   KEY_DOWN_COMMAND,
@@ -12,9 +9,8 @@ import {
 } from "lexical";
 
 import { formatCommandForKey } from "../formatting";
-import { IMAGE_PREFIX } from "../../lib/images";
 import { imagesSave, onImagesDropped } from "../../lib/ipc";
-import { $createImageNode } from "./ImageNode";
+import { insertImage } from "./ImageNode";
 import { $setFromMarkdown, $toMarkdown } from "./markdown";
 import { runCommand, useToolbarState } from "./toolbar";
 
@@ -189,14 +185,7 @@ export function ImagePlugin() {
 
   const insert = useCallback(
     (name: string) => {
-      editor.update(() => {
-        const selection = $getSelection();
-        if ($isRangeSelection(selection)) {
-          selection.insertNodes([$createImageNode(`${IMAGE_PREFIX}${name}`)]);
-          return;
-        }
-        $getRoot().append($createParagraphNode().append($createImageNode(`${IMAGE_PREFIX}${name}`)));
-      });
+      insertImage(editor, name);
     },
     [editor],
   );

@@ -80,6 +80,7 @@ pub fn run() {
             commands::app_quit,
             commands::dock_set_keep_open,
             commands::dock_set_interaction_lock,
+            commands::dock_set_modal,
             commands::dock_animation_done,
             commands::dock_toggle,
             commands::dock_pointer_left,

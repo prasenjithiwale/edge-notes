@@ -4036,6 +4036,35 @@ opens it, so there is somewhere to type the caption. The two cannot both fire:
 the panel's listener checks `editingId` first, and the plugin only exists while
 an editor does.
 
+### `/image`, and the one blur that means nothing
+
+Paste and drop were the two ways in, and neither is a thing you can *find*. The
+slash menu is where the editor keeps what it can do, and an image is now
+something the dialect can store, so `/image` belongs there by the menu's own
+rule. It opens a hidden `<input type="file">` — the same native picker a dialog
+plugin would open, with no dependency and no filesystem permission: the webview
+reads the bytes the user handed it and passes them to the command a paste
+already uses.
+
+**The picker is a window, and a window takes focus.** Brief 6.3 closes the panel
+when another app takes focus and the cursor is elsewhere, and `on_blur` clears
+the interaction lock for the good reason that a field of ours cannot still have
+focus when another app does. Both of those are wrong for a picker the user
+opened *from* the panel: it would have slid shut and taken the editor — and the
+caret the picture was going to land at — with it.
+
+So `Input::SetModal(bool)` is a second flag beside the lock, and the difference
+between them is the whole point. The lock says a field of ours has focus, which
+is why a blur clears it. The modal says the focus went somewhere the user sent
+it from here, so a blur means nothing at all. Releasing it restarts the close
+delay exactly as releasing the lock does, so a cancelled picker behaves like a
+field that lost focus. `a_picker_of_ours_holds_the_panel_open_through_a_blur`
+holds it, and the dock tests were run.
+
+`cancel` on the input is what says the picker was dismissed, with the window's
+own `focus` event as the fallback: a panel left holding itself open for a picker
+that has gone would be a panel that never closes again.
+
 ### Nothing accumulates
 
 `images::sweep` runs at startup, after the 30-day purge, and deletes any file no

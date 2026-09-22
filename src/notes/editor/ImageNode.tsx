@@ -1,6 +1,11 @@
 import type { ReactNode } from "react";
 import {
+  $createParagraphNode,
+  $getRoot,
+  $getSelection,
+  $isRangeSelection,
   DecoratorNode,
+  type LexicalEditor,
   type DOMExportOutput,
   type LexicalNode,
   type NodeKey,
@@ -8,7 +13,7 @@ import {
   type Spread,
 } from "lexical";
 
-import { imageSrc } from "../../lib/images";
+import { IMAGE_PREFIX, imageSrc } from "../../lib/images";
 import styles from "./RichEditor.module.css";
 
 export type SerializedImageNode = Spread<
@@ -90,6 +95,23 @@ export class ImageNode extends DecoratorNode<ReactNode> {
     }
     return <img className={styles.image} src={src} alt={this.__alt} draggable={false} />;
   }
+}
+
+/**
+ * Put a stored image into the note, at the caret if there is one and at the end
+ * if there is not. Both ways in — pasting and the picker — end here, so there is
+ * one answer to where a picture goes.
+ */
+export function insertImage(editor: LexicalEditor, name: string): void {
+  editor.update(() => {
+    const image = $createImageNode(`${IMAGE_PREFIX}${name}`);
+    const selection = $getSelection();
+    if ($isRangeSelection(selection)) {
+      selection.insertNodes([image]);
+      return;
+    }
+    $getRoot().append($createParagraphNode().append(image));
+  });
 }
 
 export function $createImageNode(url: string, alt = ""): ImageNode {

@@ -32,6 +32,8 @@ import {
 import { $setBlocksType } from "@lexical/selection";
 
 import { $createCodeNode } from "./CodeNode";
+import { insertImage } from "./ImageNode";
+import { pickImages } from "./pickImage";
 
 export type FormatCommand =
   /** Back to a plain paragraph: what the slash menu calls "Text". */
@@ -46,7 +48,13 @@ export type FormatCommand =
   | "bullet"
   | "ordered"
   | "task"
-  | "codeblock";
+  | "codeblock"
+  /**
+   * Ask for an image file and put it in the note. The only command that opens a
+   * window of its own, which is why it is also the only one that tells the dock
+   * a picker is up.
+   */
+  | "image";
 
 /** Which of the toolbar's marks and list kinds the caret is currently inside. */
 export interface ToolbarState {
@@ -138,6 +146,9 @@ export function useToolbarState(editor: LexicalEditor): ToolbarState {
 /** Whether the caret is already inside what this button applies. */
 export function isActive(command: FormatCommand, state: ToolbarState): boolean {
   switch (command) {
+    // Adding a picture is not a state the caret can be in.
+    case "image":
+      return false;
     case "text":
       return state.list === null && state.heading === 0;
     case "heading1":
@@ -174,6 +185,13 @@ export function runCommand(
   lang = "",
 ): void {
   switch (command) {
+    case "image":
+      void pickImages().then((names) => {
+        for (const name of names) {
+          insertImage(editor, name);
+        }
+      });
+      return;
     case "text":
       // Whatever kind of list this line is in, it stops being one. A line that
       // is already a paragraph is left alone, which is what `REMOVE_LIST` does.
