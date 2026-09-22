@@ -22,6 +22,8 @@ const DEFAULTS: Settings = {
   "notes.lastColor": "yellow",
   "notes.lastCodeLang": "",
   "shortcut.newNote": "CmdOrCtrl+Alt+N",
+  "shortcut.quickCapture": "CmdOrCtrl+Alt+Q",
+  "shortcut.clipboardNote": "",
   "tasks.reminders": true,
   "privacy.hideFromCapture": true,
   "panel.translucency": 0,

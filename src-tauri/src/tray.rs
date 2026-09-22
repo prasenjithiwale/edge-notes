@@ -289,75 +289,133 @@ pub fn init(app: &AppHandle) -> tauri::Result<()> {
     Ok(())
 }
 
-/// Register `accelerator` as the one global shortcut, replacing whatever is
-/// bound now. Returns the reason it could not be, which is almost always that
-/// another application already owns the combination.
-fn register_shortcut(app: &AppHandle, accelerator: &str) -> Result<(), String> {
+/// Which global shortcut a binding is, so one enum decides its setting, its
+/// default and what pressing it does.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Global {
+    /// Brief 6.11: open the panel with a new note ready to type into.
+    NewNote,
+    /// Brief 14: the one-line capture field, without the panel.
+    QuickCapture,
+    /// Brief 14: the same field, with the clipboard already in it.
+    ClipboardNote,
+}
+
+impl Global {
+    /// Every binding, so registering them is a loop rather than three calls that
+    /// can drift apart.
+    pub const ALL: [Self; 3] = [Self::NewNote, Self::QuickCapture, Self::ClipboardNote];
+
+    fn accelerator(self, settings: &Settings) -> String {
+        match self {
+            Self::NewNote => settings.shortcut_new_note.clone(),
+            Self::QuickCapture => settings.shortcut_quick_capture.clone(),
+            Self::ClipboardNote => settings.shortcut_clipboard_note.clone(),
+        }
+    }
+
+    fn run(self, app: &AppHandle) {
+        match self {
+            Self::NewNote => open_with_new_note(app),
+            Self::QuickCapture => crate::commands::open_quick_capture(app, None),
+            Self::ClipboardNote => {
+                // Read here, not in the webview: the frontend has no clipboard
+                // permission and does not need one (brief 9.5).
+                let text = read_clipboard(app);
+                crate::commands::open_quick_capture(app, text);
+            }
+        }
+    }
+}
+
+fn read_clipboard(app: &AppHandle) -> Option<String> {
+    use tauri_plugin_clipboard_manager::ClipboardExt;
+    match app.clipboard().read_text() {
+        Ok(text) if !text.trim().is_empty() => Some(text),
+        Ok(_) => None,
+        Err(error) => {
+            log::error!("clipboard: could not read text: {error}");
+            None
+        }
+    }
+}
+
+/// The settings the bindings come from, falling back to the defaults if the
+/// database cannot be read — a shortcut is not worth failing startup over.
+fn shortcut_settings(app: &AppHandle) -> Settings {
+    app.try_state::<Database>()
+        .and_then(|db| db.with(settings::get).ok())
+        .unwrap_or_default()
+}
+
+/// Register every global shortcut from the settings, replacing whatever is bound
+/// now.
+///
+/// All of them together, because the plugin's `unregister_all` is the only
+/// idempotent way to rebind and it takes the others with it. An accelerator that
+/// is empty is deliberately not bound: that is how a shortcut is turned off.
+fn register_shortcuts(app: &AppHandle, settings: &Settings) -> Result<(), String> {
     let shortcuts = app.global_shortcut();
-    // Only ever one shortcut is registered, so clearing the lot is the simplest
-    // way to make rebinding idempotent.
     if let Err(error) = shortcuts.unregister_all() {
         log::warn!("shortcut: could not clear existing shortcuts: {error}");
     }
 
-    shortcuts
-        .on_shortcut(accelerator, |app, _shortcut, event| {
-            // Both press and release arrive; acting on each would open two notes.
+    let mut failed: Option<String> = None;
+    for binding in Global::ALL {
+        let accelerator = binding.accelerator(settings);
+        if accelerator.trim().is_empty() {
+            continue;
+        }
+        let result = shortcuts.on_shortcut(accelerator.as_str(), move |app, _shortcut, event| {
+            // Both press and release arrive; acting on each would do it twice.
             if event.state() == ShortcutState::Pressed {
-                open_with_new_note(app);
+                binding.run(app);
             }
-        })
-        .map_err(|error| error.to_string())
+        });
+        if let Err(error) = result {
+            log::error!("shortcut: could not register {accelerator}: {error}");
+            failed.get_or_insert_with(|| error.to_string());
+        }
+    }
+    failed.map_or(Ok(()), Err)
 }
 
-/// Brief 6.11: one global shortcut, opening the panel with a new note ready to
-/// type into. The accelerator is a setting, so someone who has already given
-/// `CmdOrCtrl+Alt+N` to another app can move it.
+/// Brief 6.11 and 14: the global shortcuts, bound from the settings at startup.
 ///
-/// `accelerator` is `None` at startup, meaning "whatever is stored".
-pub fn bind_new_note_shortcut(app: &AppHandle, accelerator: Option<&str>) {
-    let accelerator = accelerator.map_or_else(|| stored_shortcut(app), ToOwned::to_owned);
-
-    if let Err(error) = register_shortcut(app, accelerator.as_str()) {
+/// Each accelerator is a setting, so someone who has already given a combination
+/// to another app can move it.
+pub fn bind_shortcuts(app: &AppHandle) {
+    let settings = shortcut_settings(app);
+    if let Err(error) = register_shortcuts(app, &settings) {
         // A shortcut another app already owns must not stop the widget from
         // starting, or from accepting the rest of a settings change.
-        log::error!("shortcut: could not register {accelerator}: {error}");
+        log::error!("shortcut: some shortcuts could not be registered: {error}");
     }
 }
 
-/// The accelerator in the settings table, or the default if it cannot be read.
-pub fn stored_shortcut(app: &AppHandle) -> String {
-    app.try_state::<Database>()
-        .and_then(|db| db.with(settings::get).ok())
-        .map_or_else(
-            || Settings::default().shortcut_new_note,
-            |settings| settings.shortcut_new_note,
-        )
-}
-
-/// Re-bind after the setting changes, so a new accelerator works immediately.
+/// Re-bind after a setting changes, so a new accelerator works immediately.
 ///
-/// Unlike [`bind_new_note_shortcut`] this reports failure, and puts `previous`
-/// back when the new accelerator is refused. Registration clears the old binding
-/// before it tries the new one, so without that restore a rejected accelerator
-/// left the app with no shortcut at all and nothing on screen saying so.
-pub fn try_rebind_new_note_shortcut(
+/// Unlike [`bind_shortcuts`] this reports failure and puts the old set back when
+/// the new accelerator is refused. Registration clears the old bindings before it
+/// tries the new ones, so without that restore a rejected accelerator left the
+/// app with no shortcuts at all and nothing on screen saying so.
+pub fn try_rebind_shortcuts(
     app: &AppHandle,
-    accelerator: &str,
-    previous: &str,
+    wanted: &Settings,
+    previous: &Settings,
 ) -> Result<(), String> {
-    match register_shortcut(app, accelerator) {
+    match register_shortcuts(app, wanted) {
         Ok(()) => Ok(()),
         Err(error) => {
-            if let Err(restore) = register_shortcut(app, previous) {
-                log::error!("shortcut: could not restore {previous}: {restore}");
+            if let Err(restore) = register_shortcuts(app, previous) {
+                log::error!("shortcut: could not restore the previous shortcuts: {restore}");
             }
             Err(error)
         }
     }
 }
 
-/// Re-bind after the setting changes, so a new accelerator works immediately.
-pub fn rebind_new_note_shortcut(app: &AppHandle, accelerator: &str) {
-    bind_new_note_shortcut(app, Some(accelerator));
+/// Re-bind from what is stored, after the settings have already been written.
+pub fn rebind_shortcuts(app: &AppHandle) {
+    bind_shortcuts(app);
 }

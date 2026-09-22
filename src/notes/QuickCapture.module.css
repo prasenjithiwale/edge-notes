@@ -1,0 +1,48 @@
+/* The panel at its smallest: one line and a hint, and nothing else. Padded to
+   the same rhythm as the panel's own contents so the field lands where the
+   search field would. */
+.view {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 6px;
+  padding: 12px;
+  min-height: 0;
+}
+
+/* A textarea rather than an input: a pasted clipboard can be long, and it wraps
+   here rather than scrolling sideways. Selectable text needs both spellings of
+   `user-select` to beat the chrome's `none` (brief 7.5). */
+.input {
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.45;
+  resize: none;
+  max-height: 44px;
+  overflow-y: auto;
+  cursor: text;
+  user-select: text;
+  -webkit-user-select: text;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-primary);
+}
+
+.input::placeholder {
+  color: var(--text-tertiary);
+}
+
+.input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+}
+
+.hint {
+  margin: 0;
+  font-size: 11px;
+  color: var(--text-tertiary);
+  text-align: center;
+}

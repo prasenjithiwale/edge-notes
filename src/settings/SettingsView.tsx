@@ -293,6 +293,10 @@ function SliderSetting({ label, value, range, step, onPreview, onCommit }: Slide
 }
 
 interface ShortcutSettingProps {
+  /** Which shortcut this row is, for `shortcut_set` and for the label's id. */
+  which: "newNote" | "quickCapture" | "clipboardNote";
+  label: string;
+  description: string | undefined;
   accelerator: string;
   onRecord: (accelerator: string) => void;
   error: string | null;
@@ -311,6 +315,9 @@ interface ShortcutSettingProps {
  * application.
  */
 function ShortcutSetting({
+  which,
+  label,
+  description,
   accelerator,
   onRecord,
   error,
@@ -360,14 +367,17 @@ function ShortcutSetting({
   return (
     <>
       <div className={styles.row}>
-        <span className={styles.labelWrap} id="shortcut-label">
-          <span className={styles.label}>New note shortcut</span>
+        <span className={styles.labelWrap} id={`shortcut-label-${which}`}>
+          <span className={styles.label}>{label}</span>
+          {description !== undefined && (
+            <span className={styles.description}>{description}</span>
+          )}
         </span>
         <button
           type="button"
           className={styles.recorder}
-          aria-labelledby="shortcut-label"
-          aria-describedby={message === null ? undefined : "shortcut-message"}
+          aria-labelledby={`shortcut-label-${which}`}
+          aria-describedby={message === null ? undefined : `shortcut-message-${which}`}
           data-recording={recording ? "" : undefined}
           onFocus={onFocus}
           onBlur={() => {
@@ -380,12 +390,12 @@ function ShortcutSetting({
             setHint(false);
           }}
         >
-          {recording ? "Press a shortcut" : formatAccelerator(accelerator)}
+          {recording ? "Press a shortcut" : formatAccelerator(accelerator) || "Not set"}
         </button>
       </div>
       {message !== null && (
         <p
-          id="shortcut-message"
+          id={`shortcut-message-${which}`}
           className={error !== null && !recording && !hint ? styles.error : styles.note}
           role={error !== null && !recording && !hint ? "alert" : "status"}
         >
@@ -580,6 +590,35 @@ const SIDES: Choice<Settings["dock.side"]>[] = [
   { value: "right", label: "Right" },
 ];
 
+/** Which global shortcut a row sets. Mirrors `tray::Global` on the Rust side. */
+type ShortcutName = "newNote" | "quickCapture" | "clipboardNote";
+
+/**
+ * The three global shortcuts, in the order they are used: the panel first, then
+ * the two that never open it. Adding one is adding an entry here and a variant
+ * to `tray::Global`.
+ */
+const SHORTCUTS: {
+  which: ShortcutName;
+  key: "shortcut.newNote" | "shortcut.quickCapture" | "shortcut.clipboardNote";
+  label: string;
+  description?: string;
+}[] = [
+  { which: "newNote", key: "shortcut.newNote", label: "New note shortcut" },
+  {
+    which: "quickCapture",
+    key: "shortcut.quickCapture",
+    label: "Quick capture",
+    description: "One line to write into, without opening the panel.",
+  },
+  {
+    which: "clipboardNote",
+    key: "shortcut.clipboardNote",
+    label: "Capture the clipboard",
+    description: "The same line, with whatever you last copied already in it.",
+  },
+];
+
 /** Brief M4: a small settings view inside the panel. */
 export function SettingsView({ onClose }: SettingsViewProps) {
   const settings = useSettingsStore((state) => state.settings);
@@ -589,7 +628,10 @@ export function SettingsView({ onClose }: SettingsViewProps) {
   const [monitors, setMonitors] = useState<string[]>([]);
   const [focused, setFocused] = useState(false);
   const [autostart, setAutostart] = useState<boolean | null>(null);
-  const [shortcutError, setShortcutError] = useState<string | null>(null);
+  const [shortcutError, setShortcutError] = useState<{
+    which: ShortcutName;
+    message: string;
+  } | null>(null);
   const [exportedTo, setExportedTo] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
   const [about, setAbout] = useState<AppInfo | null>(null);
@@ -932,23 +974,30 @@ export function SettingsView({ onClose }: SettingsViewProps) {
           {...fieldProps}
         />
 
-        <ShortcutSetting
-          accelerator={settings["shortcut.newNote"]}
-          error={shortcutError}
-          onRecord={(accelerator) => {
-            setShortcutError(null);
-            void shortcutSet(accelerator)
-              .then(apply)
-              .catch((error: unknown) => {
-                setShortcutError(
-                  isIpcErrorOf(error, "shortcut_unavailable")
-                    ? "Another app is using that shortcut. The old one is still set."
-                    : "That shortcut could not be set.",
-                );
-              });
-          }}
-          {...fieldProps}
-        />
+        {SHORTCUTS.map((shortcut) => (
+          <ShortcutSetting
+            key={shortcut.which}
+            which={shortcut.which}
+            label={shortcut.label}
+            description={shortcut.description}
+            accelerator={settings[shortcut.key]}
+            error={shortcutError?.which === shortcut.which ? shortcutError.message : null}
+            onRecord={(accelerator) => {
+              setShortcutError(null);
+              void shortcutSet(shortcut.which, accelerator)
+                .then(apply)
+                .catch((error: unknown) => {
+                  setShortcutError({
+                    which: shortcut.which,
+                    message: isIpcErrorOf(error, "shortcut_unavailable")
+                      ? "Another app is using that shortcut. The old one is still set."
+                      : "That shortcut could not be set.",
+                  });
+                });
+            }}
+            {...fieldProps}
+          />
+        ))}
 
         <div className={styles.row}>
           <Label text="Notes as text files" description={exportedTo ?? undefined} />

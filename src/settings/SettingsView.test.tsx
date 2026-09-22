@@ -54,7 +54,7 @@ beforeEach(() => {
       return Promise.resolve((args as { enabled: boolean }).enabled);
     }
     if (command === "shortcut_set") {
-      const { accelerator } = args as { accelerator: string };
+      const { accelerator } = args as { which: string; accelerator: string };
       return Promise.resolve({
         ...useSettingsStore.getState().settings,
         "shortcut.newNote": accelerator,
@@ -283,7 +283,7 @@ describe("the new note shortcut", () => {
     await waitFor(() => {
       expect(
         invoke.mock.calls.filter(([command]) => command === "shortcut_set"),
-      ).toEqual([["shortcut_set", { accelerator: "Shift+Cmd+KeyJ" }]]);
+      ).toEqual([["shortcut_set", { which: "newNote", accelerator: "Shift+Cmd+KeyJ" }]]);
     });
     await waitFor(() => {
       expect(screen.getByRole("button", { name: "New note shortcut" }).textContent).toBe("⇧⌘J");

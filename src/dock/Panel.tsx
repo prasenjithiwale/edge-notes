@@ -26,6 +26,7 @@ import { pomodoroReminder, usePomodoroStore } from "../store/pomodoro";
 import { moveCardFocus } from "../notes/cardFocus";
 import { ArchiveView } from "../notes/ArchiveView";
 import { LockedView } from "../notes/LockedView";
+import { QuickCapture } from "../notes/QuickCapture";
 import { ColorFilter } from "../notes/ColorFilter";
 import { EmptyState } from "../notes/EmptyState";
 import { NoteEditor } from "../notes/NoteEditor";
@@ -94,6 +95,7 @@ export function Panel({ className }: PanelProps) {
   const setKeepOpen = useDockStore((state) => state.setKeepOpen);
   const phase = useDockStore((state) => state.phase);
   const large = useDockStore((state) => state.large);
+  const quick = useDockStore((state) => state.quick);
   const setLock = useDockStore((state) => state.setLock);
 
   const notes = useNotesStore((state) => state.notes);
@@ -438,6 +440,22 @@ export function Panel({ className }: PanelProps) {
     // A pinned note opens to read, as its card does; any other note to edit.
     void expand(id, { edit: target ? !target.pinned : true });
   };
+
+  if (quick) {
+    // Summoned by its own shortcut, and it is the whole panel while it is up:
+    // there is no list to show beside a field that exists to be gone in a
+    // second, and the window Rust sized has no room for one.
+    return (
+      <section
+        ref={panelRef}
+        className={cx(className, styles.panel)}
+        data-slide="true"
+        data-panel=""
+      >
+        <QuickCapture />
+      </section>
+    );
+  }
 
   if (security?.protection === "locked") {
     // The whole panel, header and toolbar included. Nothing above the locked

@@ -88,6 +88,13 @@ pub struct Settings {
     pub notes_last_code_lang: String,
     #[serde(rename = "shortcut.newNote")]
     pub shortcut_new_note: String,
+    /// Not in brief 9.2: quick capture, and a note from the clipboard (brief 14).
+    /// Empty means the shortcut is not bound at all, which is how someone turns
+    /// one off without giving it a combination they will never press.
+    #[serde(rename = "shortcut.quickCapture")]
+    pub shortcut_quick_capture: String,
+    #[serde(rename = "shortcut.clipboardNote")]
+    pub shortcut_clipboard_note: String,
     /// Not in brief 9.2: a system notification when a task is due.
     #[serde(rename = "tasks.reminders")]
     pub tasks_reminders: bool,
@@ -186,6 +193,15 @@ impl Default for Settings {
             notes_last_color: NoteColor::Yellow,
             notes_last_code_lang: String::new(),
             shortcut_new_note: "CmdOrCtrl+Alt+N".to_owned(),
+            // Beside the new-note one. Not ⌥⌘Space: that is macOS's own Finder
+            // search, and the system takes it first, so the default would be a
+            // shortcut that silently does nothing.
+            shortcut_quick_capture: "CmdOrCtrl+Alt+Q".to_owned(),
+            // Deliberately unbound: every ⌥⌘key that reads as "clipboard" (V, C)
+            // is one Finder already uses, and taking it globally would break it
+            // everywhere. Quick capture plus ⌘V does the same thing, so this is
+            // a convenience to bind rather than one to take by default.
+            shortcut_clipboard_note: String::new(),
             // Both asked for by the owner.
             tasks_reminders: true,
             privacy_hide_from_capture: true,
@@ -233,6 +249,10 @@ pub struct SettingsPatch {
     pub notes_last_code_lang: Option<String>,
     #[serde(rename = "shortcut.newNote")]
     pub shortcut_new_note: Option<String>,
+    #[serde(rename = "shortcut.quickCapture")]
+    pub shortcut_quick_capture: Option<String>,
+    #[serde(rename = "shortcut.clipboardNote")]
+    pub shortcut_clipboard_note: Option<String>,
     #[serde(rename = "tasks.reminders")]
     pub tasks_reminders: Option<bool>,
     #[serde(rename = "privacy.hideFromCapture")]
@@ -314,6 +334,16 @@ pub fn get(connection: &Connection) -> AppResult<Settings> {
             defaults.notes_last_code_lang,
         )?,
         shortcut_new_note: read(connection, "shortcut.newNote", defaults.shortcut_new_note)?,
+        shortcut_quick_capture: read(
+            connection,
+            "shortcut.quickCapture",
+            defaults.shortcut_quick_capture,
+        )?,
+        shortcut_clipboard_note: read(
+            connection,
+            "shortcut.clipboardNote",
+            defaults.shortcut_clipboard_note,
+        )?,
         tasks_reminders: read(connection, "tasks.reminders", defaults.tasks_reminders)?,
         privacy_hide_from_capture: read(
             connection,
@@ -409,6 +439,12 @@ pub fn update(connection: &Connection, patch: &SettingsPatch) -> AppResult<Setti
     }
     if let Some(value) = &patch.shortcut_new_note {
         write(connection, "shortcut.newNote", value)?;
+    }
+    if let Some(value) = &patch.shortcut_quick_capture {
+        write(connection, "shortcut.quickCapture", value)?;
+    }
+    if let Some(value) = &patch.shortcut_clipboard_note {
+        write(connection, "shortcut.clipboardNote", value)?;
     }
     if let Some(value) = patch.tasks_reminders {
         write(connection, "tasks.reminders", &value)?;

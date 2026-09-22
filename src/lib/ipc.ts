@@ -193,6 +193,9 @@ export interface Settings {
   /** The language the editor writes after a new code fence; "" for none. */
   "notes.lastCodeLang": string;
   "shortcut.newNote": string;
+  /** Quick capture, and a note from the clipboard. Empty means "not bound". */
+  "shortcut.quickCapture": string;
+  "shortcut.clipboardNote": string;
   /** A system notification when a task is due. */
   "tasks.reminders": boolean;
   /** Keep the panel out of screen shares, recordings and screenshots. */
@@ -232,6 +235,8 @@ export interface DockState {
   panelWidth: number;
   /** A note is expanded into the large panel. */
   large: boolean;
+  /** The panel is the one-line capture field, and nothing else. */
+  quick: boolean;
 }
 
 /** The shape Rust serializes `AppError` into. */
@@ -331,6 +336,20 @@ export function dockToggle(): Promise<void> {
 /** Grow the open panel for an expanded note, or return it to normal. */
 export function dockSetLarge(value: boolean): Promise<void> {
   return call("dock_set_large", { value });
+}
+
+/**
+ * What the capture field should open with: the clipboard, when that shortcut
+ * summoned it, and nothing otherwise. Taken rather than read — the clipboard
+ * that summoned the field belongs to that one summoning.
+ */
+export function quickCapturePrefill(): Promise<string | null> {
+  return callResult<string | null>("quick_capture_prefill");
+}
+
+/** Leave the capture field, whether or not anything was captured. */
+export function quickCaptureClose(keepOpen: boolean): Promise<void> {
+  return call("quick_capture_close", { keepOpen });
 }
 
 /** The full list of task reminders; Rust schedules and shows them. */
@@ -499,8 +518,11 @@ export function settingsUpdate(patch: SettingsPatch): Promise<Settings> {
  * it with the OS *before* storing it, and rejects an accelerator another app
  * already owns, so the settings field can say so instead of failing silently.
  */
-export function shortcutSet(accelerator: string): Promise<Settings> {
-  return callResult<Settings>("shortcut_set", { accelerator });
+export function shortcutSet(
+  which: "newNote" | "quickCapture" | "clipboardNote",
+  accelerator: string,
+): Promise<Settings> {
+  return callResult<Settings>("shortcut_set", { which, accelerator });
 }
 
 /** Launch at login, read from the OS rather than from the settings table. */

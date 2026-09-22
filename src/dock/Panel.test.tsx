@@ -80,6 +80,8 @@ const SETTINGS: Settings = {
   "notes.lastColor": "yellow",
   "notes.lastCodeLang": "",
   "shortcut.newNote": "CmdOrCtrl+Alt+N",
+  "shortcut.quickCapture": "CmdOrCtrl+Alt+Space",
+  "shortcut.clipboardNote": "CmdOrCtrl+Alt+V",
   "tasks.reminders": true,
   "privacy.hideFromCapture": true,
   "panel.translucency": 0,
@@ -396,6 +398,7 @@ function answerLargeLikeRust() {
         side: dock.side,
         tabTop: dock.tabTop,
         keepOpen: dock.keepOpen,
+        quick: false,
         large: value,
         panelWidth: value ? 760 : 320,
       });

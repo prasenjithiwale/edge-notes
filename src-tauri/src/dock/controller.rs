@@ -8,7 +8,7 @@ use std::time::{Duration, Instant};
 
 use serde::{Deserialize, Serialize};
 
-use super::geometry::{DockGeometry, Rect, Side};
+use super::geometry::{DockGeometry, PanelSize, Rect, Side};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -40,6 +40,8 @@ pub struct DockState {
     pub panel_width: f64,
     /// A note is expanded into the large panel.
     pub large: bool,
+    /// The panel is one line to capture a thought into, and nothing else.
+    pub quick: bool,
 }
 
 /// What the caller must do. `poller.rs` is the only thing that applies these.
@@ -71,6 +73,14 @@ pub enum Input {
     /// Grow the panel so a note can be read and edited at a comfortable size, or
     /// return it to normal. Only meaningful while the panel is out.
     SetLarge(bool),
+    /// Summon the one-line capture field, with focus, from wherever the user is
+    /// (brief 14's quick capture). Opens the panel if it is closed, and takes
+    /// the keyboard either way: it is a field the user asked for by name.
+    OpenQuick,
+    /// Leave quick capture: back to the normal panel, or shut altogether.
+    CloseQuick {
+        keep_open: bool,
+    },
 }
 
 /// What opens a collapsed panel (`dock.openOn`).
@@ -234,6 +244,7 @@ impl DockController {
             keep_open: self.keep_open,
             panel_width: self.geometry.panel_width_logical(),
             large: self.geometry.is_large(),
+            quick: self.geometry.is_quick(),
         }
     }
 
@@ -285,6 +296,8 @@ impl DockController {
             Input::PointerLeftWebview => self.on_pointer_left(now),
             Input::MonitorChanged => self.on_monitor_changed(),
             Input::SetLarge(large) => self.on_set_large(large, now),
+            Input::OpenQuick => self.on_open_quick(now),
+            Input::CloseQuick { keep_open } => self.on_close_quick(keep_open, now),
             Input::BeginTabDrag => {
                 self.press = Some(TabPress::default());
                 Vec::new()
@@ -572,6 +585,50 @@ impl DockController {
         ]
     }
 
+    /// Summon quick capture: the panel at its smallest, focused, however it was
+    /// left. Opening it while a note is expanded shrinks the window first, which
+    /// is the same path a shrink already takes.
+    fn on_open_quick(&mut self, now: Instant) -> Vec<Action> {
+        self.geometry = self.geometry.with_size(PanelSize::Quick);
+        let mut actions = if self.phase.is_expanded() {
+            // Already out: only the size changes, and the frontend swaps what it
+            // is drawing when the state arrives.
+            vec![Action::SetWindowRect(self.rect_for_phase())]
+        } else {
+            self.begin_open(now, true)
+        };
+        // A capture field that does not have the keyboard is a box that eats
+        // what you type, so this is the one open that always takes focus.
+        actions.push(Action::EmitState(self.state()));
+        actions.push(Action::Focus);
+        actions
+    }
+
+    /// Done capturing. The panel goes back to its normal size either way; it
+    /// only stays out if something else is holding it there.
+    fn on_close_quick(&mut self, keep_open: bool, now: Instant) -> Vec<Action> {
+        if !self.geometry.is_quick() {
+            return Vec::new();
+        }
+        self.geometry = self.geometry.with_size(PanelSize::Normal);
+        // Deliberately not `interaction_lock`: the only thing holding it while
+        // the capture field is up is the capture field, and Enter is the user
+        // saying they are done with it.
+        if keep_open || self.keep_open {
+            return vec![
+                Action::SetWindowRect(self.rect_for_phase()),
+                Action::EmitState(self.state()),
+            ];
+        }
+        // Dismissed rather than closed: the cursor is wherever it was when the
+        // shortcut was pressed, which may well be over the panel, and brief 6.1's
+        // re-entry rule would pull it straight back open.
+        self.dismissed = true;
+        let mut actions = vec![Action::SetWindowRect(self.rect_for_phase())];
+        actions.extend(self.begin_close(now));
+        actions
+    }
+
     /// Brief 8.4 open sequence: resize first, then tell the frontend to slide in.
     /// Reversing out of `closing` skips the resize, since the window is already
     /// the expanded size.
@@ -611,8 +668,9 @@ impl DockController {
 
     fn finish_close(&mut self) -> Vec<Action> {
         self.phase = Phase::Collapsed;
-        // An expanded note ends with the panel: the next open is the normal panel.
-        self.geometry = self.geometry.with_large(false);
+        // An expanded note, or a capture field, ends with the panel: the next
+        // open is the normal panel.
+        self.geometry = self.geometry.with_size(PanelSize::Normal);
         self.shrunk_at = None;
         self.opened_by_shortcut = false;
         self.opened_deliberately_at = None;
@@ -1596,5 +1654,111 @@ mod tests {
         let actions = c.set_geometry(left);
         assert!(c.geometry().is_large());
         assert!(matches!(actions[1], Action::EmitState(s) if s.large && s.side == Side::Left));
+    }
+
+    /// Brief 14: the capture field is summoned from wherever the user is, so it
+    /// has to open the panel, shrink it, and take the keyboard in one go.
+    #[test]
+    fn quick_capture_opens_the_panel_small_and_focused() {
+        let mut c = controller();
+        let t0 = Instant::now();
+
+        let actions = c.handle(Input::OpenQuick, t0);
+        assert_eq!(c.phase(), Phase::Opening);
+        assert!(c.geometry().is_quick());
+        assert_eq!(
+            actions[0],
+            Action::SetWindowRect(c.geometry().expanded_window_rect())
+        );
+        assert!(matches!(actions[1], Action::EmitState(s) if s.quick && !s.large));
+        // The one open that always takes focus: a field that does not have the
+        // keyboard eats what you type into it.
+        assert!(actions.contains(&Action::Focus));
+
+        // It is a small window: the quick panel is shorter than the normal one.
+        let quick = c.geometry().expanded_window_rect();
+        let normal = c.geometry().with_quick(false).expanded_window_rect();
+        assert!(quick.height < normal.height);
+        assert_eq!(quick.width, normal.width);
+    }
+
+    #[test]
+    fn quick_capture_over_an_open_panel_only_resizes_it() {
+        let mut c = controller();
+        let t0 = Instant::now();
+        hover_open(&mut c, t0);
+        assert_eq!(c.phase(), Phase::Open);
+
+        let actions = c.handle(Input::OpenQuick, ms(t0, 200));
+        // Still open: it was already out, so there is nothing to slide.
+        assert_eq!(c.phase(), Phase::Open);
+        assert!(c.geometry().is_quick());
+        assert_eq!(
+            actions[0],
+            Action::SetWindowRect(c.geometry().expanded_window_rect())
+        );
+        assert!(matches!(actions[1], Action::EmitState(s) if s.quick));
+    }
+
+    #[test]
+    fn leaving_quick_capture_closes_the_panel_and_stays_closed() {
+        let mut c = controller();
+        let t0 = Instant::now();
+        c.handle(Input::OpenQuick, t0);
+        c.handle(Input::AnimationDone(Phase::Opening), ms(t0, 100));
+
+        let actions = c.handle(Input::CloseQuick { keep_open: false }, ms(t0, 200));
+        assert!(
+            !c.geometry().is_quick(),
+            "the next open would still be small"
+        );
+        assert_eq!(c.phase(), Phase::Closing);
+        assert!(matches!(actions.last(), Some(Action::EmitState(s)) if !s.quick));
+
+        // The cursor never moved, and it may be sitting on the panel: without the
+        // dismissal, brief 6.1's re-entry rule would pull it straight back open.
+        let panel = c.geometry().panel_rect();
+        c.handle(
+            Input::Cursor {
+                x: f64::from(panel.x + 10),
+                y: f64::from(panel.y + 10),
+            },
+            ms(t0, 210),
+        );
+        c.tick(ms(t0, 400));
+        assert_ne!(c.phase(), Phase::Opening);
+    }
+
+    #[test]
+    fn leaving_quick_capture_keeps_the_panel_out_if_something_holds_it() {
+        let mut c = controller();
+        let t0 = Instant::now();
+        c.handle(Input::SetKeepOpen(true), t0);
+        c.handle(Input::OpenQuick, ms(t0, 10));
+        c.handle(Input::AnimationDone(Phase::Opening), ms(t0, 100));
+
+        c.handle(Input::CloseQuick { keep_open: false }, ms(t0, 200));
+        assert_eq!(c.phase(), Phase::Open);
+        assert!(!c.geometry().is_quick());
+        assert_eq!(
+            c.geometry().expanded_window_rect(),
+            c.geometry().with_quick(false).expanded_window_rect()
+        );
+    }
+
+    #[test]
+    fn a_collapse_ends_quick_capture_too() {
+        let mut c = controller();
+        let t0 = Instant::now();
+        c.handle(Input::OpenQuick, t0);
+        c.handle(Input::AnimationDone(Phase::Opening), ms(t0, 100));
+        c.handle(Input::Toggle, ms(t0, 200));
+        c.handle(Input::AnimationDone(Phase::Closing), ms(t0, 300));
+
+        assert_eq!(c.phase(), Phase::Collapsed);
+        assert!(
+            !c.geometry().is_quick(),
+            "the next open would be the small one"
+        );
     }
 }

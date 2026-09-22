@@ -1,6 +1,6 @@
 [package]
 name = "ledge"
-version = "0.6.1"
+version = "0.7.0"
 description = "Edge-docked notes widget"
 edition = "2024"
 rust-version = "1.85"
@@ -29,6 +29,11 @@ tauri-plugin-global-shortcut = "2.3.2"
 tauri-plugin-log = "2.9.1"
 log = "0.4.34"
 tauri-plugin-notification = "2.4.0"
+# Read the system clipboard from Rust, for "new note from the clipboard". The
+# webview is given no clipboard permission in `capabilities/default.json`: the
+# shortcut is handled in Rust and the text arrives through a typed command, the
+# same as everything else (brief 9.5).
+tauri-plugin-clipboard-manager = "2.3.3"
 
 # Pinned per build brief section 13: community git dependency, isolated in platform/macos.rs.
 # The database key lives in the platform's own credential store. Each backend is

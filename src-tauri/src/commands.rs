@@ -285,6 +285,64 @@ pub fn app_info(app: AppHandle) -> AppResult<AppInfo> {
     })
 }
 
+/// What quick capture was opened with, if anything.
+///
+/// A pull rather than a push: the shortcut stashes the clipboard here and the
+/// field asks for it as it mounts, so there is one ordering to reason about
+/// instead of a race between an event and a render.
+#[derive(Default)]
+pub struct QuickCapture {
+    prefill: std::sync::Mutex<Option<String>>,
+}
+
+impl QuickCapture {
+    fn set(&self, text: Option<String>) {
+        match self.prefill.lock() {
+            Ok(mut held) => *held = text,
+            Err(poisoned) => *poisoned.into_inner() = text,
+        }
+    }
+
+    fn take(&self) -> Option<String> {
+        match self.prefill.lock() {
+            Ok(mut held) => held.take(),
+            Err(poisoned) => poisoned.into_inner().take(),
+        }
+    }
+}
+
+/// Summon the one-line capture field. `prefill` is the clipboard, for the
+/// shortcut that captures it; `None` opens an empty field.
+///
+/// Not a command: the only things that call it are the two global shortcuts,
+/// which are Rust.
+pub fn open_quick_capture(app: &AppHandle, prefill: Option<String>) {
+    if let Some(state) = app.try_state::<QuickCapture>() {
+        state.set(prefill);
+    }
+    let Some(dock) = app.try_state::<Arc<Dock>>() else {
+        return;
+    };
+    dock.input(app, Input::OpenQuick);
+}
+
+/// What the field should open with, taken rather than read: the clipboard that
+/// summoned it belongs to that one summoning.
+#[tauri::command]
+pub fn quick_capture_prefill(state: State<'_, QuickCapture>) -> Option<String> {
+    state.take()
+}
+
+/// Leave quick capture, whether something was captured or not.
+#[tauri::command]
+pub fn quick_capture_close(app: AppHandle, keep_open: bool) -> AppResult<()> {
+    let dock = app
+        .try_state::<Arc<Dock>>()
+        .ok_or(AppError::DockUnavailable)?;
+    dock.input(&app, Input::CloseQuick { keep_open });
+    Ok(())
+}
+
 /// The key, and where the database it opens lives.
 ///
 /// Managed state rather than a global: the key is needed by three commands and
@@ -489,8 +547,11 @@ pub fn settings_update(
         crate::platform::set_hidden_from_capture(&window, hidden);
     }
 
-    if let Some(accelerator) = patch.shortcut_new_note.as_deref() {
-        crate::tray::rebind_new_note_shortcut(&app, accelerator);
+    if patch.shortcut_new_note.is_some()
+        || patch.shortcut_quick_capture.is_some()
+        || patch.shortcut_clipboard_note.is_some()
+    {
+        crate::tray::rebind_shortcuts(&app);
     }
 
     // The tray shows the dock side too, and the settings view can change it.
@@ -514,21 +575,37 @@ pub fn settings_update(
 pub fn shortcut_set(
     app: AppHandle,
     db: State<'_, Database>,
+    which: String,
     accelerator: String,
 ) -> AppResult<Settings> {
     let trimmed = accelerator.trim();
-    if trimmed.is_empty() {
+    // Empty is allowed for the two optional ones: it means "not bound", which is
+    // how a shortcut is turned off rather than hidden behind a combination
+    // nobody will press. The new-note shortcut is brief 6.11 and stays bound.
+    if trimmed.is_empty() && which == "newNote" {
         return Err(AppError::ShortcutUnavailable(
             "that is not a shortcut".to_owned(),
         ));
     }
 
-    let previous = crate::tray::stored_shortcut(&app);
-    crate::tray::try_rebind_new_note_shortcut(&app, trimmed, &previous)
+    let previous = db.with(settings::get)?;
+    let mut wanted = previous.clone();
+    match which.as_str() {
+        "newNote" => wanted.shortcut_new_note = trimmed.to_owned(),
+        "quickCapture" => wanted.shortcut_quick_capture = trimmed.to_owned(),
+        "clipboardNote" => wanted.shortcut_clipboard_note = trimmed.to_owned(),
+        other => {
+            return Err(AppError::UnknownTaskField("shortcut", other.to_owned()));
+        }
+    }
+
+    crate::tray::try_rebind_shortcuts(&app, &wanted, &previous)
         .map_err(AppError::ShortcutUnavailable)?;
 
     let patch = SettingsPatch {
-        shortcut_new_note: Some(trimmed.to_owned()),
+        shortcut_new_note: (which == "newNote").then(|| trimmed.to_owned()),
+        shortcut_quick_capture: (which == "quickCapture").then(|| trimmed.to_owned()),
+        shortcut_clipboard_note: (which == "clipboardNote").then(|| trimmed.to_owned()),
         ..SettingsPatch::default()
     };
     let updated = db.with(|connection| settings::update(connection, &patch))?;

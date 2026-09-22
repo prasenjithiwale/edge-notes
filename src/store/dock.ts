@@ -14,7 +14,15 @@ import {
  * boolean: with one flag, closing the editor while the search field still had
  * focus would release a lock that is still needed.
  */
-export type LockOwner = "editor" | "search" | "settings" | "expanded" | "tasks" | "undo";
+export type LockOwner =
+  | "editor"
+  | "search"
+  | "settings"
+  | "expanded"
+  | "tasks"
+  | "undo"
+  /** The quick-capture field, whose cursor is never over the panel. */
+  | "quick";
 
 interface DockStore {
   phase: DockPhase;
@@ -25,6 +33,8 @@ interface DockStore {
   panelWidth: number;
   /** Rust has grown the window for an expanded note. */
   large: boolean;
+  /** The panel is the one-line capture field (brief 14). */
+  quick: boolean;
   locks: ReadonlySet<LockOwner>;
   /** Rust owns the phase; this only mirrors it. */
   applyState: (state: DockState) => void;
@@ -39,6 +49,7 @@ export const useDockStore = create<DockStore>((set, get) => ({
   keepOpen: false,
   panelWidth: 320,
   large: false,
+  quick: false,
   locks: new Set<LockOwner>(),
   applyState: (state) => {
     set({
@@ -48,6 +59,7 @@ export const useDockStore = create<DockStore>((set, get) => ({
       keepOpen: state.keepOpen,
       panelWidth: state.panelWidth,
       large: state.large,
+      quick: state.quick,
     });
   },
   setKeepOpen: (value) => {

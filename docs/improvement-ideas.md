@@ -28,7 +28,7 @@ brief section 4, it says so, because the project rules require asking first.
 | 11 | Continuous integration on every push | Reliability | S | Medium |
 | 12 | More install channels | Distribution | M | Medium |
 | 13 | Real full-text search | Feature | M | High |
-| 14 | Quick capture and clipboard to note | Feature | S–M | High |
+| 14 | Quick capture and clipboard to note | Feature | S–M | High | **Built, 0.7.0** |
 | 15 | Sync across devices, end-to-end encrypted | Feature | L | High |
 | 16 | Tags, and drag to reorder | Feature | M | Medium |
 | 17 | Images and screenshots in notes | Feature | M–L | Medium |
@@ -275,6 +275,10 @@ per the rules; no new dependency, since FTS5 is in bundled SQLite.
 **Effort** M. **New dependencies** none.
 
 ### 14. Quick capture, and clipboard to note
+
+**Built in 0.7.0** — a third panel size, two more global shortcuts, and `[ ]` for
+a task. See [progress.md](progress.md) for what changed and why two of the
+defaults did.
 
 **What.** A second global shortcut opens a single-line field beside the tab: type,
 press Enter, and it is saved without opening the panel. A third makes a note from

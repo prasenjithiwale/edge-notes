@@ -3794,6 +3794,100 @@ One thing fell out of it that the tests caught: deeper cards cost
 - [ ] The sixteen colours look right on a real screen, in both themes
 - [ ] A note with no colour is still plainly a card
 
+## Quick capture, and a note from the clipboard (22 Sep 2026)
+
+Idea 14 from [improvement-ideas.md](improvement-ideas.md), which is brief 14's
+first and sixth items. One line, summoned by its own shortcut from wherever you
+are: type, Enter, gone. Shipped as 0.7.0.
+
+### It is a third panel size, not a second window
+
+The obvious build is a little window of its own near the tab. It is the wrong
+one: a second window is a second thing to place on the right monitor, to keep
+above full-screen apps, to convert to an NSPanel, to keep out of screen shares,
+and to hit-test against. All of that already works for the panel.
+
+So quick capture is the panel at a third size. `geometry.rs`'s `large: bool`
+became `PanelSize` — `Normal`, `Large`, `Quick` — because the sizes are
+alternatives and a capture field that was also an expanded note is not a state
+the app should be able to reach. `Quick` is the panel's own width at 92 logical
+px of height; everything else (the docked edge, the tab, hit testing) follows
+from `panel_rect` as it always has. `DockState` carries `quick`, `Panel` returns
+the field instead of the panel when it is set, and `finish_close` clears it, so
+the next ordinary open is the ordinary panel.
+
+Two inputs, `OpenQuick` and `CloseQuick`, and they are the only open in the app
+that **always** takes focus: a capture field that does not have the keyboard is a
+box that eats what you type. Leaving sets `dismissed`, because the cursor is
+still wherever it was when the shortcut was pressed — which may well be over the
+panel, and brief 6.1's re-entry rule would otherwise pull it straight back open.
+
+### The clipboard is read in Rust, and the text is pulled, not pushed
+
+`tauri-plugin-clipboard-manager` (2.3.3) reads it in the shortcut handler; the
+webview still has no clipboard permission and does not need one. The text is
+stashed in a `QuickCapture` state and the field **asks for it as it mounts**
+(`quick_capture_prefill`, which takes rather than reads). A push would be an
+event racing a render; a pull has one ordering to reason about. Taking it also
+means the clipboard that summoned the field belongs to that one summoning.
+
+### Three shortcuts, one registration
+
+The plugin's `unregister_all` is the only idempotent way to rebind and it takes
+the others with it, so `tray::register_shortcuts` binds all three from the
+settings in one pass, and `try_rebind_shortcuts` puts the whole previous set back
+when one is refused. `tray::Global` is the enum: its setting, its default and
+what pressing it does, in one place, so adding a fourth is adding a variant and a
+row to `SHORTCUTS` in `SettingsView`.
+
+An empty accelerator is deliberately **not bound** — that is how a shortcut is
+turned off rather than hidden behind a combination nobody will press — and the
+recorder shows "Not set" for one.
+
+### Two defaults that had to change
+
+The first pass defaulted quick capture to ⌥⌘Space and the clipboard one to ⌥⌘V.
+Both are wrong on a Mac:
+
+- **⌥⌘Space is macOS's own** (Finder search). The system takes it first, so the
+  default would have been a shortcut that silently does nothing. It is ⌥⌘Q now.
+- **⌥⌘V is Finder's move-paste**, and a global shortcut takes a combination from
+  every application, not just this one. Breaking a Finder shortcut everywhere for
+  a convenience is not a trade to make by default, and every other ⌥⌘key that
+  reads as "clipboard" (C is Finder's copy-path) is the same story. So it ships
+  unbound, with a row in Settings to bind it — and ⌘V in the capture field does
+  the same job anyway.
+
+⌥⌘N, the existing new-note shortcut, overlaps Finder's New Folder, which is the
+same class of collision. It stays: it shipped, and moving it would break the
+binding people already have.
+
+### A line that starts with a box is a task
+
+`[ ]`, `[]` or `- [ ]` and the rest goes through `parseTaskText`, the same quick
+entry the Tasks tab's add field uses, so `[ ] call the bank @tomorrow 2pm !high`
+arrives complete. Anything else is a note. The hint under the field says which
+one Enter will do, and changes as it is typed — the tokens in the Tasks tab had
+always worked and nobody knew, which is the whole reason `QuickPreview` exists.
+
+Nothing is thrown away silently: a save that fails leaves the field up with the
+text still in it, because that text is the only copy of what was typed.
+
+### Checklist
+
+- [ ] ⌥⌘Q from another app puts the field on screen with the caret in it, and the
+      first keystroke lands (macOS gives the panel the keyboard a moment late)
+- [ ] Enter saves a note and the field goes; the note is in the panel
+- [ ] `[ ] pay the bill @tomorrow !high` lands in Tasks, dated and flagged
+- [ ] Escape leaves without saving, and the panel does not spring back open when
+      the cursor is resting on it
+- [ ] With Keep open on, leaving the field shows the normal panel instead of
+      closing it
+- [ ] Settings › Shortcuts: all three rows record, the clipboard one says
+      "Not set" until it is bound, and binding it opens the field with the
+      clipboard in it
+- [ ] A shortcut another app owns is refused, and the old one still works
+
 ## M0 acceptance checklist
 
 From brief section 12. Run `npm run tauri dev`, then work through these with

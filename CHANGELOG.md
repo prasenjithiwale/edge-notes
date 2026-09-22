@@ -11,6 +11,30 @@ To release, see "Releasing" in the README.
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-09-22
+
+### Added
+
+- **Quick capture.** A global shortcut (⌥⌘Q by default) puts one line on screen
+  wherever you are, with the keyboard already in it: type the thought, press
+  Enter, and it is saved as a note without the panel ever opening. Escape leaves
+  without saving. A line that starts with `[ ]` becomes a **task** instead,
+  through the same quick entry the Tasks tab's add field uses, so
+  `[ ] call the bank @tomorrow 2pm !high` arrives complete.
+- **A note from the clipboard.** A third shortcut opens the same line with
+  whatever you last copied already in it, so you can see and fix what is about to
+  be saved. It ships **unbound**: every ⌥⌘key that reads as "clipboard" is one
+  Finder already uses, and a global shortcut takes it from every app. Bind it in
+  Settings › Shortcuts — or just press ⌘V in the capture field, which does the
+  same thing.
+- **Settings lists all three shortcuts**, each with its own row and its own
+  recorder.
+
+### Changed
+
+- The new-note shortcut's setting is now one of three; an existing binding is
+  kept as it was.
+
 ## [0.6.1] - 2026-09-18
 
 ### Fixed

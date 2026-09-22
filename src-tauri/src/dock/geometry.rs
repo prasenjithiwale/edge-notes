@@ -84,6 +84,8 @@ pub struct Metrics {
     pub large_panel_width_ratio: f64,
     /// The large panel's share of the work-area height, uncapped.
     pub large_panel_height_ratio: f64,
+    /// Quick capture: one line and the hint under it, and nothing else.
+    pub quick_panel_height: f64,
 }
 
 impl Default for Metrics {
@@ -102,8 +104,26 @@ impl Default for Metrics {
             large_panel_max_width: 760.0,
             large_panel_width_ratio: 0.6,
             large_panel_height_ratio: 0.9,
+            quick_panel_height: 92.0,
         }
     }
+}
+
+/// How big the panel is drawn, which decides the window's rect and what the
+/// frontend puts in it.
+///
+/// One value rather than a flag each, because the sizes are alternatives: a
+/// quick-capture field that was also an expanded note is not a state the app
+/// should be able to reach.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum PanelSize {
+    /// The notes, tasks and focus panel: brief 6.4.
+    #[default]
+    Normal,
+    /// An expanded note, for reading and writing at a comfortable width.
+    Large,
+    /// One line to capture a thought into, summoned by its own shortcut.
+    Quick,
 }
 
 /// Resolves the dock's rectangles for one monitor.
@@ -114,10 +134,9 @@ pub struct DockGeometry {
     side: Side,
     tab_offset: f64,
     metrics: Metrics,
-    /// An expanded note: the panel grows so a long note can be read and edited
-    /// comfortably. Everything else — the docked edge, the tab, hit testing —
-    /// follows from the bigger panel rect.
-    large: bool,
+    /// Which of the three sizes the panel is at. Everything else — the docked
+    /// edge, the tab, hit testing — follows from the panel rect it gives.
+    size: PanelSize,
 }
 
 impl DockGeometry {
@@ -129,19 +148,49 @@ impl DockGeometry {
             side,
             tab_offset: tab_offset.clamp(0.0, 1.0),
             metrics,
-            large: false,
+            size: PanelSize::Normal,
         }
     }
 
     #[must_use]
+    pub fn size(&self) -> PanelSize {
+        self.size
+    }
+
+    #[must_use]
     pub fn is_large(&self) -> bool {
-        self.large
+        self.size == PanelSize::Large
+    }
+
+    #[must_use]
+    pub fn is_quick(&self) -> bool {
+        self.size == PanelSize::Quick
+    }
+
+    /// Same dock, with the panel at the size given.
+    #[must_use]
+    pub fn with_size(&self, size: PanelSize) -> Self {
+        Self { size, ..*self }
     }
 
     /// Same dock, with the panel at its large or its normal size.
     #[must_use]
     pub fn with_large(&self, large: bool) -> Self {
-        Self { large, ..*self }
+        self.with_size(if large {
+            PanelSize::Large
+        } else {
+            PanelSize::Normal
+        })
+    }
+
+    /// Same dock, as one line to capture into or back to the normal panel.
+    #[must_use]
+    pub fn with_quick(&self, quick: bool) -> Self {
+        self.with_size(if quick {
+            PanelSize::Quick
+        } else {
+            PanelSize::Normal
+        })
     }
 
     #[must_use]
@@ -174,7 +223,7 @@ impl DockGeometry {
             tab_offset,
             self.metrics,
         )
-        .with_large(self.large)
+        .with_size(self.size)
     }
 
     /// The offset that puts the tab's centre at `centre_y` (physical, desktop
@@ -201,7 +250,7 @@ impl DockGeometry {
     /// stays where the user put it across resolution and scale changes.
     #[must_use]
     pub fn with_monitor(&self, work_area: Rect, scale: f64) -> Self {
-        Self::new(work_area, scale, self.side, self.tab_offset, self.metrics).with_large(self.large)
+        Self::new(work_area, scale, self.side, self.tab_offset, self.metrics).with_size(self.size)
     }
 
     /// Same monitor, other edge.
@@ -214,7 +263,7 @@ impl DockGeometry {
             self.tab_offset,
             self.metrics,
         )
-        .with_large(self.large)
+        .with_size(self.size)
     }
 
     /// Logical pixels to physical, rounded to the nearest device pixel.
@@ -236,7 +285,10 @@ impl DockGeometry {
 
     fn panel_w(&self) -> i32 {
         let normal = self.px(self.metrics.panel_width);
-        if !self.large {
+        if self.size != PanelSize::Large {
+            // Quick capture is the panel's own width: it is the same field in
+            // the same place, and a different width would make it a different
+            // thing arriving.
             return normal;
         }
         let work_w = self.work_area.width as i32;
@@ -261,7 +313,10 @@ impl DockGeometry {
     /// Panel height: `min(640, 80% of the work-area height)`, per brief 6.4, or
     /// 90% of the work area when a note is expanded.
     fn panel_h(&self) -> i32 {
-        if self.large {
+        if self.size == PanelSize::Quick {
+            return self.px(self.metrics.quick_panel_height).max(1);
+        }
+        if self.size == PanelSize::Large {
             let work_h = self.work_area.height as i32;
             let by_ratio =
                 (f64::from(work_h) * self.metrics.large_panel_height_ratio).round() as i32;

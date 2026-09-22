@@ -42,7 +42,8 @@ pub fn run() {
             None,
         ))
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
-        .plugin(tauri_plugin_notification::init());
+        .plugin(tauri_plugin_notification::init())
+        .plugin(tauri_plugin_clipboard_manager::init());
 
     #[cfg(target_os = "macos")]
     let builder = builder.plugin(tauri_nspanel::init());
@@ -50,6 +51,8 @@ pub fn run() {
     builder
         .invoke_handler(tauri::generate_handler![
             commands::app_ready,
+            commands::quick_capture_prefill,
+            commands::quick_capture_close,
             commands::security_status,
             commands::security_recovery_key,
             commands::security_unlock,
@@ -135,6 +138,7 @@ pub fn run() {
             let timings = stored.timings();
             app.manage(database);
             app.manage(commands::Vault::new(database_path.clone(), vault));
+            app.manage(commands::QuickCapture::default());
 
             // Task reminders run on their own thread; the frontend sends the list.
             let reminders = reminders::Reminders::new(stored.tasks_reminders);
@@ -178,7 +182,7 @@ pub fn run() {
             });
 
             tray::init(&handle)?;
-            tray::bind_new_note_shortcut(&handle, None);
+            tray::bind_shortcuts(&handle);
 
             poller::spawn(handle);
             Ok(())
