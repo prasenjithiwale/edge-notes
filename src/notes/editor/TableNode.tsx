@@ -157,7 +157,9 @@ function TableGrid({ nodeKey, table }: { nodeKey: NodeKey; table: Table }) {
             column and the strips are the first and last rows. */}
         <div
           className={styles.grid}
-          style={{ gridTemplateColumns: `repeat(${String(columns)}, minmax(64px, 1fr)) 22px` }}
+          style={{
+            gridTemplateColumns: `repeat(${String(columns)}, minmax(var(--table-column-min), 1fr)) 22px`,
+          }}
         >
           {table.header.map((_, column) => (
             <button

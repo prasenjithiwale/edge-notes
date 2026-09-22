@@ -317,7 +317,12 @@ export function LineRow({
 export function NoteTable({ table }: { table: Table }) {
   return (
     <div className={styles.tableWrap} onClick={stop}>
-      <table className={styles.table}>
+      <table
+        className={styles.table}
+        // The same floor the editor's grid uses, from the same token: below it
+        // the columns stop sharing the width and the table scrolls instead.
+        style={{ minWidth: `calc(${String(table.header.length)} * var(--table-column-min))` }}
+      >
         <thead>
           <tr>
             {table.header.map((cell, index) => (

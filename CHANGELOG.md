@@ -13,6 +13,10 @@ To release, see "Releasing" in the README.
 
 ### Fixed
 
+- **A table keeps its shape when it is saved.** The editor gives every column an
+  equal share of the note's width and a fixed row height; the reader sized the
+  same table to its contents, so saving it looked like it had shrunk. Both read
+  the same three numbers now.
 - **A table's grid lines are visible.** They were drawn in the card's own edge
   colour, which is transparent on every note colour but the colourless one, so a
   saved table read as two loose lines of words. It has a neutral surface of its

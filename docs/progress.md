@@ -4289,6 +4289,20 @@ No unit test can see a transparent border, so what is pinned instead is the fact
 that caused it: `contrast.test.ts` asserts `--note-edge` exists for the
 colourless card and for nothing else.
 
+### The same table, before and after the save
+
+The editor draws a table as a grid — `minmax(--table-column-min, 1fr)` columns
+and a fixed row height — and the reader drew it as an ordinary `<table>`, which
+sizes itself to its contents. Nothing was lost, but the table visibly shrank the
+moment it was saved, which is indistinguishable from something having gone
+wrong.
+
+The three numbers live in `tokens.css` now (`--table-row-height`,
+`--table-column-min`, `--table-cell-padding`) and both sheets read them; the
+reader's table is `table-layout: fixed` at full width with a minimum set from
+the column count, which is the same rule the grid's `minmax` expresses. `height`
+on a cell is a minimum rather than a cap, so a long cell still wraps and grows.
+
 ### The controls moved to the grid's edges
 
 Asked for, and better than the footer they replaced: a `−` over every column

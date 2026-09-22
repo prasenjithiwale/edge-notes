@@ -112,6 +112,13 @@
   /* Native controls (date and time pickers, scrollbars) follow the theme. */
   color-scheme: light;
   --panel-width: 320px;
+
+  /* A table's metrics, read by both the grid that edits one and the table that
+     reads one back. They are the same numbers on purpose: a table that shrank
+     to its contents the moment it was saved looked like it had lost its shape. */
+  --table-row-height: 28px;
+  --table-column-min: 64px;
+  --table-cell-padding: 0 6px;
   --shadow-margin: 12px;
 
   /* Motion (brief 6.2). */

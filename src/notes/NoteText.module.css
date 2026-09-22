@@ -320,9 +320,7 @@
    table read as two loose lines of words. */
 .tableWrap {
   margin: 4px 0;
-  /* Hugs its columns: a surface that ran on past the last one looked like a
-     table with an empty column stuck to it. */
-  width: max-content;
+  width: 100%;
   max-width: 100%;
   overflow-x: auto;
   overscroll-behavior-x: contain;
@@ -331,17 +329,25 @@
   border-radius: 6px;
 }
 
+/* `fixed`, and full width: the editor gives every column an equal share of the
+   note's width (`minmax(--table-column-min, 1fr)`), and a table that sized
+   itself to its contents the moment it was saved looked like it had shrunk.
+   The minimum width is set from the column count, which is the same rule. */
 .table {
   border-collapse: collapse;
   font-size: 12px;
-  min-width: max-content;
+  table-layout: fixed;
+  width: 100%;
 }
 
 .table th,
 .table td {
-  padding: 4px 8px;
+  /* `height` on a cell is a minimum, so a long cell still wraps and grows. */
+  height: var(--table-row-height);
+  padding: var(--table-cell-padding);
   text-align: left;
-  vertical-align: top;
+  vertical-align: middle;
+  overflow-wrap: anywhere;
   border-bottom: 1px solid var(--border);
   border-right: 1px solid var(--border);
   /* The note's ink on the table's own surface, as the code block's text is. */

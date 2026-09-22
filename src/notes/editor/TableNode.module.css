@@ -30,7 +30,8 @@
   font: inherit;
   font-size: 12px;
   min-width: 0;
-  padding: 5px 6px;
+  height: var(--table-row-height);
+  padding: var(--table-cell-padding);
   border: none;
   background: var(--surface);
   color: var(--text-primary);
