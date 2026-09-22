@@ -304,19 +304,30 @@
   margin: 4px 0;
   border-radius: 6px;
   object-fit: contain;
-  /* A picture on a coloured card needs an edge or it floats on the colour. */
-  box-shadow: 0 0 0 1px var(--note-edge, rgb(0 0 0 / 0.08));
+  /* A picture on a coloured card needs an edge or it floats on the colour, and
+     it has to be a neutral one: `--note-edge` is transparent on every colour
+     but `none`. */
+  box-shadow: 0 0 0 1px var(--border);
 }
 
 /* A table as it is read. Sideways rather than squeezed: four columns crushed
    into 320 px are unreadable, and a table you push is better than one you
-   cannot read. Not inside the card's click target, so it can be scrolled. */
+   cannot read. Not inside the card's click target, so it can be scrolled.
+
+   Its own neutral surface, like a fenced code block's, and neutral rules. The
+   first cut drew the lines in `--note-edge`, which is `transparent` on all
+   sixteen colours — only `none` has an edge — so the grid was invisible and a
+   table read as two loose lines of words. */
 .tableWrap {
   margin: 4px 0;
+  /* Hugs its columns: a surface that ran on past the last one looked like a
+     table with an empty column stuck to it. */
+  width: max-content;
   max-width: 100%;
   overflow-x: auto;
   overscroll-behavior-x: contain;
-  border: 1px solid var(--note-edge, rgb(0 0 0 / 0.08));
+  background: var(--code-bg);
+  border: 1px solid var(--border);
   border-radius: 6px;
 }
 
@@ -331,8 +342,10 @@
   padding: 4px 8px;
   text-align: left;
   vertical-align: top;
-  border-bottom: 1px solid var(--note-edge, rgb(0 0 0 / 0.08));
-  border-right: 1px solid var(--note-edge, rgb(0 0 0 / 0.08));
+  border-bottom: 1px solid var(--border);
+  border-right: 1px solid var(--border);
+  /* The note's ink on the table's own surface, as the code block's text is. */
+  color: var(--text-primary);
 }
 
 .table th {

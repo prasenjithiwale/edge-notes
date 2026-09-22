@@ -11,6 +11,13 @@ To release, see "Releasing" in the README.
 
 ## [Unreleased]
 
+### Fixed
+
+- **A table's grid lines are visible.** They were drawn in the card's own edge
+  colour, which is transparent on every note colour but the colourless one, so a
+  saved table read as two loose lines of words. It has a neutral surface of its
+  own now, like a code block. A picture's hairline was drawn the same way.
+
 ## [0.7.0] - 2026-09-22
 
 ### Added

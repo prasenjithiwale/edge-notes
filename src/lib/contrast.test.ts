@@ -66,6 +66,21 @@ const AA = 4.5;
  */
 const SECONDARY_OPACITY = 0.82;
 
+/**
+ * `--note-edge` is a hairline that exists for one colour only, and that caught
+ * something out: a card sets `--note-edge: var(--note-<colour>-edge, transparent)`,
+ * so on the other sixteen the variable **is** defined — as transparent — and a
+ * `var(--note-edge, <fallback>)` elsewhere never reaches its fallback. A table's
+ * grid lines were drawn that way in 0.7.0 and were invisible on every coloured
+ * note. Anything that must be seen on a card needs a neutral of its own.
+ */
+describe("the note edge", () => {
+  it("is defined for the colourless card and for nothing else", () => {
+    const edges = [...tokens.matchAll(/--note-([a-z]+)-edge\s*:/g)].map((match) => match[1]);
+    expect([...new Set(edges)]).toEqual(["none"]);
+  });
+});
+
 describe("note palette contrast (brief 7.3)", () => {
   for (const name of NOTE_COLORS) {
     for (const theme of ["light", "dark"] as const) {

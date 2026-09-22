@@ -222,7 +222,8 @@
   border-radius: 6px;
   object-fit: contain;
   vertical-align: bottom;
-  box-shadow: 0 0 0 1px var(--note-edge, rgb(0 0 0 / 0.08));
+  /* Neutral: `--note-edge` is transparent on every colour but `none`. */
+  box-shadow: 0 0 0 1px var(--border);
 }
 
 /* The empty line the caret is on says what `/` does. Drawn on `::after` and

@@ -4269,6 +4269,26 @@ rows are gone. The card draws the real table now, clamped to
 the clamp is for a run of words, and it had cut the table down to half of its
 heading.
 
+### The grid lines were painted in transparent
+
+Reported as "after saving it's still not retaining table structure", and it was
+not the saving at all: the note's text was right the whole time, and every test
+of it passed. A card sets `--note-edge: var(--note-<colour>-edge, transparent)`,
+and **only `none` has an edge token** — so on all sixteen colours the variable is
+defined, as transparent, and the `var(--note-edge, rgb(0 0 0 / 0.08))` the table
+drew its rules with never reached its fallback. The grid was there, in
+transparent, and a table read as two loose lines of words.
+
+It has a neutral surface of its own now (`--code-bg`) with rules in `--border`,
+which is the fenced code block's treatment and the one thing that is legible on
+all sixteen colours in both themes. The wrap hugs its columns, because a surface
+that ran on past the last one looked like a table with an empty column attached.
+The picture's hairline was drawn the same wrong way and is neutral now too.
+
+No unit test can see a transparent border, so what is pinned instead is the fact
+that caused it: `contrast.test.ts` asserts `--note-edge` exists for the
+colourless card and for nothing else.
+
 ### The controls moved to the grid's edges
 
 Asked for, and better than the footer they replaced: a `−` over every column
