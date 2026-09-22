@@ -13,6 +13,7 @@ import {
   ListChecks,
   ListOrdered,
   Strikethrough,
+  Table,
   Type,
   type LucideIcon,
 } from "lucide-react";
@@ -99,6 +100,7 @@ const BLOCKS: readonly BlockOption[] = [
   new BlockOption("codeblock", "block", "Code block", "With a language of its own", ["code", "snippet", "pre"], Braces),
   // The one item that opens a window of its own. It is a block rather than a
   // mark because what it adds is a thing on the line, not a way of writing one.
+  new BlockOption("table", "block", "Table", "Rows and columns", ["table", "grid", "rows", "columns", "spreadsheet"], Table),
   new BlockOption("image", "block", "Image", "A picture from a file", ["image", "picture", "photo", "img", "screenshot"], Image),
   // The marks apply to the selection, or to whatever is typed next when there
   // is none — which is the case the moment after `/bold` has been picked.

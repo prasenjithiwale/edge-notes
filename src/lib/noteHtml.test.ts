@@ -55,6 +55,13 @@ describe("a note as HTML", () => {
     expect(noteToHtml(`![](${IMAGE})`, drop)).toBe("<p>[image]</p>");
   });
 
+  it("writes a table as a table, which is what a table is for", () => {
+    expect(noteToHtml("| Day | Cost |\n| --- | ---: |\n| Mon | 12 |", drop)).toBe(
+      "<table><thead><tr><th>Day</th><th style=\"text-align:right\">Cost</th></tr></thead>" +
+        "<tbody><tr><td>Mon</td><td style=\"text-align:right\">12</td></tr></tbody></table>",
+    );
+  });
+
   it("writes a bare link as a link", () => {
     expect(noteToHtml("see https://example.test/docs", drop)).toBe(
       '<p>see <a href="https://example.test/docs">https://example.test/docs</a></p>',

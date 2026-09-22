@@ -12,6 +12,7 @@ import { AutoLinkNode, LinkNode } from "@lexical/link";
 
 import { CodeNode } from "./CodeNode";
 import { ImageNode } from "./ImageNode";
+import { TableNode } from "./TableNode";
 import { HeadingNode } from "@lexical/rich-text";
 
 import { EDITOR_NODES } from "./config";
@@ -214,6 +215,9 @@ describe("the node list", () => {
       // An image is a node the dialect writes: `![alt](url)`, round-tripped by
       // `markdown.test.ts` like every other shape.
       ImageNode,
+      // And a pipe table, which is GFM's spelling so a note with one in it is
+      // still worth pasting somewhere else.
+      TableNode,
     ]);
   });
 });

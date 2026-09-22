@@ -34,6 +34,7 @@ import { $setBlocksType } from "@lexical/selection";
 import { $createCodeNode } from "./CodeNode";
 import { insertImage } from "./ImageNode";
 import { pickImages } from "./pickImage";
+import { $createTableNode } from "./TableNode";
 
 export type FormatCommand =
   /** Back to a plain paragraph: what the slash menu calls "Text". */
@@ -54,7 +55,9 @@ export type FormatCommand =
    * window of its own, which is why it is also the only one that tells the dock
    * a picker is up.
    */
-  | "image";
+  | "image"
+  /** Put an empty table in the note; the grid takes it from there. */
+  | "table";
 
 /** Which of the toolbar's marks and list kinds the caret is currently inside. */
 export interface ToolbarState {
@@ -146,8 +149,9 @@ export function useToolbarState(editor: LexicalEditor): ToolbarState {
 /** Whether the caret is already inside what this button applies. */
 export function isActive(command: FormatCommand, state: ToolbarState): boolean {
   switch (command) {
-    // Adding a picture is not a state the caret can be in.
+    // Adding a picture or a table is not a state the caret can be in.
     case "image":
+    case "table":
       return false;
     case "text":
       return state.list === null && state.heading === 0;
@@ -185,6 +189,21 @@ export function runCommand(
   lang = "",
 ): void {
   switch (command) {
+    case "table":
+      editor.update(() => {
+        const selection = $getSelection();
+        if (!$isRangeSelection(selection)) {
+          return;
+        }
+        const table = $createTableNode();
+        $insertNodes([table]);
+        // Somewhere to carry on after it, exactly as the code block does: a
+        // decorator at the end of a note leaves nowhere to type.
+        if (table.getNextSibling() === null) {
+          table.insertAfter($createParagraphNode());
+        }
+      });
+      return;
     case "image":
       void pickImages().then((names) => {
         for (const name of names) {

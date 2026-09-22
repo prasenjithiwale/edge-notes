@@ -8,6 +8,7 @@ import { openUrl } from "../lib/ipc";
 import { parseBlocks, parseInline, plainText, type Inline, type Line } from "../lib/markdown";
 import { imageSrc } from "../lib/images";
 import { splitTags } from "../lib/tags";
+import type { Table } from "../lib/table";
 import styles from "./NoteText.module.css";
 
 /**
@@ -305,6 +306,43 @@ export function LineRow({
   );
 }
 
+/**
+ * A table as a table. The cells are inline-formatted like any other text, so
+ * `**bold**` in a cell is bold — the cell is text that happens to be in a grid.
+ *
+ * It scrolls sideways rather than squeezing: a 320 px panel cannot show four
+ * columns at a readable size, and a table with unreadable columns is worse than
+ * one you have to push.
+ */
+export function NoteTable({ table }: { table: Table }) {
+  return (
+    <div className={styles.tableWrap} onClick={stop}>
+      <table className={styles.table}>
+        <thead>
+          <tr>
+            {table.header.map((cell, index) => (
+              <th key={index} style={{ textAlign: table.align[index] ?? undefined }}>
+                <InlineText text={cell} />
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {table.rows.map((row, rowIndex) => (
+            <tr key={rowIndex}>
+              {row.map((cell, index) => (
+                <td key={index} style={{ textAlign: table.align[index] ?? undefined }}>
+                  <InlineText text={cell} />
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 interface NoteLinesProps {
   content: string;
   /** Class for the first line with text on it, the one that reads as the title. */
@@ -334,10 +372,10 @@ export function NoteLines({
   onToggle,
 }: NoteLinesProps) {
   const blocks = useMemo(() => parseBlocks(content), [content]);
-  // The title is the first line with text on it, and a code block counts: a note
-  // that opens with one has no other first line.
+  // The title is the first line with text on it, and a code block or a table
+  // counts: a note that opens with one has no other first line.
   const titleIndex = blocks.findIndex(
-    (block) => block.kind === "code" || block.line.text.trim() !== "",
+    (block) => block.kind !== "line" || block.line.text.trim() !== "",
   );
 
   if (titleIndex === -1) {
@@ -349,6 +387,9 @@ export function NoteLines({
       {blocks.map((block, position) => {
         if (block.kind === "code") {
           return <CodeBlock key={block.from} lang={block.lang} code={block.code} />;
+        }
+        if (block.kind === "table") {
+          return <NoteTable key={block.from} table={block.table} />;
         }
         const { line, index } = block;
         if (line.text.trim() === "") {

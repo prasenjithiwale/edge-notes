@@ -307,3 +307,43 @@
   /* A picture on a coloured card needs an edge or it floats on the colour. */
   box-shadow: 0 0 0 1px var(--note-edge, rgb(0 0 0 / 0.08));
 }
+
+/* A table as it is read. Sideways rather than squeezed: four columns crushed
+   into 320 px are unreadable, and a table you push is better than one you
+   cannot read. Not inside the card's click target, so it can be scrolled. */
+.tableWrap {
+  margin: 4px 0;
+  max-width: 100%;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  border: 1px solid var(--note-edge, rgb(0 0 0 / 0.08));
+  border-radius: 6px;
+}
+
+.table {
+  border-collapse: collapse;
+  font-size: 12px;
+  min-width: max-content;
+}
+
+.table th,
+.table td {
+  padding: 4px 8px;
+  text-align: left;
+  vertical-align: top;
+  border-bottom: 1px solid var(--note-edge, rgb(0 0 0 / 0.08));
+  border-right: 1px solid var(--note-edge, rgb(0 0 0 / 0.08));
+}
+
+.table th {
+  font-weight: 600;
+}
+
+.table tr:last-child td {
+  border-bottom: none;
+}
+
+.table th:last-child,
+.table td:last-child {
+  border-right: none;
+}

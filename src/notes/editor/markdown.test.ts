@@ -6,6 +6,7 @@ import { HeadingNode } from "@lexical/rich-text";
 
 import { CodeNode } from "./CodeNode";
 import { ImageNode } from "./ImageNode";
+import { TableNode } from "./TableNode";
 import { $setFromMarkdown, $toMarkdown } from "./markdown";
 
 let editor: LexicalEditor;
@@ -13,7 +14,7 @@ let editor: LexicalEditor;
 beforeEach(() => {
   editor = createEditor({
     namespace: "test",
-    nodes: [HeadingNode, ListNode, ListItemNode, LinkNode, CodeNode, ImageNode],
+    nodes: [HeadingNode, ListNode, ListItemNode, LinkNode, CodeNode, ImageNode, TableNode],
     onError: (error) => {
       throw error;
     },
@@ -87,6 +88,22 @@ describe("a note survives a trip through the editor", () => {
       "a pipe with no number after it",
       "![alt|wide](ledge://localhost/0199a000-0000-7000-8000-000000000006.png)",
     ],
+    // Tables. The canonical spelling is what the editor writes, and what it
+    // writes has to be what it reads, or opening a note would rewrite it.
+    ["a table", "| Day | Cost |\n| --- | --- |\n| Mon | 12 |"],
+    [
+      "a table with alignment",
+      "| Day | Cost |\n| :--- | ---: |\n| Mon | 12 |\n| Tue | 9 |",
+    ],
+    ["a table between paragraphs", "before\n| a | b |\n| --- | --- |\n| 1 | 2 |\nafter"],
+    ["a table with an empty cell", "| a | b |\n| --- | --- |\n|  | 2 |"],
+    ["a cell with a pipe in it", "| a | b |\n| --- | --- |\n| x \\| y | 2 |"],
+    ["a table with no body rows", "| a | b |\n| --- | --- |"],
+    // And the shapes that are not tables: a line of pipes with no divider, and
+    // a divider whose width does not match the header.
+    ["a line with pipes in it", "a | b | c"],
+    ["pipes with no divider under them", "| a | b |\n| 1 | 2 |"],
+    ["a divider of the wrong width", "| a | b |\n| --- |\n| 1 | 2 |"],
     ["something that only looks like an image", "not ![an image really"],
     ["a bang before a bracket", "wow! [not a link] here"],
     // The three levels the dialect writes, and the shapes that look like

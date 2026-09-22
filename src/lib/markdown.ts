@@ -32,6 +32,8 @@ export type Inline =
    */
   | { kind: "image"; url: string; alt: string; width: number | null };
 
+import { parseTable, type Table } from "./table";
+
 export type LineKind = "paragraph" | "heading" | "bullet" | "ordered" | "task";
 
 export interface Line {
@@ -406,7 +408,9 @@ export interface CodeBlock {
  */
 export type Block =
   | { kind: "line"; index: number; line: Line }
-  | ({ kind: "code" } & CodeBlock);
+  | ({ kind: "code" } & CodeBlock)
+  /** A pipe table: several lines that are one thing (see `lib/table.ts`). */
+  | { kind: "table"; table: Table; from: number; to: number };
 
 export function parseBlocks(content: string): Block[] {
   const lines = content.split("\n");
@@ -416,6 +420,14 @@ export function parseBlocks(content: string): Block[] {
     const raw = lines[i] ?? "";
     const open = FENCE_OPEN.exec(raw);
     if (open === null) {
+      // A table is looked for before the line is taken as a line, and inside a
+      // fence it never is: code with pipes in it is code.
+      const table = parseTable(lines, i);
+      if (table !== null) {
+        blocks.push({ kind: "table", table: table.table, from: i, to: table.to });
+        i = table.to - 1;
+        continue;
+      }
       blocks.push({ kind: "line", index: i, line: parseLine(raw) });
       continue;
     }
@@ -493,6 +505,19 @@ export function cardPreview(content: string): CardPreview {
       if (text !== "") {
         lines.push({ ...block.line, text, index: block.index, code: false });
       }
+      continue;
+    }
+    if (block.kind === "table") {
+      // A card is two lines wide; a table is not going to fit in one. The
+      // header row is what says what the table is about, so that is what the
+      // preview shows, as plain text rather than as a grid.
+      const heading = block.table.header.filter((cell) => cell !== "").join(" · ");
+      lines.push({
+        ...parseLine(""),
+        text: heading === "" ? "Table" : heading,
+        index: block.from,
+        code: false,
+      });
       continue;
     }
     // The fences themselves are not content, so they are not previewed. What is

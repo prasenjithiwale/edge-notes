@@ -4203,6 +4203,73 @@ holding itself open for a sheet that has gone would never close again.
 - [ ] A note whose picture file is missing shares as `[image]` rather than
       failing
 
+## Tables (22 Sep 2026)
+
+"Add an option to add a table in the notes." The dialect's rule decided most of
+it: a note is stored exactly as it is written, and a block the serialiser cannot
+write back is a block that is lost on the next save.
+
+### GFM's spelling, because it is everyone's
+
+    | Day | Cost |
+    | --- | ---: |
+    | Mon | 12   |
+
+`lib/table.ts` parses and writes it. Choosing the pipe table rather than
+something of our own means a note with a table is still worth pasting into
+Obsidian, still readable in a text editor, and still plain text in the database.
+
+**Alignment is parsed and written back** although nothing in the app sets it: a
+table pasted in from elsewhere has it, and a dialect that reads something it
+cannot write is a dialect that loses it.
+
+It is the second multi-line block, after the code fence, so `parseBlocks` grew a
+`table` kind — and every consumer had to answer for it, which the type checker
+insisted on: the reader draws a real `<table>`, the card preview shows the
+header row as text (a grid does not fit in two lines), the share HTML writes a
+`<table>`, and the editor builds a node.
+
+`formatTable` writes **one canonical spelling**, so `a|b / -|- / 1|2` becomes
+the spaced form on the first save. The round trip is what matters and
+`markdown.test.ts` holds it: six table shapes, plus three that are *not* tables
+(pipes with no divider under them, a divider of the wrong width, prose with a
+pipe in it) and must stay the text they are.
+
+### A grid of real fields, like the code block is a real textarea
+
+`editor/TableNode.tsx` is a `DecoratorNode` holding one `<input>` per cell. A
+cell is a single line of plain text, which is exactly what a pipe table can
+store: a cell that could hold a paragraph would be a cell the dialect cannot
+write back.
+
+Two things were only findable on screen, both already written down elsewhere in
+this file and both hit again:
+
+- **The keystrokes never reached the fields.** Everything in a decorator is
+  inside the editor's root, so a character typed into a cell bubbles to
+  Lexical's own input handling, which tries to reconcile it into a node that
+  holds no text. The code block's wrapper stops the whole editing conversation
+  — keydown, beforeinput, input, paste, cut, copy, composition — and the table
+  needs exactly the same one, with Escape the same exception.
+- **The per-row delete buttons were off the edge.** They sat in the grid's last
+  column, which is past the right-hand side of a 320 px panel as soon as the
+  table scrolls — the image handle's mistake, two days old. Every control is in
+  the footer now and acts on the cell the caret is in.
+
+Verified in Safari, the same WebKit the webview is: typing in a cell reaches the
+note's text, and "+ Row" adds a row to it.
+
+### Checklist
+
+- [ ] `/table` inserts a grid, and there is a paragraph after it to carry on in
+- [ ] Typing in a cell, closing the note and opening it again keeps what was typed
+- [ ] + Row, + Column, − Row, − Column all do what they say
+- [ ] A table with four columns scrolls sideways rather than becoming unreadable
+- [ ] The card shows the header row as its preview line
+- [ ] Share › Copy as rich text, pasted into Apple Notes, arrives as a table
+- [ ] A pasted GFM table with `:---:` in it keeps its alignment after a save
+- [ ] A line with pipes in it that is not a table stays text
+
 ## M0 acceptance checklist
 
 From brief section 12. Run `npm run tauri dev`, then work through these with

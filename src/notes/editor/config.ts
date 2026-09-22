@@ -3,8 +3,7 @@
  * the editor puts on them.
  *
  * The node list is deliberately short. A note has paragraphs, headings of three
- * levels, three kinds of list, bare links and code blocks — no quotes, no
- * tables — because that is the whole of the Markdown dialect a note is stored
+ * levels, three kinds of list, bare links and code blocks — no quotes — because that is the whole of the Markdown dialect a note is stored
  * in, and a node the dialect cannot write is a node that would be lost on the
  * next save. Headings joined the dialect in 0.5.0; `####` still cannot be
  * written, so there is no h4.
@@ -16,6 +15,7 @@ import type { EditorThemeClasses, Klass, LexicalNode } from "lexical";
 
 import { CodeNode } from "./CodeNode";
 import { ImageNode } from "./ImageNode";
+import { TableNode } from "./TableNode";
 import styles from "./RichEditor.module.css";
 
 /**
@@ -34,6 +34,7 @@ export const EDITOR_NODES: Klass<LexicalNode>[] = [
   AutoLinkNode,
   CodeNode,
   ImageNode,
+  TableNode,
 ];
 
 export const EDITOR_THEME: EditorThemeClasses = {

@@ -1,0 +1,87 @@
+/* A table in the editor: its own inset surface, like the code block's, so it
+   reads as one thing inside the note rather than as loose fields. */
+.wrap {
+  margin: 6px 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--code-bg);
+  overflow: hidden;
+}
+
+/* Sideways rather than squeezed: four columns at 320 px are unreadable if they
+   are made to fit, and a table you have to push is better than one you cannot
+   read. */
+.scroller {
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+}
+
+.grid {
+  display: grid;
+  gap: 1px;
+  background: var(--border);
+  /* Fits the panel when it can, and scrolls when the columns would be too
+     narrow to read rather than squeezing them. */
+  min-width: min-content;
+}
+
+.cell,
+.head {
+  font: inherit;
+  font-size: 12px;
+  min-width: 0;
+  padding: 5px 6px;
+  border: none;
+  background: var(--surface);
+  color: var(--text-primary);
+  cursor: text;
+  /* Both spellings, or WebKit refuses the caret (brief 7.5). */
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.head {
+  font-weight: 600;
+  background: var(--surface-sunken);
+}
+
+.cell:focus-visible,
+.head:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.foot {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 6px;
+  border-top: 1px solid var(--border);
+}
+
+.footTool {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+
+.footTool:hover:not(:disabled) {
+  background: var(--surface-sunken);
+  color: var(--text-primary);
+}
+
+.footTool:disabled {
+  opacity: 0.4;
+}
+
+/* Adding on the left, removing on the right, with air between them: the two
+   pairs do opposite things and should not be next to each other. */
+.spacer {
+  flex: 1;
+}

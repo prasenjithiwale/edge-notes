@@ -29,6 +29,12 @@ To release, see "Releasing" in the README.
   same thing.
 - **Settings lists all three shortcuts**, each with its own row and its own
   recorder.
+- **Tables.** `/table` in a note puts a grid in it: type into the cells, add or
+  remove a row or a column from the controls under it. It is stored as an
+  ordinary Markdown pipe table, so a note with a table in it still exports,
+  still pastes into another Markdown app, and is still plain text in the
+  database — and it arrives as a real table when the note is shared as rich
+  text. Alignment written by another app (`:---:`) is kept.
 - **Share a note.** A Share button in the note's header offers three ways out:
   **Copy as rich text**, which is what Apple Notes, OneNote, Mail and Word
   actually read — headings, lists, links and the pictures themselves all arrive

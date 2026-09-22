@@ -37,6 +37,7 @@ import { $createHeadingNode, $isHeadingNode, type HeadingTagType } from "@lexica
 import { parseBlocks, parseInline, type Inline, type ListKind } from "../../lib/markdown";
 import { $createCodeNode, $isCodeNode } from "./CodeNode";
 import { $createImageNode } from "./ImageNode";
+import { $createTableNode } from "./TableNode";
 
 /** Our list kinds and Lexical's names for the same three things. */
 const LIST_TYPE: Record<ListKind, ListType> = {
@@ -138,6 +139,12 @@ export function $setFromMarkdown(content: string): void {
       list = null;
       listKind = null;
       root.append($createCodeNode(block.lang, block.code));
+      continue;
+    }
+    if (block.kind === "table") {
+      list = null;
+      listKind = null;
+      root.append($createTableNode(block.table));
       continue;
     }
 

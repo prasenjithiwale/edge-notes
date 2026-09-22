@@ -90,6 +90,24 @@ export function noteToHtml(content: string, src: ImageSrc): string {
       continue;
     }
 
+    if (block.kind === "table") {
+      list = closeList(list, out);
+      const cells = (row: string[], tag: "th" | "td") =>
+        row
+          .map((cell, index) => {
+            const align = block.table.align[index];
+            const style = align === null || align === undefined ? "" : ` style="text-align:${align}"`;
+            return `<${tag}${style}>${inlineHtml(parseInline(cell), src)}</${tag}>`;
+          })
+          .join("");
+      out.push(
+        `<table><thead><tr>${cells(block.table.header, "th")}</tr></thead><tbody>${block.table.rows
+          .map((row) => `<tr>${cells(row, "td")}</tr>`)
+          .join("")}</tbody></table>`,
+      );
+      continue;
+    }
+
     const { line } = block;
     const html = inlineHtml(parseInline(line.text), src);
 

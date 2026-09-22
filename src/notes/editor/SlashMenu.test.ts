@@ -17,6 +17,7 @@ describe("the slash menu's blocks", () => {
       "bullet",
       "ordered",
       "codeblock",
+      "table",
       // A picture is storable since 0.7.0: `![alt](url)`, round-tripped like
       // every other shape.
       "image",
@@ -40,6 +41,7 @@ describe("the slash menu's blocks", () => {
     // the others, and the other opens a picker rather than changing the line.
     expect(BLOCKS.filter((block) => block.shortcut === null).map((b) => b.command)).toEqual([
       "text",
+      "table",
       "image",
     ]);
     expect(BLOCKS.find((block) => block.command === "bold")?.shortcut).toMatch(/B$/);
@@ -71,6 +73,8 @@ describe("the slash menu's blocks", () => {
     expect(first("em")).toBe("Italic");
     expect(first("mono")).toBe("Code");
     expect(first("picture")).toBe("Image");
+    expect(first("grid")).toBe("Table");
+    expect(first("columns")).toBe("Table");
     expect(first("screenshot")).toBe("Image");
   });
 
