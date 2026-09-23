@@ -11,6 +11,19 @@ To release, see "Releasing" in the README.
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-09-23
+
+### Added
+
+- **Ledge updates itself.** It checks for a new version a minute after it
+  starts and once a day after that. When there is one, the tray menu offers
+  "Update to x.y.z and restart" and Settings › About says so; either one
+  downloads it, checks its signature, saves your notes, and restarts into the
+  new version. Settings › About › Updates can also check on request. On Windows,
+  macOS and the Linux AppImage. A `.deb` is still updated by `apt`, and says so.
+  This version has to be installed by hand once; from then on, it takes care of
+  the rest.
+
 ## [0.8.0] - 2026-09-23
 
 ### Added
