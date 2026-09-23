@@ -11,6 +11,8 @@ To release, see "Releasing" in the README.
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-09-23
+
 ### Added
 
 - **The panel can wear a colour.** Settings › Appearance › Panel colour picks
