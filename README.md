@@ -158,6 +158,33 @@ existing version alone rather than failing.
 Neither Linux nor Windows can be built on a Mac: Tauri bundles only for the
 platform it runs on, so each needs its own machine or a CI runner.
 
+### The keychain, while developing
+
+A dev build is a freshly signed binary every time it rebuilds, and the keychain
+treats each one as a stranger — so it asks for access to the database key on
+every restart, and a prompt left unanswered leaves the panel showing the locked
+view.
+
+`LEDGE_DB_KEY` supplies the key instead, and **debug builds only**:
+
+```bash
+# The key, once, from the running app: Settings › Privacy › Reveal — or from
+# the keychain directly, which asks for permission once:
+security find-generic-password -s dev.ledge.app -a notes.db -w
+
+# Then, for a dev session that never asks again:
+LEDGE_DB_KEY="<that key>" npm run tauri dev
+```
+
+Spaces and dashes are ignored, so the key can be pasted as it is displayed.
+Unset the variable and the keychain is used exactly as before — nothing else
+changes, and the database stays encrypted either way.
+
+An environment variable is a worse place for a key than the keychain: it is
+inherited by every child process and visible in a process listing. That is why a
+release build ignores it, and why this is for a development machine rather than
+for daily use.
+
 ## Building
 
 ```bash

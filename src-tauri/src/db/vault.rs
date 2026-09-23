@@ -142,6 +142,22 @@ enum Stored {
 }
 
 fn read_key() -> Stored {
+    // A way round the credential store for development: `LEDGE_DB_KEY` supplies
+    // the key itself, so a dev build — a freshly signed binary on every rebuild,
+    // which the keychain treats as a stranger every time — stops asking for
+    // access every time. Unset it and the keychain is used exactly as before.
+    //
+    // Debug builds only. An environment variable is a worse place for a key than
+    // the keychain is: it is inherited by every child process and shows up in a
+    // process listing, and a release build must not be talkable into reading one.
+    #[cfg(debug_assertions)]
+    if let Ok(secret) = std::env::var("LEDGE_DB_KEY") {
+        return DatabaseKey::parse(&secret).map_or_else(
+            || Stored::NoStore("LEDGE_DB_KEY is not a key this app wrote".to_owned()),
+            Stored::Key,
+        );
+    }
+
     let entry = match keyring::Entry::new(KEYCHAIN_SERVICE, KEYCHAIN_ACCOUNT) {
         Ok(entry) => entry,
         Err(error) => return Stored::NoStore(describe(&error)),
