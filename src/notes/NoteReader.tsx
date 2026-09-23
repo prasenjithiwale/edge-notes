@@ -1,7 +1,9 @@
-import { Minimize2, Pencil } from "lucide-react";
+import { useState } from "react";
+import { Check, Copy, Minimize2, Pencil } from "lucide-react";
 
 import { IconButton } from "../components/IconButton";
-import type { Note } from "../lib/ipc";
+import { shareCopyText, type Note } from "../lib/ipc";
+import { noteToText } from "../lib/noteHtml";
 import { editedLabel } from "../lib/notes";
 import { useNow } from "../lib/useNow";
 import { useNotesStore } from "../store/notes";
@@ -18,7 +20,11 @@ interface NoteReaderProps {
  * note shows, and where an expanded note lands after Done. Boxes can still be
  * ticked and links followed, as on a card; changing the text means Edit.
  */
+/** How long the copy button stays ticked, as the card's does. */
+const COPIED_MS = 1_400;
+
 export function NoteReader({ note }: NoteReaderProps) {
+  const [copied, setCopied] = useState(false);
   const startEditing = useNotesStore((state) => state.startEditing);
   const shrink = useNotesStore((state) => state.shrink);
   const toggleTask = useNotesStore((state) => state.toggleTask);
@@ -27,6 +33,31 @@ export function NoteReader({ note }: NoteReaderProps) {
   return (
     <section className={styles.reader} style={noteColorStyle(note.color)}>
       <div className={styles.toolbar}>
+        {/* The expanded note is read the same way a locked card is, so it needs
+            the same way out: the copy key only arrives if the panel owns the
+            keyboard, and a panel opened by hover does not. */}
+        <IconButton
+          label={copied ? "Note copied" : "Copy note"}
+          className={styles.button}
+          onClick={() => {
+            void shareCopyText(noteToText(note.content))
+              .then(() => {
+                setCopied(true);
+                setTimeout(() => {
+                  setCopied(false);
+                }, COPIED_MS);
+              })
+              .catch((error: unknown) => {
+                console.error("notes: could not copy the note", error);
+              });
+          }}
+        >
+          {copied ? (
+            <Check size={16} strokeWidth={2.25} />
+          ) : (
+            <Copy size={16} strokeWidth={1.75} />
+          )}
+        </IconButton>
         <IconButton
           label="Edit note"
           className={styles.button}

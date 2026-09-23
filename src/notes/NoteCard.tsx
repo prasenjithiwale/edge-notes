@@ -1,10 +1,11 @@
-import { useMemo, type CSSProperties, type MouseEvent } from "react";
-import { Lock, Maximize2, Pencil } from "lucide-react";
+import { useMemo, useState, type CSSProperties, type MouseEvent } from "react";
+import { Check, Copy, Lock, Maximize2, Pencil } from "lucide-react";
 
 import { IconButton } from "../components/IconButton";
 import { cx } from "../lib/cx";
-import type { Note } from "../lib/ipc";
+import { shareCopyText, type Note } from "../lib/ipc";
 import { cardPreview, parseInline, plainText } from "../lib/markdown";
+import { noteToText } from "../lib/noteHtml";
 import { FlowText, InlineText, LineRow, NoteLines, NoteTable } from "./NoteText";
 import styles from "./NoteCard.module.css";
 
@@ -137,7 +138,11 @@ function cardLabel(note: Note): string {
  * it, and the only way into the editor is the pencil — the point of pinning a
  * note is that you keep it in front of you and stop editing it by accident.
  */
+/** How long the copy button stays ticked, as the code block's does. */
+const COPIED_MS = 1_400;
+
 export function NoteCard({ note, onOpen, onUnpin, onExpand, onToggleTask }: NoteCardProps) {
+  const [copied, setCopied] = useState(false);
   const expand = (
     <IconButton label="Expand note" className={styles.tool} onClick={onExpand}>
       <Maximize2 size={14} strokeWidth={1.75} />
@@ -176,6 +181,33 @@ export function NoteCard({ note, onOpen, onUnpin, onExpand, onToggleTask }: Note
         <FullBody note={note} onToggleTask={onToggleTask} />
       </div>
       <div className={styles.tools}>
+        {/* A locked note is one you read and copy in place, and selecting its
+            text is only half of that: the copy key only arrives if the panel
+            owns the keyboard, and a panel opened by hover deliberately does not
+            (brief 6.3). So there is a button, and it copies through Rust, which
+            needs no focus at all. */}
+        <IconButton
+          label={copied ? "Note copied" : "Copy note"}
+          className={styles.tool}
+          onClick={() => {
+            void shareCopyText(noteToText(note.content))
+              .then(() => {
+                setCopied(true);
+                setTimeout(() => {
+                  setCopied(false);
+                }, COPIED_MS);
+              })
+              .catch((error: unknown) => {
+                console.error("notes: could not copy the note", error);
+              });
+          }}
+        >
+          {copied ? (
+            <Check size={14} strokeWidth={2.25} />
+          ) : (
+            <Copy size={14} strokeWidth={1.75} />
+          )}
+        </IconButton>
         {/* Not `active`: accent is reserved for focus rings and Keep open
             (brief 7.1). A lock in the note's own colour says "locked". */}
         <IconButton

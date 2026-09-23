@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 
 import type { Note } from "../lib/ipc";
 
@@ -35,6 +35,48 @@ afterEach(() => {
  * The regression: a note whose content is a table showed only its heading row
  * as a line of words, so saving a table looked like losing it.
  */
+/**
+ * A locked note is one you read and copy in place. Selecting its text is only
+ * half of that: the copy *key* only arrives when the panel owns the keyboard,
+ * and a panel opened by hover deliberately does not (brief 6.3) — so on Linux,
+ * where the window manager may never hand focus over at all, there was no way
+ * to copy a locked note. The button copies through Rust, which needs no focus.
+ */
+describe("copying a locked note", () => {
+  it("puts the note's text on the clipboard without the keyboard", async () => {
+    const locked = note({ id: "l", content: "Wifi\nhunter2", pinned: true });
+    render(
+      <NoteCard
+        note={locked}
+        onOpen={() => undefined}
+        onUnpin={() => undefined}
+        onExpand={() => undefined}
+        onToggleTask={() => undefined}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Copy note" }));
+    await waitFor(() => {
+      expect(
+        invoke.mock.calls.filter(([command]) => command === "share_copy_text"),
+      ).toEqual([["share_copy_text", { text: "Wifi\nhunter2" }]]);
+    });
+  });
+
+  it("is not offered on a card that opens instead of being read", () => {
+    render(
+      <NoteCard
+        note={note({ id: "u", content: "open me" })}
+        onOpen={() => undefined}
+        onUnpin={() => undefined}
+        onExpand={() => undefined}
+        onToggleTask={() => undefined}
+      />,
+    );
+    expect(screen.queryByRole("button", { name: "Copy note" })).toBeNull();
+  });
+});
+
 describe("a note with a table", () => {
   it("draws the table on the card", () => {
     const { container } = render(

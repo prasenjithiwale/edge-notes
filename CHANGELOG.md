@@ -11,6 +11,15 @@ To release, see "Releasing" in the README.
 
 ## [Unreleased]
 
+### Fixed
+
+- **A locked note can be copied.** Its text was selectable, but the copy key
+  only arrives when the panel owns the keyboard, and a panel opened by hover
+  deliberately does not — so on Linux, where the window manager may never hand
+  focus over, there was no way to get a locked note out at all. Locked cards and
+  the expanded reader now have a Copy button, which copies through Rust and
+  needs no focus.
+
 ## [0.7.1] - 2026-09-23
 
 ### Added
