@@ -11,6 +11,13 @@ To release, see "Releasing" in the README.
 
 ## [Unreleased]
 
+### Added
+
+- **The panel can wear a colour.** Settings › Appearance › Panel colour picks
+  one of the sixteen note colours, and the header, the toolbar and the focus
+  timer's ring take it. "No colour" is the default and leaves the chrome exactly
+  as it was.
+
 ### Fixed
 
 - **A locked note can be copied.** Its text was selectable, but the copy key

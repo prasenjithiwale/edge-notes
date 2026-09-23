@@ -33,6 +33,9 @@ export default defineConfig({
         /tokens\.css/,
         /global\.css/,
         /NoteCard\.module\.css/,
+        // The panel's own colour is read out of these two by accent.test.ts.
+        /Panel\.module\.css/,
+        /PomodoroView\.module\.css/,
         /NoteEditor\.module\.css/,
         /NoteReader\.module\.css/,
         /NoteText\.module\.css/,

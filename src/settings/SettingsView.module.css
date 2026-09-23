@@ -371,3 +371,35 @@
   padding: 6px 8px;
   width: 100%;
 }
+
+/* The panel-colour picker: the same dots the notes are filtered by, wrapped so
+   seventeen of them fit a 320 px column. */
+.swatches {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+  max-width: 60%;
+}
+
+.swatch {
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: var(--swatch, var(--surface-sunken));
+  flex: none;
+  /* The colourless one is a card with no colour, and needs the hairline its
+     cards have or it disappears into the row. */
+  box-shadow: inset 0 0 0 1px var(--note-none-edge);
+}
+
+/* Brief 6.7's ring, as the colour filter draws it: 2 px of surface, then 2 px
+   of ink, so the focus outline still has somewhere to go outside it. */
+.swatchOn {
+  box-shadow:
+    inset 0 0 0 1px var(--note-none-edge),
+    0 0 0 2px var(--surface),
+    0 0 0 4px var(--text-primary);
+}

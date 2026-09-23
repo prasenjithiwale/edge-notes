@@ -21,6 +21,7 @@ const DEFAULTS: Settings = {
   theme: "system",
   "notes.lastColor": "yellow",
   "notes.lastCodeLang": "",
+  "appearance.accent": "none",
   "notes.manualOrder": false,
   "shortcut.newNote": "CmdOrCtrl+Alt+N",
   "shortcut.quickCapture": "CmdOrCtrl+Alt+Q",
@@ -83,6 +84,27 @@ const TAB_BASE = { width: 22, height: 72, pillWidth: 12, pillHeight: 52 };
  * the translucency is, so the settings view can show a size the moment it is
  * picked rather than after a round trip to Rust.
  */
+/**
+ * The panel's own colour, from the note palette (owner's request, 23 Sep 2026 —
+ * a deliberate exception to brief 7.1's neutral chrome).
+ *
+ * The **pairing** is what is used, not just the tint: a note's background and
+ * its ink are checked against each other at AA in both themes by
+ * `contrast.test.ts`, so a header wearing both is legible by construction. The
+ * properties are removed rather than set to a neutral for `"none"`, so every
+ * rule falls back to what it said before there was a theme at all.
+ */
+export function applyAccent(accent: Settings["appearance.accent"]): void {
+  const root = document.documentElement;
+  if (accent === "none") {
+    root.style.removeProperty("--accent-bg");
+    root.style.removeProperty("--accent-ink");
+    return;
+  }
+  root.style.setProperty("--accent-bg", `var(--note-${accent}-bg)`);
+  root.style.setProperty("--accent-ink", `var(--note-${accent}-text)`);
+}
+
 export function applyTabSize(size: Settings["tab.size"]): void {
   const scale = TAB_SCALES[size];
   const root = document.documentElement;
@@ -99,6 +121,7 @@ function applyAppearance(settings: Settings): void {
   applyTheme(settings.theme);
   applyPanelTranslucency(settings["panel.translucency"]);
   applyTabSize(settings["tab.size"]);
+  applyAccent(settings["appearance.accent"]);
 }
 
 interface SettingsStore {

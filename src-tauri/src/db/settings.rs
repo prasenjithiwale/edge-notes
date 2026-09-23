@@ -86,6 +86,12 @@ pub struct Settings {
     /// a fence with no language.
     #[serde(rename = "notes.lastCodeLang")]
     pub notes_last_code_lang: String,
+    /// Not in brief 9.2: a colour for the panel's own chrome, from the note
+    /// palette. `None` is the neutral chrome brief 7.1 asks for, and the
+    /// default; anything else tints the header, the toolbar and the focus ring,
+    /// which the owner asked for on 23 Sep 2026.
+    #[serde(rename = "appearance.accent")]
+    pub appearance_accent: NoteColor,
     /// Not in brief 9.2: the notes list is in the order the cards were dragged
     /// into, rather than most recently edited first (idea 16).
     #[serde(rename = "notes.manualOrder")]
@@ -198,6 +204,8 @@ impl Default for Settings {
             notes_last_code_lang: String::new(),
             // Recency until something is dragged: the order a widget shows by
             // default should be the one nobody had to arrange.
+            // Neutral until someone chooses otherwise: brief 7.1's chrome.
+            appearance_accent: NoteColor::None,
             notes_manual_order: false,
             shortcut_new_note: "CmdOrCtrl+Alt+N".to_owned(),
             // Beside the new-note one. Not ⌥⌘Space: that is macOS's own Finder
@@ -254,6 +262,8 @@ pub struct SettingsPatch {
     pub notes_last_color: Option<NoteColor>,
     #[serde(rename = "notes.lastCodeLang")]
     pub notes_last_code_lang: Option<String>,
+    #[serde(rename = "appearance.accent")]
+    pub appearance_accent: Option<NoteColor>,
     #[serde(rename = "notes.manualOrder")]
     pub notes_manual_order: Option<bool>,
     #[serde(rename = "shortcut.newNote")]
@@ -352,6 +362,7 @@ pub fn get(connection: &Connection) -> AppResult<Settings> {
             "notes.lastCodeLang",
             defaults.notes_last_code_lang,
         )?,
+        appearance_accent: read(connection, "appearance.accent", defaults.appearance_accent)?,
         notes_manual_order: read(connection, "notes.manualOrder", defaults.notes_manual_order)?,
         shortcut_new_note: read(connection, "shortcut.newNote", defaults.shortcut_new_note)?,
         shortcut_quick_capture: read(
@@ -456,6 +467,9 @@ pub fn update(connection: &Connection, patch: &SettingsPatch) -> AppResult<Setti
                 .filter(|c| !c.is_whitespace())
                 .collect::<String>(),
         )?;
+    }
+    if let Some(value) = patch.appearance_accent {
+        write(connection, "appearance.accent", &value)?;
     }
     if let Some(value) = patch.notes_manual_order {
         write(connection, "notes.manualOrder", &value)?;

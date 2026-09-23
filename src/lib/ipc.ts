@@ -198,6 +198,12 @@ export interface Settings {
   "notes.lastColor": NoteColor;
   /** The language the editor writes after a new code fence; "" for none. */
   "notes.lastCodeLang": string;
+  /**
+   * A colour for the panel's own chrome, from the note palette. `"none"` is the
+   * neutral chrome of brief 7.1 and the default. Not `theme`, which is brief
+   * 9.2's light/dark.
+   */
+  "appearance.accent": NoteColor;
   /** The list is in the order the cards were dragged into (idea 16). */
   "notes.manualOrder": boolean;
   "shortcut.newNote": string;

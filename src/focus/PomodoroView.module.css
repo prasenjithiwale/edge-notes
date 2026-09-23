@@ -73,7 +73,9 @@
 /* Neutral, like the rest of the chrome: the note palette is the only colour
    (brief 7.1), and a timer does not need to be red to be a timer. */
 .progress {
-  stroke: var(--text-primary);
+  /* The theme colour if there is one: the ring is the one thing on the Focus
+     tab that says how far through you are, so it is worth the colour. */
+  stroke: var(--accent-ink, var(--text-primary));
   transition: stroke-dashoffset 1s linear;
 }
 

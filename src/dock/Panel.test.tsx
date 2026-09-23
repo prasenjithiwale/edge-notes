@@ -80,6 +80,7 @@ const SETTINGS: Settings = {
   theme: "system",
   "notes.lastColor": "yellow",
   "notes.lastCodeLang": "",
+  "appearance.accent": "none",
   "notes.manualOrder": false,
   "shortcut.newNote": "CmdOrCtrl+Alt+N",
   "shortcut.quickCapture": "CmdOrCtrl+Alt+Space",

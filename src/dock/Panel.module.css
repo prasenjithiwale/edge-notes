@@ -11,6 +11,9 @@
   position: relative;
 }
 
+/* The theme colour, when there is one: the note palette's own pairing, so the
+   ink on it is the ink that palette was contrast-checked with. Without a theme
+   both fall back and the chrome is neutral, which is brief 7.1's default. */
 .header {
   display: flex;
   align-items: center;
@@ -19,6 +22,8 @@
   height: 44px;
   padding: 0 12px;
   flex: none;
+  background: var(--accent-bg, transparent);
+  color: var(--accent-ink, inherit);
 }
 
 .actions {
@@ -97,6 +102,8 @@
   height: var(--toolbar-height);
   padding: 0 8px;
   border-top: 1px solid var(--border);
+  background: var(--accent-bg, transparent);
+  color: var(--accent-ink, inherit);
 }
 
 /* What the panel keeps about itself, together at the leading edge: Settings,

@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import { ArrowLeft, ChevronRight, Minus, Plus } from "lucide-react";
 
 import { IconButton } from "../components/IconButton";
@@ -11,16 +11,19 @@ import {
   isIpcErrorOf,
   monitorsList,
   notesExport,
+  NOTE_COLORS,
   openUrl,
   securityRecoveryKey,
   securityStatus,
   shortcutSet,
   type AppInfo,
+  type NoteColor,
   type SecurityStatus,
   type Settings,
 } from "../lib/ipc";
 import { copyText } from "../lib/clipboard";
 import { useDockStore } from "../store/dock";
+import { colorName } from "../lib/notes";
 import { useNotesStore } from "../store/notes";
 import { applyPanelTranslucency, applyTabSize, useSettingsStore } from "../store/settings";
 import styles from "./SettingsView.module.css";
@@ -591,6 +594,52 @@ const SIDES: Choice<Settings["dock.side"]>[] = [
   { value: "right", label: "Right" },
 ];
 
+/**
+ * The panel's own colour, picked from the note palette.
+ *
+ * The palette rather than a second set of colours: it is the one list of
+ * colours in the app, and what it is paired with — each colour's ink — is
+ * contrast-checked against it in both themes, so chrome wearing the pair is
+ * legible by construction. "No colour" is the neutral chrome of brief 7.1, and
+ * the default; the whole row is the same dots the notes are filtered by.
+ */
+function AccentSetting({
+  value,
+  onChange,
+}: {
+  value: NoteColor;
+  onChange: (accent: NoteColor) => void;
+}) {
+  return (
+    <div className={styles.row}>
+      <Label
+        text="Panel colour"
+        description="Tints the header, the toolbar and the focus ring."
+      />
+      <div className={styles.swatches} role="group" aria-label="Panel colour">
+        {NOTE_COLORS.map((color) => (
+          <button
+            key={color}
+            type="button"
+            className={cx(styles.swatch, value === color && styles.swatchOn)}
+            style={
+              color === "none"
+                ? undefined
+                : ({ "--swatch": `var(--note-${color}-bg)` } as CSSProperties)
+            }
+            aria-label={colorName(color)}
+            aria-pressed={value === color}
+            title={colorName(color)}
+            onClick={() => {
+              onChange(color);
+            }}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
 /** Which global shortcut a row sets. Mirrors `tray::Global` on the Rust side. */
 type ShortcutName = "newNote" | "quickCapture" | "clipboardNote";
 
@@ -692,6 +741,13 @@ export function SettingsView({ onClose }: SettingsViewProps) {
       </div>
 
       <Group title="Appearance">
+        <AccentSetting
+          value={settings["appearance.accent"]}
+          onChange={(accent) => {
+            void patch({ "appearance.accent": accent });
+          }}
+        />
+
         <SegmentedSetting
           legend="Theme"
           choices={THEMES}
