@@ -35,6 +35,7 @@ Work after M5, owner-requested, newest last:
 | Headings, note titles, and deleting for good | 18 Sep 2026 | Released in **v0.5.0**. `@lexical/rich-text` approved by the owner the same day. |
 | The tab flashed inwards as the panel opened (macOS) | 18 Sep 2026 | Released in **v0.5.1**; measured frame by frame before and after. Windows and Linux still have the two-call split. |
 | Encryption at rest, no panel in screen shares, a vivid palette | 18 Sep 2026 | Built; ideas 1 and 2. Verified on the owner's own database and on screen. |
+| Automatic updates (idea 6) | 23 Sep 2026 | Released in **v0.9.0**, the first version that can update itself. Check verified against a local feed; install not yet clicked through. The `TAURI_SIGNING_PRIVATE_KEY` secret was set on release day. |
 
 **Releases:** [v0.0.1](https://github.com/prasenjithiwale/edge-notes/releases/tag/v0.0.1)
 and [v0.0.2](https://github.com/prasenjithiwale/edge-notes/releases/tag/v0.0.2),
@@ -4398,6 +4399,94 @@ in a photograph of the menu bar:
 - [ ] Pause it: the title goes, and the panel still shows the paused time
 - [ ] Let a phase end while the panel is closed: the title clears
 - [ ] Quit: nothing is left behind on the menu bar
+
+## Automatic updates (23 Sep 2026)
+
+Idea 6, with `tauri-plugin-updater` 2.12.0 approved by the owner the same day.
+Every fix so far needed a manual reinstall; now an installed copy finds, checks
+and installs the next version itself.
+
+### How it fits together
+
+- **Rust only.** `updates.rs` holds the plugin; the webview has no updater
+  permission and reaches it through `update_status`, `update_check` and
+  `update_install`, like everything else (brief 9.5). The capability file is
+  unchanged.
+- **The feed is static**: `updates/latest.json` on the Pages site, because the
+  source repository is private. `tools/publish_updates.sh` writes it in the
+  release's publish job, next to the files it lists. `updates/` keeps the
+  current version only — an AppImage is ~90 MB and the site repository was
+  already 220 MB — while the hand-download installers keep every version in
+  `macos/` and `windows/` as before. A platform missing from a release is left
+  out of the feed, and a feed already newer than the tag being published is
+  left alone.
+- **Platform keys.** The updater asks for `<os>-<arch>-<installer>` then
+  `<os>-<arch>`, reading the installer from the bundle type the bundler patches
+  into the binary. So the feed carries `windows-x86_64-nsis` (and the bare key)
+  for `setup.exe`, `windows-x86_64-msi` for the `.msi`,
+  `linux-x86_64-appimage` for the AppImage, and the universal macOS archive
+  under both `darwin-aarch64` and `darwin-x86_64`.
+- **Which copies update themselves** is `updates::unavailable_reason`, which
+  has a test: `.app`, AppImage, NSIS and MSI yes; a `.deb` no — apt already
+  updates it, and a second channel asking for a root password through `pkexec`
+  would compete with it — and a debug build never. Settings says which, instead
+  of drawing a button that would only fail.
+- **Install goes through Quit.** Download first (the signature is checked
+  there), then the tray's usual `app:quit-requested`, so the frontend saves what
+  the autosave debounce is holding; `app_quit` and the quit timeout both end in
+  `updates::finish`, which installs and restarts. The downloaded bytes are held
+  under a lock for the whole install, so the timeout thread cannot `exit(0)`
+  underneath a half-replaced app. A failed install logs and exits as a plain
+  quit would.
+- **When it checks:** a minute after startup, then daily, on a plain thread.
+  A widget runs from login for weeks; a check at launch only would rarely run.
+  A failure is logged at info — offline is normal for a laptop.
+- **Where it shows:** a tray item, inserted at the top the first time a check
+  finds something (Tauri 2.11 has no hidden menu item), and an Updates row in
+  Settings › About that listens for `update:available`.
+- **Homebrew:** the cask now says `auto_updates true`, so `brew upgrade` leaves
+  a self-updating install alone.
+
+### The key
+
+`tauri signer generate` made a password-less minisign key at
+`~/.tauri/ledge-updater.key`, outside the repository; the public half is in
+`tauri.conf.json`. **Losing the private key means no installed copy can ever be
+updated again** — the only way out is a manual reinstall of a build with a new
+public key. It needs a backup somewhere other than this Mac, and the
+`TAURI_SIGNING_PRIVATE_KEY` repository secret for CI.
+
+Updater files are requested on the command line
+(`--config '{"bundle":{"createUpdaterArtifacts":true}}'`) rather than in
+`tauri.conf.json`, because with it in the config every `tauri build` without
+the key fails. Verified: a plain `--bundles app` build still works with no key.
+
+### Verified
+
+- A release `.app` built with the key produced `Ledge.app.tar.gz` and its
+  `.sig`.
+- A second build, overridden to version 0.7.9 and pointed at a local HTTP feed
+  written by `publish_updates.sh` from that archive, fetched the feed a minute
+  after launch and logged `updates: 0.8.0 is available`. That proves the feed
+  format, the platform key and the check; the download, signature check and
+  install were not clicked through.
+- Not seen: Windows and Linux at all, and a real release-to-release update.
+  The first real one is from the first release carrying this code to the one
+  after it — copies older than that have no updater and must be reinstalled by
+  hand once.
+
+### Checklist
+
+- [x] Before releasing: `gh secret set TAURI_SIGNING_PRIVATE_KEY < ~/.tauri/ledge-updater.key`
+- [ ] Settings › About › Updates in `tauri dev` says development builds do not
+      update themselves
+- [ ] On an installed copy, Check says "Ledge is up to date."
+- [ ] With a newer release published, the tray shows "Update to x.y.z and
+      restart" within a day (or a minute after launch)
+- [ ] Choosing it saves a note typed a moment before, restarts, and the new
+      version is in Settings › About
+- [ ] Windows: the passive installer runs and Ledge comes back
+- [ ] Linux: the AppImage updates; a `.deb` install says apt updates it
 
 ## M0 acceptance checklist
 

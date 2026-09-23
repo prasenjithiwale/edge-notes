@@ -39,6 +39,13 @@ env:
   TAG: ${{ github.event.inputs.tag || github.ref_name }}
   GH_TOKEN: ${{ github.token }}
   GH_REPO: ${{ github.repository }}
+  # Idea 6: the updater's key signs every file the app may install itself. The
+  # key has no password; the secret is what protects it. Updater files are
+  # asked for on the command line rather than in tauri.conf.json, so a local
+  # build without the key still works.
+  TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+  TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ""
+  UPDATER_CONFIG: '{"bundle":{"createUpdaterArtifacts":true}}'
 
 jobs:
   prepare:
@@ -100,7 +107,7 @@ jobs:
           cd src-tauri && cargo test
 
       - name: Build .deb and .AppImage
-        run: npm run tauri build -- --bundles deb,appimage
+        run: npm run tauri build -- --bundles deb,appimage --config "$UPDATER_CONFIG"
 
       - name: Attach to the release
         run: |
@@ -109,6 +116,7 @@ jobs:
           mkdir -p out
           cp "$bundle"/deb/*.deb "out/Ledge_${version}_linux_amd64.deb"
           cp "$bundle"/appimage/*.AppImage "out/Ledge_${version}_linux_x86_64.AppImage"
+          cp "$bundle"/appimage/*.AppImage.sig "out/Ledge_${version}_linux_x86_64.AppImage.sig"
           gh release upload "$TAG" out/* --clobber
 
   windows:
@@ -174,7 +182,7 @@ jobs:
       # deploy. Tauri downloads both tools itself. The installer fetches WebView2
       # if a machine lacks it (Windows 10 before it shipped by default).
       - name: Build setup.exe and .msi
-        run: npm run tauri build -- --bundles nsis,msi
+        run: npm run tauri build -- --bundles nsis,msi --config "$UPDATER_CONFIG"
 
       - name: Attach to the release
         run: |
@@ -183,6 +191,8 @@ jobs:
           mkdir -p out
           cp "$bundle"/nsis/*-setup.exe "out/Ledge_${version}_windows_x64-setup.exe"
           cp "$bundle"/msi/*.msi "out/Ledge_${version}_windows_x64.msi"
+          cp "$bundle"/nsis/*-setup.exe.sig "out/Ledge_${version}_windows_x64-setup.exe.sig"
+          cp "$bundle"/msi/*.msi.sig "out/Ledge_${version}_windows_x64.msi.sig"
           gh release upload "$TAG" out/* --clobber
   publish:
     name: Pages site
@@ -217,7 +227,10 @@ jobs:
             --pattern "*.deb" \
             --pattern "*macOS_universal.dmg" \
             --pattern "*windows_x64-setup.exe" \
-            --pattern "*windows_x64.msi"
+            --pattern "*windows_x64.msi" \
+            --pattern "*.sig" \
+            --pattern "*macOS_universal.app.tar.gz" \
+            --pattern "*linux_x86_64.AppImage"
           ls -l incoming
 
       - uses: actions/checkout@v4
@@ -265,6 +278,11 @@ jobs:
             exit 0
           fi
           source/tools/publish_macos.sh apt "${images[@]}"
+
+      # Idea 6: the feed installed copies ask for new versions. After the
+      # installers, before the push, so the feed and its files land together.
+      - name: Write the updater feed
+        run: source/tools/publish_updates.sh apt "$SITE_URL" "${TAG#v}" incoming
 
       - name: Write the landing page
         run: source/tools/render_site.sh apt

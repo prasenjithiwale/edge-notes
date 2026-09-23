@@ -42,6 +42,9 @@ pub enum AppError {
     /// a wrong key from a database that would not open at all.
     #[error("{0}")]
     Locked(String),
+    /// Checking for, downloading or installing a new version failed (idea 6).
+    #[error("{0}")]
+    Update(String),
 }
 
 impl AppError {
@@ -64,6 +67,7 @@ impl AppError {
             Self::ShortcutUnavailable(_) => "shortcut_unavailable",
             Self::Autostart(_) => "autostart",
             Self::Locked(_) => "locked",
+            Self::Update(_) => "update",
         }
     }
 }

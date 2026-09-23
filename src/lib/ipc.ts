@@ -557,6 +557,45 @@ export function appInfo(): Promise<AppInfo> {
   return callResult<AppInfo>("app_info");
 }
 
+/** A newer version the feed announced (idea 6). */
+export interface UpdateInfo {
+  version: string;
+  notes: string | null;
+}
+
+export interface UpdateStatus {
+  /** Why this copy cannot update itself (a `.deb`, a dev build), or null. */
+  unavailable: string | null;
+  /** What the last check found, if it found anything. */
+  found: UpdateInfo | null;
+}
+
+export function updateStatus(): Promise<UpdateStatus> {
+  return callResult<UpdateStatus>("update_status");
+}
+
+/** Ask the feed now; null means this copy is current. */
+export function updateCheck(): Promise<UpdateInfo | null> {
+  return callResult<UpdateInfo | null>("update_check");
+}
+
+/**
+ * Download the new version, then save everything pending and restart into it.
+ * Resolves once the download is done; the quit follows on its own.
+ */
+export function updateInstall(): Promise<void> {
+  return callResult<null>("update_install").then(() => undefined);
+}
+
+/** A background check found a newer version while the panel was up. */
+export function onUpdateAvailable(
+  handler: (update: UpdateInfo) => void,
+): Promise<UnlistenFn> {
+  return listen<UpdateInfo>("update:available", (event) => {
+    handler(event.payload);
+  });
+}
+
 export function securityStatus(): Promise<SecurityStatus> {
   return callResult<SecurityStatus>("security_status");
 }

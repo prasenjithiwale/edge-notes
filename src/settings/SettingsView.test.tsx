@@ -8,6 +8,9 @@ const invoke = vi.fn<(command: string, args?: unknown) => Promise<unknown>>();
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: (command: string, args?: unknown) => invoke(command, args),
 }));
+vi.mock("@tauri-apps/api/event", () => ({
+  listen: () => Promise.resolve(() => undefined),
+}));
 
 const { SettingsView } = await import("./SettingsView");
 const { useSettingsStore } = await import("../store/settings");
@@ -408,5 +411,50 @@ describe("the About section", () => {
 
     await screen.findByText("Appearance");
     expect(screen.queryByText("About")).toBeNull();
+  });
+});
+
+describe("updates", () => {
+  function withUpdates(status: unknown, check: unknown = null) {
+    const base = invoke.getMockImplementation();
+    invoke.mockImplementation((command: string, args?: unknown) => {
+      if (command === "update_status") {
+        return Promise.resolve(status);
+      }
+      if (command === "update_check") {
+        return Promise.resolve(check);
+      }
+      return base ? base(command, args) : Promise.resolve(null);
+    });
+  }
+
+  /** A .deb is apt's to update; a button there would only fail. */
+  it("says why a copy cannot update itself, with nothing to press", async () => {
+    withUpdates({ unavailable: "This copy is updated by apt: sudo apt upgrade.", found: null });
+    render(<SettingsView onClose={() => undefined} />);
+
+    await screen.findByText("This copy is updated by apt: sudo apt upgrade.");
+    expect(screen.queryByRole("button", { name: "Check" })).toBeNull();
+  });
+
+  it("checks on request and says when there is nothing new", async () => {
+    withUpdates({ unavailable: null, found: null }, null);
+    render(<SettingsView onClose={() => undefined} />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Check" }));
+    await screen.findByText("Ledge is up to date.");
+  });
+
+  it("offers a found version and installs it through Rust", async () => {
+    withUpdates({ unavailable: null, found: null }, { version: "9.9.9", notes: null });
+    render(<SettingsView onClose={() => undefined} />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Check" }));
+    await screen.findByText("Version 9.9.9 is available");
+    fireEvent.click(screen.getByRole("button", { name: "Install" }));
+
+    await waitFor(() => {
+      expect(invoke.mock.calls.some(([command]) => command === "update_install")).toBe(true);
+    });
   });
 });

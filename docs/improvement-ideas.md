@@ -20,7 +20,7 @@ brief section 4, it says so, because the project rules require asking first.
 | 3 | Lock down the IPC: isolation pattern, per-command permissions, stricter CSP | Security | S–M | Medium |
 | 4 | Sign and notarise macOS and Windows builds | Security / distribution | M | High |
 | 5 | Supply-chain checks in CI | Security | S | Medium |
-| 6 | Automatic updates | Distribution | M | High |
+| 6 | Automatic updates | Distribution | M | High | **Built, 0.9.0** |
 | 7 | Automatic backups, and import | Reliability | S–M | High |
 | 8 | Close the macOS keyboard-focus gap | Reliability | S–M | Medium |
 | 9 | Native Wayland docking with layer-shell | Reliability (Linux) | L | Medium |
@@ -148,6 +148,10 @@ workflow.
 ## Reliability and platforms
 
 ### 6. Automatic updates
+
+**Built in 0.9.0** — `updates.rs`, a feed at
+`updates/latest.json` on the Pages site, and a key outside the repository. See
+[progress.md](progress.md).
 
 **What.** The app checks for a new version, shows "Update available" in Settings
 and the tray, downloads it, verifies it and restarts.

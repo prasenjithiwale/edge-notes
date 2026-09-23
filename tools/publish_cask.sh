@@ -61,6 +61,10 @@ cask "edge-notes" do
   # this one already means "Monterey or newer" (its comparator defaults to >=).
   depends_on macos: :monterey
 
+  # The app updates itself (idea 6), so brew upgrade leaves an install alone
+  # unless asked with --greedy, rather than fighting the app over the version.
+  auto_updates true
+
   app "Ledge.app"
 
   # The build is unsigned and unnotarised, so it cannot open while quarantined.

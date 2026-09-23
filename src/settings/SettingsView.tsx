@@ -16,10 +16,15 @@ import {
   securityRecoveryKey,
   securityStatus,
   shortcutSet,
+  onUpdateAvailable,
+  updateCheck,
+  updateInstall,
+  updateStatus,
   type AppInfo,
   type NoteColor,
   type SecurityStatus,
   type Settings,
+  type UpdateStatus,
 } from "../lib/ipc";
 import { copyText } from "../lib/clipboard";
 import { useDockStore } from "../store/dock";
@@ -589,6 +594,102 @@ function detailsFor(info: AppInfo): string {
   ].join("\n");
 }
 
+/**
+ * Idea 6: check for a new version, and install it. Rust checks daily on its
+ * own; this row says what it found, and lets someone ask now. A copy that
+ * cannot update itself — a `.deb`, which apt updates — says so instead of
+ * offering a button that would only fail.
+ */
+function UpdateRow() {
+  const [status, setStatus] = useState<UpdateStatus | null>(null);
+  const [busy, setBusy] = useState<"checking" | "downloading" | null>(null);
+  const [note, setNote] = useState<string | null>(null);
+
+  useEffect(() => {
+    void updateStatus()
+      .then(setStatus)
+      .catch((error: unknown) => {
+        console.error("settings: could not read the update status", error);
+      });
+    const unlisten = onUpdateAvailable((found) => {
+      setStatus((current) => current && { ...current, found });
+    });
+    return () => {
+      void unlisten.then((stop) => {
+        stop();
+      });
+    };
+  }, []);
+
+  if (status === null) {
+    return null;
+  }
+  if (status.unavailable !== null) {
+    return (
+      <div className={styles.row}>
+        <Label text="Updates" description={status.unavailable} />
+      </div>
+    );
+  }
+  if (status.found !== null) {
+    return (
+      <div className={styles.row}>
+        <Label
+          text={`Version ${status.found.version} is available`}
+          description={note ?? "Your notes are saved, then Ledge restarts."}
+        />
+        <button
+          type="button"
+          className={styles.action}
+          disabled={busy !== null}
+          onClick={() => {
+            setBusy("downloading");
+            setNote(null);
+            void updateInstall().catch((error: unknown) => {
+              console.error("settings: the update failed", error);
+              setNote("The download failed. Try again later.");
+              setBusy(null);
+            });
+          }}
+        >
+          {busy === "downloading" ? "Downloading…" : "Install"}
+        </button>
+      </div>
+    );
+  }
+  return (
+    <div className={styles.row}>
+      <Label text="Updates" description={note ?? "Checked once a day."} />
+      <button
+        type="button"
+        className={styles.action}
+        disabled={busy !== null}
+        onClick={() => {
+          setBusy("checking");
+          setNote(null);
+          void updateCheck()
+            .then((found) => {
+              if (found === null) {
+                setNote("Ledge is up to date.");
+              } else {
+                setStatus({ ...status, found });
+              }
+            })
+            .catch((error: unknown) => {
+              console.error("settings: the update check failed", error);
+              setNote("Could not reach the update server.");
+            })
+            .finally(() => {
+              setBusy(null);
+            });
+        }}
+      >
+        {busy === "checking" ? "Checking…" : "Check"}
+      </button>
+    </div>
+  );
+}
+
 const SIDES: Choice<Settings["dock.side"]>[] = [
   { value: "left", label: "Left" },
   { value: "right", label: "Right" },
@@ -1105,6 +1206,8 @@ export function SettingsView({ onClose }: SettingsViewProps) {
             <Label text={about.name} description="Notes on the edge of your screen" />
             <span className={styles.version}>{about.version}</span>
           </div>
+
+          <UpdateRow />
 
           <div className={styles.row}>
             <Label text="System" />

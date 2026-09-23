@@ -43,7 +43,25 @@ pub fn app_ready(app: AppHandle, dock: State<'_, Arc<Dock>>) -> AppResult<()> {
 /// app can exit now rather than waiting out the tray's fallback timeout.
 #[tauri::command]
 pub fn app_quit(app: AppHandle) {
-    app.exit(0);
+    crate::updates::finish(&app);
+}
+
+/// Idea 6: whether this copy updates itself, and what the last check found.
+#[tauri::command]
+pub fn update_status(app: AppHandle) -> crate::updates::UpdateStatus {
+    crate::updates::status(&app)
+}
+
+/// Idea 6: ask the feed now. `None` means this copy is current.
+#[tauri::command]
+pub async fn update_check(app: AppHandle) -> AppResult<Option<crate::updates::UpdateInfo>> {
+    crate::updates::check(&app).await
+}
+
+/// Idea 6: download the new version, then save, install and restart.
+#[tauri::command]
+pub async fn update_install(app: AppHandle) -> AppResult<()> {
+    crate::updates::install(&app).await
 }
 
 #[tauri::command]

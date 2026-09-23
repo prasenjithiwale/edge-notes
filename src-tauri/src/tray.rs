@@ -33,6 +33,7 @@ const ID_SIDE_LEFT: &str = "side-left";
 const ID_SIDE_RIGHT: &str = "side-right";
 const ID_AUTOSTART: &str = "autostart";
 const ID_QUIT: &str = "quit";
+const ID_UPDATE: &str = "update";
 
 /// The check items are rebuilt from state on every menu event, so the handler
 /// needs to reach them after the tray is built. They live in app state rather
@@ -42,6 +43,10 @@ struct MenuHandles<R: Runtime> {
     side_left: CheckMenuItem<R>,
     side_right: CheckMenuItem<R>,
     autostart: CheckMenuItem<R>,
+    menu: Menu<R>,
+    /// Added the first time a check finds a new version (idea 6); there is no
+    /// hidden menu item in Tauri 2.11, so it is inserted rather than shown.
+    update: std::sync::Mutex<Option<MenuItem<R>>>,
 }
 
 /// Whether launch-at-login is on. The OS is the only honest source for this —
@@ -137,6 +142,33 @@ pub fn autostart_is_enabled(app: &AppHandle) -> bool {
     autostart_enabled(app)
 }
 
+/// Idea 6: put "Update to x.y.z and restart" at the top of the menu, or relabel
+/// it if a later check found a newer one still.
+pub fn show_update(app: &AppHandle, version: &str) {
+    let Some(handles) = app.try_state::<MenuHandles<tauri::Wry>>() else {
+        return;
+    };
+    let text = format!("Update to {version} and restart");
+    let mut held = handles
+        .update
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let result = match held.as_ref() {
+        Some(item) => item.set_text(&text),
+        None => MenuItem::with_id(app, ID_UPDATE, &text, true, None::<&str>).and_then(|item| {
+            handles
+                .menu
+                .insert(&PredefinedMenuItem::separator(app)?, 0)?;
+            handles.menu.insert(&item, 0)?;
+            *held = Some(item);
+            Ok(())
+        }),
+    };
+    if let Err(error) = result {
+        log::warn!("tray: could not show the update: {error}");
+    }
+}
+
 /// Re-read the real state into the tray menu from wherever it changed.
 pub fn sync_menu(app: &AppHandle) {
     if let Some(handles) = app.try_state::<MenuHandles<tauri::Wry>>() {
@@ -151,17 +183,17 @@ pub fn sync_menu(app: &AppHandle) {
 /// pending and calls `app_quit` when done. A webview that is hung, or never
 /// answers, must not make Quit do nothing, so the app exits anyway after
 /// `QUIT_FLUSH_TIMEOUT`.
-fn request_quit(app: &AppHandle) {
+pub fn request_quit(app: &AppHandle) {
     if let Err(error) = app.emit(QUIT_REQUESTED_EVENT, ()) {
         log::error!("tray: failed to emit {QUIT_REQUESTED_EVENT}, quitting now: {error}");
-        app.exit(0);
+        crate::updates::finish(app);
         return;
     }
     let handle = app.clone();
     std::thread::spawn(move || {
         std::thread::sleep(QUIT_FLUSH_TIMEOUT);
         log::warn!("tray: pending notes were not confirmed saved in time; quitting anyway");
-        handle.exit(0);
+        crate::updates::finish(&handle);
     });
 }
 
@@ -176,6 +208,15 @@ fn handle_event(app: &AppHandle, handles: &MenuHandles<tauri::Wry>, event: &Menu
         }
         ID_QUIT => {
             request_quit(app);
+            return;
+        }
+        ID_UPDATE => {
+            let app = app.clone();
+            tauri::async_runtime::spawn(async move {
+                if let Err(error) = crate::updates::install(&app).await {
+                    log::error!("tray: update failed: {error}");
+                }
+            });
             return;
         }
         _ => return,
@@ -252,6 +293,8 @@ pub fn init(app: &AppHandle) -> tauri::Result<()> {
         side_left: side_left.clone(),
         side_right: side_right.clone(),
         autostart: launch.clone(),
+        menu: menu.clone(),
+        update: std::sync::Mutex::default(),
     };
     // A second set for `sync_menu`, so a change made in the settings view shows
     // in the tray. The items are `Arc` handles, so these are the same items.
@@ -259,6 +302,8 @@ pub fn init(app: &AppHandle) -> tauri::Result<()> {
         side_left,
         side_right,
         autostart: launch,
+        menu: menu.clone(),
+        update: std::sync::Mutex::default(),
     });
 
     let mut builder = TrayIconBuilder::with_id(TRAY_ID)

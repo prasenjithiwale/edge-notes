@@ -15,6 +15,7 @@ pub mod platform;
 pub mod reminders;
 pub mod share;
 pub mod tray;
+pub mod updates;
 
 use std::sync::Arc;
 
@@ -46,7 +47,8 @@ pub fn run() {
         ))
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(tauri_plugin_notification::init())
-        .plugin(tauri_plugin_clipboard_manager::init());
+        .plugin(tauri_plugin_clipboard_manager::init())
+        .plugin(tauri_plugin_updater::Builder::new().build());
 
     #[cfg(target_os = "macos")]
     let builder = builder.plugin(tauri_nspanel::init());
@@ -80,6 +82,9 @@ pub fn run() {
             commands::security_unlock,
             commands::security_start_fresh,
             commands::app_quit,
+            commands::update_status,
+            commands::update_check,
+            commands::update_install,
             commands::dock_set_keep_open,
             commands::dock_set_interaction_lock,
             commands::dock_set_modal,
@@ -178,6 +183,8 @@ pub fn run() {
             app.manage(database);
             app.manage(commands::Vault::new(database_path.clone(), vault));
             app.manage(commands::QuickCapture::default());
+            app.manage(updates::Updates::default());
+            updates::spawn_checks(handle.clone());
 
             // The menu-bar countdown runs on its own thread too, for the same
             // reason: the frontend's clock stops while the panel is collapsed.

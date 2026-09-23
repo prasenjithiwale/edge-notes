@@ -114,13 +114,25 @@ step. A test fails if they ever disagree. Every release has an entry in
    rustup target add x86_64-apple-darwin      # once
    # rustup's cargo must come first: a Homebrew Rust earlier on PATH has no
    # Intel target and fails with "can't find crate for `core`".
-   PATH="$HOME/.cargo/bin:$PATH" npm run tauri build -- --target universal-apple-darwin --bundles dmg
+   # The updater key signs the archive installed copies update from (idea 6).
+   export TAURI_SIGNING_PRIVATE_KEY="$(cat ~/.tauri/ledge-updater.key)" TAURI_SIGNING_PRIVATE_KEY_PASSWORD=""
+   PATH="$HOME/.cargo/bin:$PATH" npm run tauri build -- --target universal-apple-darwin --bundles app,dmg \
+     --config '{"bundle":{"createUpdaterArtifacts":true}}'
+   ```
+
+   Rename the updater archive beside the `.dmg`:
+
+   ```bash
+   out=src-tauri/target/universal-apple-darwin/release/bundle/macos
+   cp "$out/Ledge.app.tar.gz" Ledge_0.0.2_macOS_universal.app.tar.gz
+   cp "$out/Ledge.app.tar.gz.sig" Ledge_0.0.2_macOS_universal.app.tar.gz.sig
    ```
 
 3. Create the release with the `.dmg`. This also creates the tag:
 
    ```bash
    gh release create v0.0.2 "Ledge_0.0.2_macOS_universal.dmg" \
+     Ledge_0.0.2_macOS_universal.app.tar.gz* \
      --target master --title "Ledge v0.0.2" --notes-file notes.md
    ```
 
@@ -145,6 +157,12 @@ step. A test fails if they ever disagree. Every release has an entry in
    It can also be run from the Actions tab for an existing tag and a chosen
    platform (`gh workflow run release.yml -f tag=v0.0.2 -f platforms=windows`, or
    `platforms=publish` to publish an existing release's packages).
+
+The platform builds need `TAURI_SIGNING_PRIVATE_KEY`: the contents of
+`~/.tauri/ledge-updater.key`, which signs every file an installed copy may update
+itself from. **Lose it and no installed copy can be updated again**; keep a
+backup away from this Mac. The Pages job writes `updates/latest.json`, the feed
+the app reads, with `tools/publish_updates.sh`.
 
 The Pages job needs three repository secrets: `APT_SIGNING_KEY` (the armored
 private key that signs the APT repository), `APT_DEPLOY_KEY` (an SSH deploy key
