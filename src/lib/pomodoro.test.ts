@@ -16,6 +16,7 @@ import {
   endsLabel,
   MINUTE,
   tallyLabel,
+  timeline,
   withDurations,
   type Durations,
 } from "./pomodoro";
@@ -209,5 +210,31 @@ describe("the lines under the clock", () => {
     expect(tallyLabel({ ...idle(), day: DAY, today: 3 }, "2026-09-17")).toBe(
       "Nothing finished yet today",
     );
+  });
+});
+
+describe("the day's timeline", () => {
+  it("logs a finished session where it sat, and not a skipped one", () => {
+    const running = start(idle(), NOW);
+    const done = advance(running, DAY, true);
+    expect(done.log).toEqual([[NOW, NOW + DEFAULT_DURATIONS.focus]]);
+
+    expect(advance(running, DAY, false).log).toEqual([]);
+    // A break ending keeps the log, and a new day starts a fresh one.
+    const back = advance(done, DAY, true);
+    expect(back.log).toEqual(done.log);
+    expect(advance(start(back, NOW), "2026-09-17", true).log).toHaveLength(1);
+  });
+
+  it("lays sessions on a working day and stretches to fit one outside it", () => {
+    const at = (hour: number) => new Date(2026, 8, 16, hour).getTime();
+    const day = timeline([[at(9), at(10)]], at(12));
+    expect([day.from, day.to]).toEqual([8, 20]);
+    expect(day.blocks[0]?.left).toBeCloseTo(1 / 12);
+    expect(day.blocks[0]?.width).toBeCloseTo(1 / 12);
+    expect(day.now).toBeCloseTo(4 / 12);
+
+    const late = timeline([[at(6), at(7)]], at(22) + 30 * MINUTE);
+    expect([late.from, late.to]).toEqual([6, 23]);
   });
 });

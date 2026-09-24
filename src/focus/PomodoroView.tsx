@@ -1,5 +1,15 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
-import { Check, ChevronDown, Pause, Play, RotateCcw, SkipForward, X } from "lucide-react";
+import {
+  Check,
+  ChevronDown,
+  Minus,
+  Pause,
+  Play,
+  Plus,
+  RotateCcw,
+  SkipForward,
+  X,
+} from "lucide-react";
 
 import { IconButton } from "../components/IconButton";
 import { cx } from "../lib/cx";
@@ -10,14 +20,184 @@ import {
   isRunning,
   PHASE_HINTS,
   PHASE_LABELS,
+  type Phase,
+  PRESETS,
   progress,
   remaining,
+  type Session,
   tallyLabel,
+  timeline,
 } from "../lib/pomodoro";
 import { compareTasks, dateKey, isClosed } from "../lib/taskMeta";
+import { clampSetting, FOCUS_MINUTES } from "../settings/limits";
+import { useDockStore } from "../store/dock";
+import { useSettingsStore } from "../store/settings";
 import { usePomodoroStore } from "../store/pomodoro";
 import { useTasksStore } from "../store/tasks";
 import styles from "./PomodoroView.module.css";
+
+type LengthKey = "focus.focusMinutes" | "focus.breakMinutes" | "focus.longBreakMinutes";
+
+/** Which setting each phase's length is, and how far a press of − or + moves it. */
+const LENGTH: Record<Phase, { key: LengthKey; step: number; name: string }> = {
+  focus: { key: "focus.focusMinutes", step: 5, name: "Session length" },
+  short: { key: "focus.breakMinutes", step: 1, name: "Break length" },
+  long: { key: "focus.longBreakMinutes", step: 5, name: "Long break length" },
+};
+
+/**
+ * The length of the phase in front of you, set where the timer is rather than
+ * only in Settings: − and + nudge it, and the number is a field that takes any
+ * length in range. Only drawn while the timer is not running — a running phase
+ * keeps its end whatever the setting says (`withDurations`), so a control there
+ * would appear to do nothing. Writes the same setting Settings › Focus does.
+ */
+function LengthControl({ phase }: { phase: Phase }) {
+  const { key, step, name } = LENGTH[phase];
+  const minutes = useSettingsStore((store) => store.settings[key]);
+  const patch = useSettingsStore((store) => store.patch);
+  const setLock = useDockStore((store) => store.setLock);
+  const [draft, setDraft] = useState<string | null>(null);
+  const editing = draft !== null;
+
+  // Typing a length holds the panel open, as the search field does; derived
+  // from state so a remount cannot drop it (see the interaction-lock notes).
+  useEffect(() => {
+    setLock("focus", editing);
+    return () => {
+      setLock("focus", false);
+    };
+  }, [editing, setLock]);
+
+  const set = (next: number) => {
+    const clamped = Math.min(Math.max(next, FOCUS_MINUTES.min), FOCUS_MINUTES.max);
+    if (clamped !== minutes) {
+      void patch({ [key]: clamped });
+    }
+  };
+  const commit = () => {
+    if (draft !== null) {
+      set(clampSetting(draft, { ...FOCUS_MINUTES, fallback: minutes }));
+    }
+    setDraft(null);
+  };
+
+  return (
+    <div className={styles.length} role="group" aria-label={name}>
+      <button
+        type="button"
+        className={styles.lengthStep}
+        aria-label={`${name}: less`}
+        disabled={minutes <= FOCUS_MINUTES.min}
+        onClick={() => {
+          set(minutes - step);
+        }}
+      >
+        <Minus size={12} strokeWidth={2.5} />
+      </button>
+      <label className={styles.lengthValue}>
+        <input
+          className={styles.lengthInput}
+          type="number"
+          inputMode="numeric"
+          min={FOCUS_MINUTES.min}
+          max={FOCUS_MINUTES.max}
+          aria-label={`${name} in minutes`}
+          value={draft ?? String(minutes)}
+          onChange={(event) => {
+            setDraft(event.target.value);
+          }}
+          onBlur={commit}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") {
+              event.currentTarget.blur();
+            }
+          }}
+        />
+        min
+      </label>
+      <button
+        type="button"
+        className={styles.lengthStep}
+        aria-label={`${name}: more`}
+        disabled={minutes >= FOCUS_MINUTES.max}
+        onClick={() => {
+          set(minutes + step);
+        }}
+      >
+        <Plus size={12} strokeWidth={2.5} />
+      </button>
+    </div>
+  );
+}
+
+/**
+ * The rhythms most people use, one press each. Sets the focus and break lengths
+ * together — the same two settings the stepper and Settings › Focus write — and
+ * is lit when both already match. Drawn only while stopped, as the stepper is.
+ */
+function Presets() {
+  const focus = useSettingsStore((store) => store.settings["focus.focusMinutes"]);
+  const rest = useSettingsStore((store) => store.settings["focus.breakMinutes"]);
+  const patch = useSettingsStore((store) => store.patch);
+  return (
+    <div className={styles.presets} role="group" aria-label="Rhythm">
+      {PRESETS.map(([minutes, pause]) => {
+        const on = minutes === focus && pause === rest;
+        return (
+          <button
+            key={minutes}
+            type="button"
+            className={cx(styles.preset, on && styles.presetOn)}
+            aria-pressed={on}
+            aria-label={`${String(minutes)} minutes of focus, ${String(pause)} minute breaks`}
+            onClick={() => {
+              if (!on) {
+                void patch({ "focus.focusMinutes": minutes, "focus.breakMinutes": pause });
+              }
+            }}
+          >
+            {minutes}
+            <span className={styles.presetRest}>/{pause}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/** "9", "14": an hour on the timeline's scale, in the locale's own clock. */
+function hourLabel(hour: number): string {
+  const at = new Date();
+  at.setHours(hour, 0, 0, 0);
+  return new Intl.DateTimeFormat(undefined, { hour: "numeric" }).format(at);
+}
+
+/**
+ * Today on one bar: each finished focus session a block, and a tick where now
+ * is. A count says how many; this says when, and where the gaps were.
+ */
+function DayTimeline({ log, now }: { log: readonly Session[]; now: number }) {
+  const { from, to, blocks, now: at } = timeline(log, now);
+  return (
+    <div className={styles.timeline}>
+      <div className={styles.timelineBar} aria-hidden="true">
+        {blocks.map((block, index) => (
+          <span
+            key={index}
+            className={styles.timelineBlock}
+            style={{ left: `${String(block.left * 100)}%`, width: `${String(block.width * 100)}%` }}
+          />
+        ))}
+        <span className={styles.timelineNow} style={{ left: `${String(at * 100)}%` }} />
+      </div>
+      <div className={styles.timelineScale} aria-hidden="true">
+        <span>{hourLabel(from)}</span>
+        <span>{hourLabel(to % 24)}</span>
+      </div>
+    </div>
+  );
+}
 
 interface PomodoroViewProps {
   /** The tab is showing. It stays mounted while hidden so the track can slide. */
@@ -53,17 +233,18 @@ function useSeconds(active: boolean): number {
   return useSyncExternalStore(subscribe, secondsNow, secondsNow);
 }
 
-/** The ring: a track and the part of it that has gone. */
-function Ring({ value, muted }: { value: number; muted: boolean }) {
-  const radius = 68;
+/** The ring: a track and the part of it that has gone, in the phase's colour. */
+function Ring({ value, phase }: { value: number; phase: Phase }) {
+  const radius = 90;
   const circumference = 2 * Math.PI * radius;
   return (
-    <svg className={styles.ring} viewBox="0 0 160 160" aria-hidden="true">
-      <circle className={styles.track} cx="80" cy="80" r={radius} />
+    <svg className={styles.ring} viewBox="0 0 200 200" aria-hidden="true">
+      <circle className={styles.track} cx="100" cy="100" r={radius} />
       <circle
-        className={cx(styles.progress, muted && styles.progressMuted)}
-        cx="80"
-        cy="80"
+        className={styles.progress}
+        data-phase={phase}
+        cx="100"
+        cy="100"
         r={radius}
         strokeDasharray={circumference}
         strokeDashoffset={circumference * (1 - value)}
@@ -147,7 +328,7 @@ export function PomodoroView({ active }: PomodoroViewProps) {
       </div>
 
       <div className={styles.clock}>
-        <Ring value={progress(state, now)} muted={!focusing} />
+        <Ring value={progress(state, now)} phase={state.phase} />
         <div className={styles.readout}>
           <span
             className={styles.time}
@@ -170,6 +351,13 @@ export function PomodoroView({ active }: PomodoroViewProps) {
           <span key={index} className={cx(styles.dot, filled && styles.dotFilled)} />
         ))}
       </div>
+
+      {!running && (
+        <div className={styles.setup}>
+          {focusing && <Presets />}
+          <LengthControl phase={state.phase} />
+        </div>
+      )}
 
       {/* What the session is for. A pomodoro with nothing attached to it is a
           kitchen timer; naming the task is what makes the tally mean something,
@@ -280,9 +468,12 @@ export function PomodoroView({ active }: PomodoroViewProps) {
         </IconButton>
       </div>
 
-      <p className={styles.tally} role="status">
-        {tallyLabel(state, dateKey(new Date(now)))}
-      </p>
+      <div className={styles.day}>
+        <DayTimeline log={state.day === dateKey(new Date(now)) ? state.log : []} now={now} />
+        <p className={styles.tally} role="status">
+          {tallyLabel(state, dateKey(new Date(now)))}
+        </p>
+      </div>
     </div>
   );
 }

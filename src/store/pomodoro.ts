@@ -67,6 +67,7 @@ function persistTally(state: Pomodoro): void {
     "focus.day": state.day,
     "focus.today": state.today,
     "focus.streak": state.streak,
+    "focus.log": state.log,
   });
 }
 
@@ -102,6 +103,7 @@ export const usePomodoroStore = create<PomodoroStore>((set, get) => ({
         // streak is kept because the long break is earned, not scheduled.
         day,
         today: day === today ? settings["focus.today"] : 0,
+        log: day === today ? settings["focus.log"] : [],
         streak: settings["focus.streak"],
       },
     });

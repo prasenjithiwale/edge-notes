@@ -4488,6 +4488,89 @@ the key fails. Verified: a plain `--bundles app` build still works with no key.
 - [ ] Windows: the passive installer runs and Ledge comes back
 - [ ] Linux: the AppImage updates; a `.deb` install says apt updates it
 
+## Clipboard history (24 Sep 2026)
+
+A fourth tab, **Clips**: the last 50 things copied as text, in any app, newest
+first. Pressing an entry puts it back on the clipboard; each row also has Save
+as note and Remove, and the tab has Clear. ⌘F searches it, and the arrow keys
+move through its rows.
+
+- **Rust watches, in memory only.** `clips.rs` runs one thread that looks once a
+  second and emits `clips:changed` with the whole list. Nothing is written to
+  disk: a clipboard sees passwords and one-time codes, and a history that ends
+  with the process is a convenience rather than a record. Copies over 100 kB and
+  blank ones are skipped; copying something already there moves it up.
+- **macOS reads the text only when something was copied**, using
+  `NSPasteboard.changeCount` (`platform::clipboard_state`), and **never keeps a
+  copy marked concealed, transient or auto-generated** (nspasteboard.org —
+  1Password, Bitwarden, Apple's Passwords). `platform/` was changed for this,
+  because the check needs AppKit and AppKit stays there; the `NSPasteboard`
+  feature was added to the existing `objc2-app-kit` dependency. Windows and Linux
+  compare the text each second and have no such marker to honour.
+- **Copying back goes through `share_copy_text`**, Rust's clipboard, because a
+  panel opened by hover does not own the keyboard or the webview's clipboard.
+- **What is on the clipboard now is highlighted**: raised, outlined, and labelled "On the clipboard" in place of its time. Rust decides it (`Clip.current`), and copying a password or a picture clears it rather than leaving an old row lit.
+- Save as note reuses the new `createWithContent` in the notes store, which
+  `createWithImages` now goes through as well.
+
+### Verified
+
+Gates green: lint, tsc, 852 Vitest tests, clippy, cargo test (four new tests in
+`clips.rs`, one Panel test for the tab). `tauri dev` ran and survived two
+`pbcopy`s with nothing in the log. The panel itself was not seen — it is hidden
+from screenshots.
+
+### Checklist
+
+- [ ] Copy text in another app; open the panel, Clips shows it at the top
+- [ ] Press an entry, paste elsewhere: it is that text, and the row said "Copied"
+- [ ] Copy a password from a password manager: it does not appear
+- [ ] Save as note opens the editor on a new note with the text in it
+- [ ] Remove and Clear empty it; quitting Ledge empties it too
+- [ ] On macOS 26, whether the system asks to allow Ledge to read the clipboard
+
+## Pictures deleted by a locked start (24 Sep 2026)
+
+Reported: pictures in notes no longer show. The files were gone from
+`images/`. The log has the cause: on 22 Sep at 19:29:37 the app started with no
+keychain, opened `Protection::Locked` — an empty in-memory stand-in — and
+`images::sweep` ran over that stand-in, found no note mentioning anything, and
+deleted the two pictures the real notes used. The startup sweep now does not
+run while locked. The two files were not recoverable: `remove_file` does not use
+the Trash, there is no Time Machine backup, and the webview kept no cached copy.
+The notes still hold their links; the pictures have to be added again.
+
+## The image picker ignored clicks (24 Sep 2026)
+
+Reported: `/image` opened the picker, but clicking a file did nothing until
+you changed folder and came back. wry answers `<input type="file">` with a bare
+`NSOpenPanel.runModal()`, and Ledge is an accessory app whose non-activating
+panel never makes it active, so the open panel came up in an inactive app. On
+macOS the picker is now Rust's: `images_pick` calls `platform::pick_images`,
+which activates the app, then runs the open panel (limited to the four stored
+formats) on the main thread. It reads the chosen files with `images::import`, as
+a drop does, and holds the dock with `Input::SetModal` itself. Other platforms
+get `null` and keep the file input. **Not verified by clicking**: the panel
+cannot be driven from here.
+
+Also: the current clip is now in colour (the panel colour's pair, or an accent
+tint) with `--shadow-card-raised`, and the Clips tab has 8 px above Clear.
+
+## Focus: colour, and a length set on the tab (24 Sep 2026)
+
+- The ring's progress is in colour (`--accent-ink` when a panel colour is set,
+  the accent otherwise); the track stays `--surface-sunken`, no shadow — the
+  owner wanted only the time spent coloured. A break draws it at 45 %.
+  `accent.test.ts` now pins the accent fallback instead of the neutral ink.
+- **The phase's length can be set on the Focus tab.** Under the dots, while the
+  timer is not running: − and + (5 min for sessions and long breaks, 1 for short
+  breaks) and a field in between that takes any whole number of minutes, clamped
+  to `FOCUS_MINUTES` (1–120). It writes the same setting as Settings › Focus, so
+  the two always agree, and `withDurations` gives the stopped phase the new
+  length. A paused phase restarts from the new length. Hidden while running,
+  because a running phase keeps its end. Typing in it holds the panel open (lock
+  owner `"focus"`).
+
 ## M0 acceptance checklist
 
 From brief section 12. Run `npm run tauri dev`, then work through these with
@@ -4508,3 +4591,9 @@ Also worth checking while you are in there:
 - [ ] Keep open (the pin) holds the panel open when the cursor leaves
 - [ ] With Keep open off, focusing the test input holds the panel open too
 - [ ] Release notes: the release `.app` still renders transparent (issue #13415)
+
+## 24 Sep 2026 — Focus tab: hero clock, presets, day timeline
+
+- **Clock:** ring 200 px with a 10 px stroke, countdown 48 px. The ring takes the phase's colour: focus is the accent mix, a short break teal, a long break indigo (each a note palette pairing, mixed as the focus ring is).
+- **Presets:** 25/5, 50/10 and 90/20 chips above the stepper while stopped on focus; they write `focus.focusMinutes` and `focus.breakMinutes` together and are lit when both match.
+- **Timeline:** new setting `focus.log` (`[start, end]` epoch ms per finished session, tied to `focus.day`, capped at 96 in Rust). `advance` appends on a counted focus end, placing the session as `[endsAt − focus length, endsAt]`, so a pause shifts the start rather than lengthening the block. `timeline()` lays it on an 8–20 h bar that widens to fit a session or now outside it. Blocks are not coloured by task; tasks have no colour.

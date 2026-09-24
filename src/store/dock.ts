@@ -21,6 +21,8 @@ export type LockOwner =
   | "expanded"
   | "tasks"
   | "undo"
+  /** The Focus tab's length field, while a number is being typed. */
+  | "focus"
   /** The quick-capture field, whose cursor is never over the panel. */
   | "quick";
 

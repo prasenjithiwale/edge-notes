@@ -3,6 +3,7 @@
 //! Rust owns the window geometry, the dock state machine and (from M1) the
 //! database, so the webview needs no privileged permissions.
 
+pub mod clips;
 pub mod commands;
 pub mod db;
 pub mod dock;
@@ -99,10 +100,14 @@ pub fn run() {
             commands::notes_update,
             commands::notes_set_pinned,
             commands::images_save,
+            commands::images_pick,
             commands::share_copy_rich,
             commands::share_copy_text,
             commands::share_sheet,
             commands::share_sheet_supported,
+            commands::clips_list,
+            commands::clips_remove,
+            commands::clips_clear,
             commands::notes_reorder,
             commands::notes_delete,
             commands::notes_restore,
@@ -172,10 +177,18 @@ pub fn run() {
             // purge, so a note that has just gone for good takes its pictures
             // with it, and only at startup: it is the one moment when every note
             // can be read at once and nothing is being typed.
-            match database.with(|connection| images::sweep(&handle, connection)) {
-                Ok(0) => {}
-                Ok(count) => log::info!("images: removed {count} unused files"),
-                Err(error) => log::error!("images: sweep failed: {error}"),
+            //
+            // Never while locked: the connection is then an empty stand-in, and
+            // a sweep over it finds no note mentioning anything and deletes every
+            // picture the real notes still use. That happened on 22 Sep 2026.
+            if vault.protection == db::Protection::Locked {
+                log::info!("images: not sweeping, the notes are locked");
+            } else {
+                match database.with(|connection| images::sweep(&handle, connection)) {
+                    Ok(0) => {}
+                    Ok(count) => log::info!("images: removed {count} unused files"),
+                    Err(error) => log::error!("images: sweep failed: {error}"),
+                }
             }
             let stored = database.with(db::settings::get).unwrap_or_default();
             let placement = stored.placement();
@@ -196,6 +209,12 @@ pub fn run() {
             let reminders = reminders::Reminders::new(stored.tasks_reminders);
             reminders.spawn(handle.clone());
             app.manage(reminders);
+
+            // The clipboard history, watched from its own thread: things are
+            // copied while the panel is collapsed, when its timers are stopped.
+            let clips = clips::Clips::new();
+            clips.spawn(handle.clone());
+            app.manage(clips);
 
             let window = handle
                 .get_webview_window(DOCK_WINDOW_LABEL)
@@ -256,6 +275,9 @@ pub fn run() {
                         }
                         if let Some(timer) = event_handle.try_state::<Arc<focus::FocusTimer>>() {
                             timer.stop();
+                        }
+                        if let Some(clips) = event_handle.try_state::<Arc<clips::Clips>>() {
+                            clips.stop();
                         }
                     }
                     _ => {}

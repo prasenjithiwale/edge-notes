@@ -69,6 +69,14 @@ objc2-app-kit = { version = "0.3", default-features = false, features = [
   "NSStatusBarButton",
   "NSAttributedString",
   "NSWindow",
+  # The clipboard history: its change count, so nothing is read until something
+  # was copied, and its types, so a password manager's copy is never kept.
+  "NSPasteboard",
+  # The image picker, opened from Rust so the app can be activated first: wry's
+  # own runs in an inactive app, where the file list ignores clicks.
+  "NSOpenPanel",
+  "NSSavePanel",
+  "NSPanel",
 ] }
 objc2-foundation = { version = "0.3", default-features = false, features = [
   "std",

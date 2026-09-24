@@ -55,6 +55,9 @@ export const PHASE_HINTS: Record<Phase, string> = {
   long: "Leave the desk for this one.",
 };
 
+/** A finished focus session, `[start, end]` in epoch milliseconds. */
+export type Session = [number, number];
+
 export interface Pomodoro {
   phase: Phase;
   /** When the current phase ends, or null while it is paused or not started. */
@@ -66,6 +69,8 @@ export interface Pomodoro {
   /** Focus sessions finished on `day`, which is a local `YYYY-MM-DD`. */
   day: string;
   today: number;
+  /** The focus sessions finished on `day`, as `[start, end]` epoch ms. */
+  log: Session[];
   /** The lengths this timer is running to. */
   durations: Durations;
 }
@@ -78,6 +83,7 @@ export function idle(phase: Phase = "focus", durations: Durations = DEFAULT_DURA
     streak: 0,
     day: "",
     today: 0,
+    log: [],
     durations,
   };
 }
@@ -199,6 +205,7 @@ export function advance(state: Pomodoro, today: string, counted: boolean): Pomod
       streak: state.streak,
       day: state.day,
       today: state.today,
+      log: state.log,
     };
   }
 
@@ -208,11 +215,18 @@ export function advance(state: Pomodoro, today: string, counted: boolean): Pomod
   // The day's tally resets by itself when the day does, so nothing has to run
   // at midnight.
   const sameDay = state.day === today;
+  const log = sameDay ? state.log : [];
+  // Where the session sat on the clock: it ended when it was due to, and it was
+  // the focus length long. A pause in the middle shifts the start, not the time
+  // spent, which is what the timeline is about.
+  const session: Session | null =
+    counted && state.endsAt !== null ? [state.endsAt - state.durations.focus, state.endsAt] : null;
   return {
     ...idle(next, state.durations),
     streak,
     day: counted ? today : state.day,
     today: counted ? (sameDay ? state.today : 0) + 1 : sameDay ? state.today : 0,
+    log: session === null ? log : [...log, session],
   };
 }
 
@@ -251,4 +265,64 @@ export function endNotice(phase: Phase, task?: string | null): { title: string; 
     };
   }
   return { title: "Break over", body: "Back to it." };
+}
+
+/**
+ * The rhythms offered as one press each: focus and break, in minutes. The
+ * stepper is for anything else.
+ */
+export const PRESETS: readonly (readonly [focus: number, rest: number])[] = [
+  [25, 5],
+  [50, 10],
+  [90, 20],
+];
+
+/** Where the day's timeline starts and ends, in hours: a working day, stretched when a session falls outside it. */
+export const TIMELINE_HOURS = { start: 8, end: 20 } as const;
+
+/** One session on the timeline, as fractions of its width. */
+export interface TimelineBlock {
+  left: number;
+  width: number;
+}
+
+export interface Timeline {
+  /** The first and last hour shown. */
+  from: number;
+  to: number;
+  blocks: TimelineBlock[];
+  /** Where now is; the span always includes it. */
+  now: number;
+}
+
+/**
+ * The day's sessions laid on a bar from `from` to `to` o'clock. The bar shows a
+ * working day and widens to whole hours when a session or now falls outside it,
+ * so nothing is ever drawn off the end.
+ */
+export function timeline(log: readonly Session[], now: number): Timeline {
+  const midnight = new Date(now);
+  midnight.setHours(0, 0, 0, 0);
+  const base = midnight.getTime();
+  const hours = (at: number) => (at - base) / 3_600_000;
+
+  let from: number = TIMELINE_HOURS.start;
+  let to: number = TIMELINE_HOURS.end;
+  for (const at of [now, ...log.flat()]) {
+    const hour = Math.min(24, Math.max(0, hours(at)));
+    from = Math.min(from, Math.floor(hour));
+    to = Math.max(to, Math.ceil(hour));
+  }
+
+  const span = to - from;
+  const place = (at: number) => Math.min(1, Math.max(0, (hours(at) - from) / span));
+  return {
+    from,
+    to,
+    blocks: log.map(([start, end]) => {
+      const left = place(start);
+      return { left, width: Math.max(0, place(end) - left) };
+    }),
+    now: place(now),
+  };
 }

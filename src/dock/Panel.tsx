@@ -13,6 +13,7 @@ import {
   dockToggle,
   NOTE_COLORS,
   focusTimerSet,
+  onClipsChanged,
   onImagesDropped,
   onNewNoteRequested,
   onQuitRequested,
@@ -37,11 +38,13 @@ import { NoteEditor } from "../notes/NoteEditor";
 import { NoteList } from "../notes/NoteList";
 import { NoteReader } from "../notes/NoteReader";
 import { TasksView } from "../notes/TasksView";
+import { ClipsView } from "../notes/ClipsView";
 import { PomodoroView } from "../focus/PomodoroView";
 import { TABS, ViewTabs } from "../notes/ViewTabs";
 import { SearchField } from "../notes/SearchField";
 import { SettingsView } from "../settings/SettingsView";
 import { useArchiveStore } from "../store/archive";
+import { useClipsStore } from "../store/clips";
 import { useDockStore } from "../store/dock";
 import { useNotesStore } from "../store/notes";
 import { useSettingsStore } from "../store/settings";
@@ -156,6 +159,18 @@ export function Panel({ className }: PanelProps) {
         console.error("panel: could not read the security status", error);
       });
   }, [load, loadTasks, loadSettings, loadArchive]);
+
+  // The clipboard history is Rust's; this is its copy, replaced whole on every
+  // copy made anywhere.
+  useEffect(() => {
+    void useClipsStore.getState().load();
+    return subscription(
+      onClipsChanged((clips) => {
+        useClipsStore.getState().replace(clips);
+      }),
+      "clips:changed",
+    );
+  }, []);
 
   useEffect(
     () => subscription(onSettingsChanged(applySettings), "settings:changed"),
@@ -388,7 +403,12 @@ export function Panel({ className }: PanelProps) {
           return;
         }
         // Each list tab has its own kind of row; the movement is the same.
-        const rows = notesStore.view === "todo" ? "[data-task-row]" : "[data-card]";
+        const rows =
+          notesStore.view === "todo"
+            ? "[data-task-row]"
+            : notesStore.view === "clips"
+              ? "[data-clip-row]"
+              : "[data-card]";
         if (
           moveCardFocus(panelRef.current, event.key === "ArrowDown" ? 1 : -1, rows)
         ) {
@@ -592,7 +612,7 @@ export function Panel({ className }: PanelProps) {
         {searching ? (
           <SearchField
             query={query}
-            what={view === "todo" ? "tasks" : "notes"}
+            what={view === "todo" ? "tasks" : view === "clips" ? "clipboard" : "notes"}
             onQueryChange={setQuery}
             onAbandon={closeSearch}
           />
@@ -613,14 +633,16 @@ export function Panel({ className }: PanelProps) {
         <div className={styles.actions}>
           {!searching && !expandedNote && view !== "focus" && (
             <IconButton
-              label={view === "todo" ? "Search tasks" : "Search notes"}
+              label={
+                view === "todo" ? "Search tasks" : view === "clips" ? "Search clipboard" : "Search notes"
+              }
               shortcut="⌘F"
               onClick={openSearch}
             >
               <Search size={16} strokeWidth={1.75} />
             </IconButton>
           )}
-          {view !== "focus" && (
+          {view !== "focus" && view !== "clips" && (
             <IconButton
               label={view === "todo" ? "New task" : "New note"}
               shortcut="⌘N"
@@ -742,6 +764,14 @@ export function Panel({ className }: PanelProps) {
               inert={view !== "focus"}
             >
               <PomodoroView active={view === "focus"} />
+            </div>
+            <div
+              className={styles.pane}
+              style={paneWidth}
+              aria-hidden={view !== "clips"}
+              inert={view !== "clips"}
+            >
+              <ClipsView query={query} />
             </div>
           </div>
         </div>

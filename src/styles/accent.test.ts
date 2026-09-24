@@ -28,7 +28,11 @@ describe("the panel's colour", () => {
     expect(rule(panel, "toolbar")).toContain("var(--accent-ink, inherit)");
     // The ring's metrics and its colour are separate rules, so this asks the
     // sheet rather than one of them.
-    expect(pomodoro).toContain("stroke: var(--accent-ink, var(--text-primary))");
+    // The panel colour deepened towards its ink, never the ink alone (nearly
+    // black on the deeper colours), and the accent without one (24 Sep 2026).
+    expect(pomodoro).toContain(
+      "color-mix(in oklch, var(--accent-bg, var(--accent)) 65%, var(--accent-ink, var(--accent)))",
+    );
   });
 
   it("always names a fallback, so no colour means the chrome it always had", () => {

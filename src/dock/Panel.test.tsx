@@ -97,6 +97,7 @@ const SETTINGS: Settings = {
   "focus.day": "",
   "focus.today": 0,
   "focus.streak": 0,
+  "focus.log": [],
 };
 
 /** What `tasks_list` answers with, and what the write commands change. */
@@ -155,6 +156,9 @@ beforeEach(() => {
     }
     if (command === "tasks_list") {
       return Promise.resolve(tasksInDb);
+    }
+    if (command === "clips_list") {
+      return Promise.resolve([]);
     }
     if (command === "archive_list") {
       return Promise.resolve(archivedInDb);
@@ -1263,8 +1267,8 @@ describe("sliding between the tabs", () => {
     await renderPanel();
     const tablist = screen.getByRole("tablist", { name: "Panel view" });
     expect(tablist.style.getPropertyValue("--tab-index")).toBe("0");
-    // Three tabs, so the track is three panels wide and shifts by a third.
-    expect(track()?.style.width).toBe("300%");
+    // Four tabs, so the track is four panels wide and shifts by a quarter.
+    expect(track()?.style.width).toBe("400%");
     expect(track()?.style.transform).toBe("translateX(-0%)");
 
     let [notesPane, todoPane, focusPane] = panes();
@@ -1277,7 +1281,7 @@ describe("sliding between the tabs", () => {
     await waitFor(() => {
       expect(tablist.style.getPropertyValue("--tab-index")).toBe("1");
     });
-    expect(track()?.style.transform).toBe("translateX(-33.333333333333336%)");
+    expect(track()?.style.transform).toBe("translateX(-25%)");
     [notesPane, todoPane, focusPane] = panes();
     expect(notesPane?.getAttribute("aria-hidden")).toBe("true");
     expect(notesPane?.hasAttribute("inert")).toBe(true);
@@ -1530,6 +1534,32 @@ describe("the Focus tab", () => {
     expect(endsAt - new Date(2026, 8, 16, 10, 1).getTime()).toBe(24 * 60_000);
   });
 
+  it("takes a typed session length, clamped, and hides the control while running", async () => {
+    await renderPanel();
+    await useNotesStore.getState().setView("focus");
+    const panel = await screen.findByRole("tabpanel", { name: "Focus" });
+
+    const field = within(panel).getByRole("spinbutton", { name: "Session length in minutes" });
+    fireEvent.change(field, { target: { value: "42" } });
+    fireEvent.blur(field);
+    await waitFor(() => {
+      expect(within(panel).getByRole("timer").textContent).toBe("42:00");
+    });
+    expect(invoke).toHaveBeenCalledWith("settings_update", {
+      patch: { "focus.focusMinutes": 42 },
+    });
+
+    fireEvent.change(field, { target: { value: "500" } });
+    fireEvent.blur(field);
+    await waitFor(() => {
+      expect(within(panel).getByRole("timer").textContent).toBe("2:00:00");
+    });
+
+    within(panel).getByRole("button", { name: "Start" }).click();
+    await screen.findByRole("button", { name: "Pause" });
+    expect(within(panel).queryByRole("spinbutton")).toBeNull();
+  });
+
   it("tells Rust when the session ends, so a closed panel still says so", async () => {
     await renderPanel();
     await useNotesStore.getState().setView("focus");
@@ -1715,6 +1745,29 @@ describe("reminders", () => {
  * drawn as one: an empty list with a New note button invites someone to write
  * over notes that are still there, encrypted, on disk.
  */
+describe("the Clips tab", () => {
+  it("lists what Rust says was copied, and copies an entry back through Rust", async () => {
+    render(<Panel className="" />);
+    await waitFor(() => {
+      expect(listeners.has("clips:changed")).toBe(true);
+    });
+    listeners.get("clips:changed")?.({
+      payload: [
+        { id: 2, text: "on the clipboard", copiedAt: Date.now(), current: true },
+        { id: 1, text: "ssh deploy@example.com", copiedAt: Date.now(), current: false },
+      ],
+    });
+    fireEvent.click(screen.getByRole("tab", { name: "Clips" }));
+    expect((await screen.findByText("On the clipboard")).closest("li")?.getAttribute("aria-current")).toBe("true");
+
+    fireEvent.click(await screen.findByRole("button", { name: "Copy ssh deploy@example.com" }));
+    await waitFor(() => {
+      expect(invoke).toHaveBeenCalledWith("share_copy_text", { text: "ssh deploy@example.com" });
+    });
+    expect(await screen.findByText("Copied")).toBeTruthy();
+  });
+});
+
 describe("a locked database", () => {
   it("takes the panel, instead of showing an empty list", async () => {
     securityInDb = {

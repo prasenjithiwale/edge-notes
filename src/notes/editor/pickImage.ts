@@ -1,4 +1,4 @@
-import { imagesSave } from "../../lib/ipc";
+import { imagesPick, imagesSave } from "../../lib/ipc";
 import { withModal } from "../../lib/modal";
 
 /** What the picker will offer, and what `images::sniff` will accept. */
@@ -18,7 +18,14 @@ const ACCEPT = "image/png,image/jpeg,image/gif,image/webp";
  * take the editor, and the caret the image was going to land at, with it.
  */
 export async function pickImages(): Promise<string[]> {
-  return withModal(pick);
+  // macOS: Rust's own open panel. wry answers a file input with one that comes
+  // up in an inactive app, where the file list ignores clicks until changing
+  // folder wakes it; Rust activates the app first, and holds the panel open.
+  const picked = await imagesPick().catch((error: unknown) => {
+    console.error("images: the picker failed", error);
+    return [];
+  });
+  return picked ?? withModal(pick);
 }
 
 async function pick(): Promise<string[]> {

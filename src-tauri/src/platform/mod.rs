@@ -57,3 +57,42 @@ pub fn set_hidden_from_capture(window: &WebviewWindow, hidden: bool) {
 pub const fn capture_protection_supported() -> bool {
     cfg!(any(target_os = "macos", target_os = "windows"))
 }
+
+/// The clipboard's change count, and whether what is on it asked not to be
+/// remembered, for the clipboard history (`clips.rs`).
+///
+/// macOS only: `NSPasteboard.changeCount` moves on every copy, so the text is
+/// read only when something was copied, and password managers mark their copies
+/// with the nspasteboard.org types. Elsewhere this is `None`, and the history
+/// compares the text itself and has no such marker to honour.
+#[must_use]
+pub fn clipboard_state() -> Option<(isize, bool)> {
+    #[cfg(target_os = "macos")]
+    return Some(macos::clipboard_state());
+    #[cfg(not(target_os = "macos"))]
+    None
+}
+
+/// Image files chosen in the system's open panel, or `None` where the webview's
+/// own file input is the picker (everywhere but macOS). Blocks until the panel
+/// is closed; call from a thread that may wait, not the main thread.
+#[must_use]
+pub fn pick_images(app: &tauri::AppHandle) -> Option<Vec<std::path::PathBuf>> {
+    #[cfg(target_os = "macos")]
+    {
+        let (sender, receiver) = std::sync::mpsc::channel();
+        if let Err(error) = app.run_on_main_thread(move || {
+            // The receiver outlives this unless the app is going away.
+            let _ = sender.send(macos::pick_images());
+        }) {
+            log::error!("platform: could not open the image picker: {error}");
+            return Some(Vec::new());
+        }
+        Some(receiver.recv().unwrap_or_default())
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = app;
+        None
+    }
+}

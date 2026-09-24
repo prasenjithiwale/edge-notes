@@ -38,6 +38,7 @@ const DEFAULTS: Settings = {
   "focus.day": "",
   "focus.today": 0,
   "focus.streak": 0,
+  "focus.log": [],
 };
 
 /**

@@ -201,6 +201,39 @@ pub fn images_save(app: AppHandle, request: tauri::ipc::Request<'_>) -> AppResul
     crate::images::save(&app, bytes)
 }
 
+/// Pick images with the system's open panel and store them; the names come back
+/// in the order chosen. `None` means this platform has no picker of Rust's and
+/// the webview's file input is the one to use.
+///
+/// The files are read here, as a dropped file is, and `images::sniff` decides
+/// what each one is. The panel is held open while the picker is up
+/// (`Input::SetModal`): it takes focus, and a blur is otherwise a goodbye.
+/// Async so the wait is on a worker thread, never on the main one the picker
+/// runs on.
+#[tauri::command]
+pub async fn images_pick(app: AppHandle) -> Option<Vec<String>> {
+    let dock = app.try_state::<Arc<Dock>>();
+    if let Some(dock) = &dock {
+        dock.input(&app, Input::SetModal(true));
+    }
+    let paths = platform::pick_images(&app);
+    if let Some(dock) = &dock {
+        dock.input(&app, Input::SetModal(false));
+    }
+    Some(
+        paths?
+            .iter()
+            .filter_map(|path| match crate::images::import(&app, path) {
+                Ok(name) => Some(name),
+                Err(error) => {
+                    log::warn!("images: {} was not stored: {error}", path.display());
+                    None
+                }
+            })
+            .collect(),
+    )
+}
+
 /// One note on the clipboard as rich text and plain text together, so whatever
 /// it is pasted into takes the best of the two it understands.
 #[tauri::command]
@@ -212,6 +245,30 @@ pub fn share_copy_rich(app: AppHandle, html: String, text: String) -> AppResult<
 #[tauri::command]
 pub fn share_copy_text(app: AppHandle, text: String) -> AppResult<()> {
     crate::share::copy_text(&app, &text)
+}
+
+/// The clipboard history, newest first.
+#[tauri::command]
+#[must_use]
+pub fn clips_list(clips: State<'_, Arc<crate::clips::Clips>>) -> Vec<crate::clips::Clip> {
+    clips.list()
+}
+
+/// Forget one entry; the list that is left comes back.
+#[tauri::command]
+#[must_use]
+pub fn clips_remove(
+    clips: State<'_, Arc<crate::clips::Clips>>,
+    id: u64,
+) -> Vec<crate::clips::Clip> {
+    clips.remove(id);
+    clips.list()
+}
+
+/// Forget the whole history. What is on the clipboard now stays there.
+#[tauri::command]
+pub fn clips_clear(clips: State<'_, Arc<crate::clips::Clips>>) {
+    clips.clear();
 }
 
 /// Whether this platform has a share sheet at all, so the menu can leave the

@@ -45,8 +45,8 @@
 .clock {
   position: relative;
   flex: none;
-  width: 160px;
-  height: 160px;
+  width: 200px;
+  height: 200px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -62,25 +62,35 @@
 .track,
 .progress {
   fill: none;
-  stroke-width: 8;
+  stroke-width: 10;
   stroke-linecap: round;
 }
 
+/* The track stays neutral; only the time spent is in colour (24 Sep 2026). */
 .track {
   stroke: var(--surface-sunken);
 }
 
-/* Neutral, like the rest of the chrome: the note palette is the only colour
-   (brief 7.1), and a timer does not need to be red to be a timer. */
 .progress {
-  /* The theme colour if there is one: the ring is the one thing on the Focus
-     tab that says how far through you are, so it is worth the colour. */
-  stroke: var(--accent-ink, var(--text-primary));
-  transition: stroke-dashoffset 1s linear;
+  /* The panel colour itself, deepened a third of the way towards its own ink
+     so it holds up on the grey track — the ink alone is nearly black on the
+     deeper colours, and the colour alone is pale. The accent with no colour. */
+  --ring: color-mix(in oklch, var(--accent-bg, var(--accent)) 65%, var(--accent-ink, var(--accent)));
+  stroke: var(--ring);
+  transition:
+    stroke-dashoffset 1s linear,
+    stroke var(--open-duration) var(--open-easing);
 }
 
-.progressMuted {
-  stroke: var(--text-tertiary);
+/* Each phase wears its own colour, so the ring says which one is running
+   before the word does. Breaks borrow the note palette's pairings, mixed as
+   the focus ring is, so they are as legible by construction. */
+.progress[data-phase="short"] {
+  stroke: color-mix(in oklch, var(--note-teal-bg) 65%, var(--note-teal-text));
+}
+
+.progress[data-phase="long"] {
+  stroke: color-mix(in oklch, var(--note-indigo-bg) 65%, var(--note-indigo-text));
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -101,9 +111,10 @@
    squinted at from across the desk is not doing its job. Tabular figures so the
    digits do not shuffle as they change. */
 .time {
-  font-size: 34px;
+  font-size: 48px;
   font-weight: 400;
   line-height: 1;
+  letter-spacing: -0.02em;
   color: var(--text-primary);
   font-variant-numeric: tabular-nums;
 }
@@ -137,6 +148,70 @@
 
 /* What the session is for. A full-width sunken row, so it reads as a field with
    a value rather than a sentence with a link in it. */
+/* The phase's length, under the clock while it is stopped: the settings
+   view's stepper, with a field in the middle that takes any number. */
+.length {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  background: var(--surface);
+}
+
+.lengthStep {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-primary);
+}
+
+.lengthStep:hover:not(:disabled) {
+  background: var(--surface-sunken);
+}
+
+.lengthStep:disabled {
+  color: var(--text-tertiary);
+}
+
+.lengthValue {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 4px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  cursor: text;
+}
+
+/* Three digits wide, no spinner: − and + are the spinner. */
+.lengthInput {
+  width: 3ch;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--text-primary);
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+  text-align: end;
+  appearance: textfield;
+  -moz-appearance: textfield;
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.lengthInput::-webkit-outer-spin-button,
+.lengthInput::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
 .workingOn {
   display: flex;
   align-items: center;
@@ -249,6 +324,55 @@
   color: var(--text-tertiary);
 }
 
+/* Rhythm and length, together, while the timer is stopped. */
+.setup {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.presets {
+  display: flex;
+  gap: 6px;
+}
+
+.preset {
+  display: flex;
+  align-items: baseline;
+  height: 26px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  line-height: 24px;
+}
+
+.preset:hover:not(.presetOn) {
+  background: var(--surface-sunken);
+}
+
+.presetRest {
+  font-weight: 400;
+  color: var(--text-tertiary);
+}
+
+/* The one that is set: filled like the Start button, since it is the answer. */
+.presetOn {
+  border-color: var(--text-primary);
+  background: var(--text-primary);
+  color: var(--surface);
+}
+
+.presetOn .presetRest {
+  color: inherit;
+  opacity: 0.7;
+}
+
 .controls {
   display: flex;
   align-items: center;
@@ -278,7 +402,58 @@
   opacity: 0.9;
 }
 
+.day {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+  margin-top: 4px;
+}
+
+.timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.timelineBar {
+  position: relative;
+  height: 8px;
+  border-radius: 4px;
+  background: var(--surface-sunken);
+  overflow: hidden;
+}
+
+/* A finished session, in the focus ring's colour. At least two pixels, so a
+   one-minute test session is still there to see. */
+.timelineBlock {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  min-width: 2px;
+  border-radius: 2px;
+  background: color-mix(in oklch, var(--accent-bg, var(--accent)) 65%, var(--accent-ink, var(--accent)));
+}
+
+.timelineNow {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  margin-left: -1px;
+  background: var(--text-primary);
+}
+
+.timelineScale {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--text-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+
 .tally {
+  text-align: center;
   margin: 0;
   font-size: 11px;
   color: var(--text-tertiary);

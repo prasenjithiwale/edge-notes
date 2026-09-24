@@ -232,6 +232,8 @@ export interface Settings {
   "focus.day": string;
   "focus.today": number;
   "focus.streak": number;
+  /** Today's finished focus sessions, `[start, end]` in epoch ms, for the timeline. */
+  "focus.log": [number, number][];
 }
 
 export type SettingsPatch = Partial<Settings>;
@@ -464,6 +466,14 @@ export async function imagesSave(bytes: Uint8Array): Promise<string> {
   return invoke<string>("images_save", bytes);
 }
 
+/**
+ * Pick images with the system's open panel and store them, in Rust. Null where
+ * there is no such picker (everywhere but macOS) and the file input is the one.
+ */
+export function imagesPick(): Promise<string[] | null> {
+  return callResult<string[] | null>("images_pick");
+}
+
 /** One note on the clipboard as rich text and plain text at once. */
 export async function shareCopyRich(html: string, text: string): Promise<void> {
   await callResult<null>("share_copy_rich", { html, text });
@@ -472,6 +482,38 @@ export async function shareCopyRich(html: string, text: string): Promise<void> {
 /** One note on the clipboard as the Markdown it is stored as. */
 export async function shareCopyText(text: string): Promise<void> {
   await callResult<null>("share_copy_text", { text });
+}
+
+// -- Clipboard history --------------------------------------------------------
+
+/** One thing copied, anywhere. Kept in Rust's memory only, never on disk. */
+export interface Clip {
+  id: number;
+  text: string;
+  /** Unix milliseconds: when it was last copied. */
+  copiedAt: number;
+  /** This is what is on the clipboard now. */
+  current: boolean;
+}
+
+export function clipsList(): Promise<Clip[]> {
+  return callResult<Clip[]>("clips_list");
+}
+
+/** Forget one; the list that is left comes back. */
+export function clipsRemove(id: number): Promise<Clip[]> {
+  return callResult<Clip[]>("clips_remove", { id });
+}
+
+export function clipsClear(): Promise<void> {
+  return callResult<null>("clips_clear").then(() => undefined);
+}
+
+/** Something was copied; the whole list, newest first. */
+export function onClipsChanged(handler: (clips: Clip[]) => void): Promise<UnlistenFn> {
+  return listen<Clip[]>("clips:changed", (event) => {
+    handler(event.payload);
+  });
 }
 
 /** Whether this system has a share sheet to offer (macOS today). */

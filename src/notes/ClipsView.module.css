@@ -1,0 +1,166 @@
+/* The clipboard history. Rows are laid out like the archive's — a sunken card
+   per entry, actions at the end — because it is the same kind of list: things
+   to pick one of, not things to read. */
+.view {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  /* The notes list starts 4 px below the header; so does this. */
+  padding: 4px 12px 12px;
+}
+
+.top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 0 2px 8px;
+  padding-top: 4px;
+}
+
+.note {
+  margin: 0;
+  font-size: 11px;
+  color: var(--text-tertiary);
+}
+
+.clear {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  background: var(--surface);
+  color: var(--text-primary);
+  font-size: 11px;
+  padding: 3px 8px;
+}
+
+.clear:hover {
+  background: var(--surface-sunken);
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.row {
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+  border-radius: 10px;
+  background: var(--surface-sunken);
+}
+
+/* What is on the clipboard now, in colour and lifted off the list — asked for
+   on 24 Sep 2026, an exception to brief 7.1's neutral chrome like the panel's
+   own colour. It wears the panel colour's pair (`--accent-bg`/`--accent-ink`,
+   AA by construction) when one is set, and a tint of the accent otherwise. It
+   is also said in words, so it is never colour alone. */
+.current {
+  background: var(--accent-bg, color-mix(in srgb, var(--accent) 14%, var(--surface)));
+  box-shadow:
+    inset 0 0 0 1px var(--accent-ink, color-mix(in srgb, var(--accent) 55%, transparent)),
+    var(--shadow-card-raised);
+}
+
+.current .text {
+  color: var(--accent-ink, var(--text-primary));
+}
+
+.current .when {
+  color: var(--accent-ink, var(--text-primary));
+  font-weight: 600;
+}
+
+/* The whole text is the button: pressing the entry is copying it. */
+.body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 0 8px 8px;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: start;
+}
+
+/* Three lines is enough to recognise a copy; the whole of it is what gets
+   copied back. Whitespace is kept, because a copied snippet's shape is part of
+   how you know it. */
+.text {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  overflow: hidden;
+  font-size: 12px;
+  line-height: 1.35;
+  color: var(--text-primary);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.when {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 10px;
+  color: var(--text-tertiary);
+}
+
+.actions {
+  flex: none;
+  display: flex;
+  gap: 2px;
+  padding: 6px 6px 0 0;
+}
+
+.icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--text-tertiary);
+}
+
+.icon:hover {
+  border-color: var(--border);
+  background: var(--surface);
+  color: var(--text-secondary);
+}
+
+.empty {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 28px 20px;
+  text-align: center;
+}
+
+.headline {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.hint {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--text-tertiary);
+}

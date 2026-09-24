@@ -60,7 +60,7 @@ interface PendingUndo {
 }
 
 /** The panel's tabs. `"todo"` is the Tasks tab, named before it was renamed. */
-export type PanelView = "notes" | "todo" | "focus";
+export type PanelView = "notes" | "todo" | "focus" | "clips";
 
 interface NotesStore {
   notes: Note[];
@@ -89,6 +89,8 @@ interface NotesStore {
    * written, which the editor's own plugin does.
    */
   createWithImages: (names: string[]) => Promise<void>;
+  /** A new note that already says something, opened in the editor. */
+  createWithContent: (content: string) => Promise<void>;
   setContent: (id: string, content: string) => void;
   setColor: (id: string, color: NoteColor) => Promise<void>;
   setPinned: (id: string, pinned: boolean) => Promise<void>;
@@ -196,12 +198,15 @@ export const useNotesStore = create<NotesStore>((set, get) => ({
     // Everything a new note does, and then the pictures already in it: the
     // editor opens on a note that is not empty, so it is never discarded on the
     // way out even if nothing is typed.
+    await get().createWithContent(names.map((name) => imageMarkdown(name)).join("\n"));
+  },
+
+  createWithContent: async (content) => {
     await get().createNote();
     const id = get().editingId;
     if (id === null) {
       return;
     }
-    const content = names.map((name) => imageMarkdown(name)).join("\n");
     get().setContent(id, content);
     beginEdit(id, content);
     await get().flush(id);

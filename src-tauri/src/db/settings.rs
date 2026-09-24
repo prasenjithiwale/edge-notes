@@ -147,7 +147,14 @@ pub struct Settings {
     /// Focus sessions finished since the last long break.
     #[serde(rename = "focus.streak")]
     pub focus_streak: u32,
+    /// The focus sessions finished on `focus.day`, as `[start, end]` in epoch
+    /// milliseconds, for the day's timeline. Belongs to `focus.day` like the tally.
+    #[serde(rename = "focus.log")]
+    pub focus_log: Vec<[i64; 2]>,
 }
+
+/// More sessions than a day has room for is not a day's log.
+pub const FOCUS_LOG_MAX: usize = 96;
 
 /// What a phase length may be set to, in minutes. One minute is a legitimate
 /// test of the notification; past two hours it is not a pomodoro.
@@ -231,6 +238,7 @@ impl Default for Settings {
             focus_day: String::new(),
             focus_today: 0,
             focus_streak: 0,
+            focus_log: Vec::new(),
         }
     }
 }
@@ -296,6 +304,8 @@ pub struct SettingsPatch {
     pub focus_today: Option<u32>,
     #[serde(rename = "focus.streak")]
     pub focus_streak: Option<u32>,
+    #[serde(rename = "focus.log")]
+    pub focus_log: Option<Vec<[i64; 2]>>,
 }
 
 /// Just the one flag the notes repository needs, so `list` can decide its own
@@ -416,6 +426,7 @@ pub fn get(connection: &Connection) -> AppResult<Settings> {
         focus_day: read(connection, "focus.day", defaults.focus_day)?,
         focus_today: read(connection, "focus.today", defaults.focus_today)?,
         focus_streak: read(connection, "focus.streak", defaults.focus_streak)?,
+        focus_log: read(connection, "focus.log", defaults.focus_log)?,
     })
 }
 
@@ -530,6 +541,10 @@ pub fn update(connection: &Connection, patch: &SettingsPatch) -> AppResult<Setti
     }
     if let Some(value) = patch.focus_streak {
         write(connection, "focus.streak", &value)?;
+    }
+    if let Some(value) = &patch.focus_log {
+        let start = value.len().saturating_sub(FOCUS_LOG_MAX);
+        write(connection, "focus.log", &value[start..].to_vec())?;
     }
     get(connection)
 }
@@ -671,6 +686,7 @@ mod tests {
                 focus_today: Some(3),
                 focus_streak: Some(3),
                 focus_task_id: Some("0192-abc".to_owned()),
+                focus_log: Some(vec![[1_000, 2_000], [3_000, 4_000]]),
                 ..SettingsPatch::default()
             },
         )
@@ -680,6 +696,7 @@ mod tests {
         assert_eq!(settings.focus_today, 3);
         assert_eq!(settings.focus_streak, 3);
         assert_eq!(settings.focus_task_id, "0192-abc");
+        assert_eq!(settings.focus_log, vec![[1_000, 2_000], [3_000, 4_000]]);
         assert_eq!(get(&connection).expect("get"), settings);
     }
 

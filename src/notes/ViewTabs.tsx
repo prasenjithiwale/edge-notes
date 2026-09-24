@@ -17,6 +17,7 @@ export const TABS: readonly { view: PanelView; label: string }[] = [
   { view: "notes", label: "Notes" },
   { view: "todo", label: "Tasks" },
   { view: "focus", label: "Focus" },
+  { view: "clips", label: "Clips" },
 ];
 
 /** The panel's tabs, in place of its title. */
