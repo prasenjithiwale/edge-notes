@@ -11,6 +11,15 @@ To release, see "Releasing" in the README.
 
 ## [Unreleased]
 
+## [0.10.1] - 2026-09-24
+
+### Changed
+
+- **The task sheet and Clips join the new look.** A task's sheet is glass,
+  lit by its priority colour, with glass controls, pill chips and a filled
+  Done button. In Clips each copy is a glass tile, and the one on your
+  clipboard now is lit by the panel's colour instead of a solid band.
+
 ## [0.10.0] - 2026-09-24
 
 ### Changed
