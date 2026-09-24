@@ -11,6 +11,31 @@ To release, see "Releasing" in the README.
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-09-24
+
+### Changed
+
+- **A new look: Aurora glass.** The panel is frosted glass over your desktop,
+  with a real blur behind it on macOS (Windows and Linux get a nearly solid
+  tint). Under the glass a soft light drifts slowly: warm while a focus
+  session runs, teal on a short break, indigo on a long one, and the panel
+  colour you chose in Settings at rest. Each screen opens with its name in
+  calligraphy beside today's date, and the Focus phase and empty pages are
+  written in it too. Notes are made of the same glass, lit by their colour
+  from both corners. Tabs, buttons, menus and the collapsed tab are glass to
+  match. Settings › Panel translucency is gone; the glass replaces it.
+- **The Focus tab** has a bigger clock inside a glass sphere, and the ring,
+  its glow and the Start button all take the colour of the phase.
+
+### Added
+
+- **Clips**, a new tab that remembers the last 50 texts you copied, so you can
+  copy any of them again. It keeps them in memory only, never on disk, and
+  skips anything a password manager marks as secret.
+- **Focus presets:** 25/5, 50/10 and 90/20 minutes, one press each.
+- **Today's timeline** on the Focus tab: every session you finished today, on
+  one bar, with a marker for now.
+
 ## [0.9.0] - 2026-09-23
 
 ### Added
