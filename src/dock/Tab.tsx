@@ -5,7 +5,7 @@ import { useSessionRunning } from "../focus/session";
 import { cx } from "../lib/cx";
 import { isClosedPhase, isOpenPhase } from "../lib/dock";
 import { dockBeginTabDrag, dockEndTabDrag } from "../lib/ipc";
-import { recentColors } from "../lib/notes";
+import { dotColor, recentColors } from "../lib/notes";
 import { useDockStore } from "../store/dock";
 import { useNotesStore } from "../store/notes";
 import { useSettingsStore } from "../store/settings";
@@ -88,7 +88,7 @@ export function Tab({ className }: TabProps) {
                 // Colours repeat, so the index is the only stable key here.
                 key={index}
                 className={styles.dot}
-                style={{ "--dot-bg": `var(--note-${color}-bg)` } as CSSProperties}
+                style={{ "--dot-bg": dotColor(color) } as CSSProperties}
               />
             ))}
           </div>

@@ -644,7 +644,7 @@ function AccentSetting({
     <div className={styles.row}>
       <Label
         text="Panel colour"
-        description="Tints the header, the toolbar and the focus ring."
+        description="The colour of the light under the glass when no timer is running."
       />
       <div className={styles.swatches} role="group" aria-label="Panel colour">
         {NOTE_COLORS.map((color) => (

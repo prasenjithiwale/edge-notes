@@ -78,11 +78,30 @@ version=$(for file in "$deb" "$dmg" "$setup"; do
 done | sort -V | tail -1)
 [ -z "$version" ] && version="—"
 
-# The screenshots travel with the page rather than with the packages.
+# The screenshots travel with the page rather than with the packages. The set
+# is replaced whole, so a picture dropped here does not linger on the site.
 screenshots=$source_dir/site/screenshots
 if [ -d "$screenshots" ]; then
+  rm -rf "$repo/screenshots"
   mkdir -p "$repo/screenshots"
   cp "$screenshots"/*.png "$repo/screenshots/"
+fi
+
+# The short clips of the app moving, each with the still it shows before it
+# plays. Recorded from a demo home seeded by tools/site_demo.sh.
+videos=$source_dir/site/videos
+if [ -d "$videos" ]; then
+  rm -rf "$repo/videos"
+  mkdir -p "$repo/videos"
+  cp "$videos"/*.mp4 "$videos"/*.jpg "$repo/videos/"
+fi
+
+# The app's calligraphy face, so the page's headlines are written in the same
+# hand as the app's. SIL Open Font License; the licence travels with it.
+fonts=$source_dir/src/assets/fonts
+if [ -d "$fonts" ]; then
+  mkdir -p "$repo/fonts"
+  cp "$fonts"/*.woff2 "$fonts"/OFL.txt "$repo/fonts/"
 fi
 
 # The app's own icon, straight from the bundle's, so the tab and the wordmark
@@ -93,6 +112,7 @@ fi
 # A screenshot is only put on the page if it is actually there: the site should
 # never show a broken image because a file was renamed here.
 shot() { [ -f "$repo/screenshots/$1" ]; }
+clip() { [ -f "$repo/videos/$1.mp4" ] && [ -f "$repo/videos/$1.jpg" ]; }
 
 macos_section=
 if [ -n "$dmg" ]; then
@@ -228,17 +248,16 @@ hero_figure=
 if shot hero.png; then
   hero_figure=$(cat <<HTML
   <figure class="hero-shot">
-    <img src="screenshots/hero.png" width="1920" height="840" alt="The Ledge panel open on the right-hand edge of a screen, over a document, showing four colour-coded notes." loading="eager">
+    <img src="screenshots/hero.png" width="1920" height="860" alt="The Ledge panel open on the right-hand edge of a screen: frosted glass over the desktop, the word Notes written in calligraphy, and notes lit by their own colours." loading="eager">
   </figure>
 HTML
 )
 fi
 
-# One feature block. \$1 image, \$2 alt, \$3 heading, \$4 body, \$5 "wide" for the
-# larger screenshots. Kept as a function because the page has seven of them and
-# the only thing that changes is the words.
+# One feature block. \$1 image, \$2 alt, \$3 kicker (a word in calligraphy),
+# \$4 heading, \$5 body, \$6 "wide" for the larger screenshots.
 feature() {
-  local image=$1 alt=$2 heading=$3 body=$4 modifier=${5-}
+  local image=$1 alt=$2 kicker=$3 heading=$4 body=$5 modifier=${6-}
   local figure=
   if shot "$image"; then
     figure="<figure class=\"shot $modifier\"><img src=\"screenshots/$image\" alt=\"$alt\" loading=\"lazy\"></figure>"
@@ -247,6 +266,7 @@ feature() {
 
     <section class="feature $modifier">
       <div class="feature-text">
+        <p class="kicker script">$kicker</p>
         <h3>$heading</h3>
         $body
       </div>
@@ -257,112 +277,183 @@ HTML
 
 features=$(
   feature notes.png \
-    "The Notes tab: coloured cards with checkboxes, code and bold text." \
-    "Notes, where you left them" \
-    "<p>Every note is a card in one column, in the colour you gave it — sixteen of
-     them, plus none at all. The newest sits at the top unless you lock it, and a
-     locked note stays put and opens read-only. The dots under the tabs filter the
-     list by colour, and <kbd>&#8984;F</kbd> searches it.</p>
-     <p>Deleting is undoable twice over: a note goes to a toast with an
-     <b>Undo</b> in it, and after that it waits in the <b>Archive</b> at the foot
-     of the panel — everything deleted in the last thirty days, notes and tasks
-     together, each with a Restore beside it.</p>"
+    "The Notes tab: glass cards, each lit by its own colour, with a checklist, tags and a colour filter." \
+    "Notes" \
+    "Notes, lit by their colour" \
+    "<p>Every note is a card of the same frosted glass as the panel, and its colour
+     is light rather than paint: a glow from its corner and a thin lit line along
+     its top. Sixteen colours, plus none at all. The dots under the tabs filter by
+     colour, a <code>#tag</code> in a note filters by tag, and <kbd>&#8984;F</kbd>
+     searches.</p>
+     <p>Deleting is undoable twice over: a toast with an <b>Undo</b> in it, and
+     then the <b>Archive</b> at the foot of the panel, which keeps everything
+     deleted in the last thirty days.</p>"
 
   feature expanded.png \
-    "A note expanded to fill a large panel, with checkboxes, a numbered list and a shell code block." \
-    "Write in rich text; keep plain Markdown" \
-    "<p>The editor is rich text — headings with <kbd>&#8984;&#8997;1</kbd>, bold
-     with <kbd>&#8984;B</kbd>, lists with <kbd>&#8984;&#8679;8</kbd>, or type
-     <kbd>/</kbd> for a menu of blocks. A note's first line is its name in the
-     list, so a Heading 1 there is how it gets a title. What is stored is still
-     Markdown, byte for byte, so a note is a file you could have written by
-     hand.</p>
-     <p>Code goes in a fenced block with a language of its own and syntax colour for
-     sixteen of them. Need room? Expand the note and the panel itself grows.</p>" \
+    "A note expanded to fill a large panel, with headings, a checklist and a table." \
+    "Write" \
+    "Rich text in, plain Markdown out" \
+    "<p>Headings with <kbd>&#8984;&#8997;1</kbd>, bold with <kbd>&#8984;B</kbd>,
+     lists with <kbd>&#8984;&#8679;8</kbd>, or type <kbd>/</kbd> for a menu of
+     blocks: code with syntax colour for sixteen languages, tables, pictures you
+     paste or drop in. What is stored is still Markdown, byte for byte.</p>
+     <p>Need room? Expand the note and the panel itself grows into a writing
+     sheet.</p>" \
     wide
 
   feature tasks.png \
-    "The Tasks tab, with an In progress section at the top, then Today, Tomorrow, Upcoming, Someday, Done and Cancelled." \
+    "The Tasks tab: In progress, Today, Tomorrow and Someday, with priority flags and due times." \
+    "Tasks" \
     "Tasks that know what day it is" \
-    "<p>Tasks are their own list, not checkboxes buried in a note: In progress at
-     the top, then Today, Tomorrow, Upcoming and Someday, with Done and Cancelled
-     folded away at the bottom.</p>
-     <p>Type the details straight into the add field — <code>@tomorrow</code>,
-     <code>2pm</code>, <code>!high</code> — and see them read back as chips before
+    "<p>Tasks are their own list: In progress at the top, then Today, Tomorrow,
+     Upcoming and Someday, with Done and Cancelled folded away.</p>
+     <p>Type the details straight into the add field (<code>@tomorrow</code>,
+     <code>2pm</code>, <code>!high</code>) and see them read back as chips before
      you press Return.</p>"
 
   feature task-details.png \
-    "A task's details: status, priority, due date and time, repeat, notes, and a Focus on this button." \
+    "A task's sheet, glowing red for high priority: status, priority, due date and time, repeat and notes." \
+    "Details" \
     "Four statuses, not one tick" \
-    "<p>A task is <b>Open</b>, <b>In progress</b>, <b>Done</b> or <b>Cancelled</b>.
-     The box in the row still finishes one in a press — that is the thing you do
-     all day — and the sheet is where a task is started or dropped. Something you
-     decided against is closed without being counted as work you did.</p>
-     <p>Underneath: priority, a due date and time, and a repeat that moves the
-     task on when you tick it rather than completing it. Anything due can raise a
-     system notification, and a task can be handed straight to the focus timer.</p>"
+    "<p>A task is <b>Open</b>, <b>In progress</b>, <b>Done</b> or <b>Cancelled</b>,
+     and its sheet glows in the colour of its priority. Underneath: a due date and
+     time, a repeat that moves the task on when you tick it, notes, and a door
+     straight to the focus timer.</p>"
 
   feature focus.png \
-    "The Focus tab with a pomodoro timer running at 24:35, working on the task Cut 0.4.0." \
-    "A focus timer that survives being ignored" \
-    "<p>A pomodoro with your own lengths, a long break every so often, and a
-     count of what you finished today. Point it at a task and the session has a
-     name.</p>
+    "The Focus tab mid-session: a glass sphere inside a glowing red ring, the time left, and today's sessions on a timeline." \
+    "Focus" \
+    "A timer that changes the light" \
+    "<p>A pomodoro in a glass sphere. While a session runs the whole panel warms;
+     on a break it turns teal, and on the long one, indigo. Presets for 25/5, 50/10
+     and 90/20, a timeline of what you finished today, and a countdown in the
+     menu bar.</p>
      <p>It keeps an end time rather than counting down, so a session that ran out
-     while the panel was closed and the machine asleep still ends when it should —
-     and a small light on the tab tells you it is running without opening
-     anything.</p>"
+     while the panel was closed still ends when it should.</p>"
+
+  feature clips.png \
+    "The Clips tab: the last few copied texts as glass tiles, the one on the clipboard lit." \
+    "Clips" \
+    "What you copied, a moment ago" \
+    "<p>The last fifty texts you copied, so the one before last is one press away.
+     They are kept in memory only, never written to disk, and anything a password
+     manager marks as secret is never kept at all.</p>"
 
   feature settings.png \
-    "Settings, showing theme, tab appearance, tab size, panel translucency and the docked edge." \
+    "Settings: the panel colour, light or dark, the tab's look and size, and the docked edge." \
+    "Yours" \
     "It goes where you want it" \
     "<p>Left edge or right, on whichever monitor, opening on hover or on a click.
-     The tab comes in three sizes and two finishes, the panel in whatever width
-     suits you, and there is a <b>Keep open</b> pin for when it should stop sliding
-     away.</p>
-     <p>Light, dark, or whatever the system is doing. A tray icon and a global
-     shortcut — <kbd>&#8984;&#8997;N</kbd> by default — open it with a new note
-     ready.</p>"
+     Pick a colour and it becomes the light under the glass. There is a <b>Keep
+     open</b> pin, a tray icon, and a global shortcut
+     (<kbd>&#8984;&#8997;N</kbd>) that opens it with a new note ready.</p>"
 
   feature dark.png \
-    "The same notes in dark mode." \
+    "The same notes in dark mode: smoked glass, with each note's colour glowing brighter." \
+    "Night" \
     "Dark, too" \
-    "<p>Every colour in the palette has a dark counterpart, checked against WCAG
-     AA contrast by a test rather than by eye. The chrome stays neutral; the notes
-     are the only colour on screen.</p>"
+    "<p>In dark mode the glass smokes over and each note's colour glows instead of
+     tinting, so sixteen colours still read as sixteen. Every text colour is held
+     to WCAG AA contrast by a test rather than by eye.</p>"
 )
+
+# The three clips, in the order the page tells the story. Only those that are
+# actually published are shown.
+reel() { # name, label for the player, calligraphy caption, sentence
+  clip "$1" || return 0
+  cat <<HTML
+      <figure class="reel">
+        <div class="reel-frame">
+          <video src="videos/$1.mp4" poster="videos/$1.jpg" muted loop playsinline controls preload="none" aria-label="$2"></video>
+        </div>
+        <figcaption><span class="script">$3</span> $4</figcaption>
+      </figure>
+HTML
+}
+reels=$(
+  reel open "The panel opening on hover, moving through its four tabs, and sliding away." \
+    "At a glance" "Point at the tab and the glass slides out; leave and it slides away."
+  reel focus "A focus session starting, then a break: the light in the panel turns from warm to teal." \
+    "In a new light" "Start a session and the panel warms; take a break and it cools."
+  reel write "A new note being written: a heading, a line of text and a checklist." \
+    "In a moment" "A note is a press away, and it saves as you type."
+)
+watch_section=
+if [ -n "$reels" ]; then
+  watch_section=$(cat <<HTML
+
+<section class="band" id="watch">
+  <div class="wrap">
+    <p class="kicker script">See it move</p>
+    <h2>Glass that answers you</h2>
+    <p class="sub">Short clips of the real app, on invented notes.</p>
+    <div class="reels">
+$reels
+    </div>
+  </div>
+</section>
+HTML
+)
+fi
 
 # The stylesheet is a file rather than a <style> block now: there are two pages
 # and they must not drift. The dark palette appears twice inside it, which is why
 # it is a variable — see the comment beside it.
-dark_tokens='    --bg: #131315;
-    --bg-soft: #1b1b1e;
-    --card: #1c1c1f;
-    --fg: #f2f2f3;
-    --muted: #a1a1a6;
-    --faint: #8a8a8f;
-    --code: #232327;
-    --border: rgba(255, 255, 255, .11);
-    --hairline: rgba(255, 255, 255, .07);
-    --shadow: 0 1px 2px rgba(0,0,0,.5), 0 18px 48px rgba(0,0,0,.55);
-    --shadow-soft: 0 1px 2px rgba(0,0,0,.4), 0 8px 24px rgba(0,0,0,.35);
-    --accent: #6f9bff;'
+dark_tokens='    --bg: #121016;
+    --fg: #f2f0f6;
+    --muted: #b3aec0;
+    --faint: #8f8a9b;
+    --code: rgba(255, 255, 255, .07);
+    --border: rgba(255, 255, 255, .13);
+    --hairline: rgba(255, 255, 255, .08);
+    --glass: rgba(30, 27, 38, .55);
+    --glass-strong: rgba(36, 33, 46, .82);
+    --glass-edge: rgba(255, 255, 255, .12);
+    --glass-hi: rgba(255, 255, 255, .12);
+    --shadow: 0 30px 70px -30px rgba(0, 0, 0, .8);
+    --shadow-soft: 0 14px 34px -20px rgba(0, 0, 0, .7);
+    --aura-opacity: .32;
+    --accent: #a898ff;
+    --on-ink: #16141b;'
 
 cat > "$repo/style.css" <<CSS
+  /* The page wears the app's own look, Aurora glass: frosted surfaces over a soft
+     light, calligraphy for headlines only. The tokens mirror the app's. */
+  @font-face {
+    font-family: "Pinyon Script";
+    font-style: normal;
+    font-weight: 400;
+    font-display: swap;
+    src: url("fonts/PinyonScript-latin.woff2") format("woff2");
+    unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+20AC, U+2122;
+  }
+  @font-face {
+    font-family: "Pinyon Script";
+    font-style: normal;
+    font-weight: 400;
+    font-display: swap;
+    src: url("fonts/PinyonScript-latin-ext.woff2") format("woff2");
+    unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+1E00-1E9F, U+2020, U+20A0-20AB;
+  }
   :root {
     color-scheme: light dark;
-    --bg: #fff;
-    --bg-soft: #f5f5f7;
-    --card: #fff;
+    --bg: #f6f4fa;
     --fg: #1d1d1f;
-    --muted: #6e6e73;
-    --faint: #86868b;
-    --code: #f4f4f5;
-    --border: rgba(0, 0, 0, .09);
-    --hairline: rgba(0, 0, 0, .06);
-    --shadow: 0 1px 2px rgba(0,0,0,.05), 0 12px 36px rgba(0,0,0,.10);
-    --shadow-soft: 0 1px 2px rgba(0,0,0,.04), 0 6px 20px rgba(0,0,0,.06);
-    --accent: #2f6df6;
+    --muted: #5d5a66;
+    --faint: #77737f;
+    --code: rgba(40, 20, 70, .06);
+    --border: rgba(60, 40, 90, .12);
+    --hairline: rgba(60, 40, 90, .08);
+    --glass: rgba(255, 255, 255, .55);
+    --glass-strong: rgba(255, 255, 255, .8);
+    --glass-edge: rgba(255, 255, 255, .78);
+    --glass-hi: rgba(255, 255, 255, .92);
+    --shadow: 0 30px 70px -32px rgba(40, 20, 80, .45);
+    --shadow-soft: 0 14px 34px -22px rgba(40, 20, 80, .4);
+    --aura-opacity: .55;
+    --accent: #6c5ce7;
+    --on-ink: #fff;
+    --script: "Pinyon Script", "Snell Roundhand", "Apple Chancery", cursive;
   }
   /* Dark, twice: for a system that asks for it where the reader has not chosen,
      and for a reader who has. The :not() is what lets a stored "light" win over
@@ -383,15 +474,42 @@ $dark_tokens
     color: var(--fg);
     font: 16px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Ubuntu, Cantarell, system-ui, sans-serif;
     -webkit-font-smoothing: antialiased;
+    position: relative;
+    isolation: isolate;
   }
-  img { max-width: 100%; height: auto; display: block; }
+  /* The aura: the app's light under the glass, drifting slowly behind the page. */
+  body::before {
+    content: "";
+    position: fixed;
+    inset: -20vh -20vw;
+    z-index: -1;
+    pointer-events: none;
+    opacity: var(--aura-opacity);
+    background:
+      radial-gradient(34% 38% at 20% 18%, #ff8a7a 0%, transparent 70%),
+      radial-gradient(36% 40% at 78% 14%, #a98bff 0%, transparent 70%),
+      radial-gradient(34% 38% at 64% 70%, #5fe3dc 0%, transparent 70%),
+      radial-gradient(30% 34% at 18% 82%, #ffc56b 0%, transparent 70%);
+    filter: blur(40px);
+    animation: aura 26s ease-in-out infinite alternate;
+  }
+  @keyframes aura {
+    from { transform: translate(-2vw, -1vh) rotate(-3deg); }
+    to { transform: translate(2vw, 2vh) rotate(4deg) scale(1.05); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    body::before { animation: none; }
+    html { scroll-behavior: auto; }
+  }
+  img, video { max-width: 100%; height: auto; display: block; }
   a { color: inherit; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 6px; }
   code, kbd, pre { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
-  code { font-size: .92em; background: var(--code); border-radius: 5px; padding: .1em .35em; }
+  code { font-size: .92em; background: var(--code); border-radius: 6px; padding: .1em .35em; }
   pre {
     background: var(--code);
     border: 1px solid var(--hairline);
-    border-radius: 12px;
+    border-radius: 14px;
     padding: 14px 16px;
     overflow-x: auto;
     font-size: 13px;
@@ -402,80 +520,106 @@ $dark_tokens
     font-size: .82em;
     border: 1px solid var(--border);
     border-bottom-width: 2px;
-    border-radius: 6px;
+    border-radius: 7px;
     padding: .1em .4em;
-    background: var(--card);
+    background: var(--glass-strong);
     white-space: nowrap;
   }
-  .wrap { max-width: 1020px; margin: 0 auto; padding: 0 24px; }
+  .wrap { max-width: 1060px; margin: 0 auto; padding: 0 24px; }
   .narrow { max-width: 760px; }
+  .script { font-family: var(--script); font-weight: 400; letter-spacing: 0; }
+
+  /* A glass surface: frosted, with a lit top edge. */
+  .glass, .card, .note, .download, .reel-frame, header.top {
+    background: var(--glass);
+    -webkit-backdrop-filter: blur(22px) saturate(1.6);
+    backdrop-filter: blur(22px) saturate(1.6);
+    border: 1px solid var(--glass-edge);
+    box-shadow: var(--shadow-soft), inset 0 1px 0 var(--glass-hi);
+  }
 
   /* Header */
   header.top {
     position: sticky; top: 0; z-index: 10;
-    backdrop-filter: saturate(180%) blur(20px);
-    -webkit-backdrop-filter: saturate(180%) blur(20px);
-    background: color-mix(in srgb, var(--bg) 82%, transparent);
-    border-bottom: 1px solid var(--hairline);
+    border-width: 0 0 1px;
+    border-color: var(--hairline);
+    box-shadow: inset 0 -1px 0 var(--hairline);
   }
-  .top-inner { display: flex; align-items: center; gap: 20px; height: 54px; }
-  .wordmark { font-weight: 600; letter-spacing: -.01em; text-decoration: none; display: flex; align-items: center; gap: 9px; }
-  .mark { width: 20px; height: 20px; border-radius: 5px; }
-  .top nav { margin-left: auto; display: flex; gap: 22px; font-size: 14px; }
+  .top-inner { display: flex; align-items: center; gap: 20px; height: 56px; }
+  .wordmark { text-decoration: none; display: flex; align-items: center; gap: 10px; }
+  .wordmark .script { font-size: 30px; line-height: 1; padding-top: 4px; }
+  .mark { width: 22px; height: 22px; border-radius: 6px; }
+  .top nav { margin-left: auto; display: flex; align-items: center; gap: 22px; font-size: 14px; }
   .top nav a { color: var(--muted); text-decoration: none; }
   .top nav a:hover { color: var(--fg); }
 
   /* Hero */
-  .hero { padding: 76px 0 8px; text-align: center; }
-  .app-icon { width: 78px; height: 78px; border-radius: 18px; margin: 0 auto 22px; box-shadow: var(--shadow-soft); }
+  .hero { padding: 64px 0 8px; text-align: center; }
+  .app-icon { width: 76px; height: 76px; border-radius: 18px; margin: 0 auto 6px; box-shadow: var(--shadow-soft); }
+  .hero-script { font-size: clamp(56px, 9vw, 92px); line-height: 1.1; margin: 0 0 10px; }
   .eyebrow {
     display: inline-flex; align-items: center; gap: 8px;
     font-size: 13px; color: var(--muted);
-    border: 1px solid var(--border); border-radius: 999px;
-    padding: 5px 13px; margin-bottom: 22px;
+    background: var(--glass); border: 1px solid var(--glass-edge); border-radius: 999px;
+    padding: 5px 14px; margin-bottom: 22px;
+    box-shadow: inset 0 1px 0 var(--glass-hi);
   }
   h1 {
-    font-size: clamp(34px, 6vw, 56px); line-height: 1.07; letter-spacing: -.028em;
-    font-weight: 600; margin: 0 0 18px;
+    font-size: clamp(34px, 6vw, 56px); line-height: 1.07; letter-spacing: -.03em;
+    font-weight: 600; margin: 0 0 18px; text-wrap: balance;
   }
   .lede { font-size: clamp(17px, 2.3vw, 21px); color: var(--muted); margin: 0 auto; max-width: 640px; }
   .cta { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin: 30px 0 10px; }
   .button {
     display: inline-block; text-decoration: none; font-weight: 600; font-size: 15px;
-    padding: 11px 20px; border-radius: 12px;
-    background: var(--fg); color: var(--bg); border: 1px solid transparent;
+    padding: 12px 22px; border-radius: 999px;
+    background: var(--fg); color: var(--on-ink); border: 1px solid transparent;
+    box-shadow: 0 12px 26px -14px rgba(20, 10, 40, .6);
   }
-  .button.secondary { background: transparent; color: var(--fg); border-color: var(--border); }
-  .button:hover { opacity: .88; }
+  .button.secondary {
+    background: var(--glass); color: var(--fg); border-color: var(--glass-edge);
+    box-shadow: inset 0 1px 0 var(--glass-hi);
+    -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px);
+  }
+  .button:hover { opacity: .9; }
   .under-cta { font-size: 13px; color: var(--faint); margin: 12px 0 0; }
   .hero-shot { margin: 44px 0 0; }
   .hero-shot img {
-    border-radius: 16px; border: 1px solid var(--border); box-shadow: var(--shadow);
+    border-radius: 20px; border: 1px solid var(--glass-edge); box-shadow: var(--shadow);
   }
 
   /* Bands */
   section.band { padding: 76px 0; }
-  section.band.soft { background: var(--bg-soft); border-block: 1px solid var(--hairline); }
-  h2 {
-    font-size: clamp(26px, 3.6vw, 34px); line-height: 1.15; letter-spacing: -.02em;
-    font-weight: 600; margin: 0 0 12px;
+  section.band.soft {
+    background: color-mix(in srgb, var(--glass) 60%, transparent);
+    border-block: 1px solid var(--hairline);
   }
+  h2 {
+    font-size: clamp(26px, 3.6vw, 36px); line-height: 1.15; letter-spacing: -.022em;
+    font-weight: 600; margin: 0 0 12px; text-wrap: balance;
+  }
+  .kicker { font-size: 34px; line-height: 1.1; margin: 0 0 2px; color: var(--accent); }
   .band > .wrap > p.sub { color: var(--muted); margin: 0 0 40px; max-width: 620px; font-size: 17px; }
-  h3 { font-size: 20px; letter-spacing: -.012em; font-weight: 600; margin: 0 0 10px; }
+  h3 { font-size: 21px; letter-spacing: -.014em; font-weight: 600; margin: 0 0 10px; }
   p { margin: 0 0 12px; }
-  .feature-text p, .card p { color: var(--muted); }
+  .feature-text p:not(.kicker), .card p { color: var(--muted); }
 
   /* Three-up */
   .trio { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
-  .card {
-    background: var(--card); border: 1px solid var(--hairline); border-radius: 16px;
-    padding: 24px; box-shadow: var(--shadow-soft);
-  }
+  .card { border-radius: 20px; padding: 26px; }
   .card p:last-child { margin-bottom: 0; }
+
+  /* Clips */
+  .reels { display: grid; grid-template-columns: repeat(3, 1fr); gap: 22px; }
+  .reel { margin: 0; }
+  .reel-frame { border-radius: 22px; padding: 8px; }
+  .reel video { width: 100%; border-radius: 16px; aspect-ratio: 540 / 760; object-fit: cover; background: var(--code); }
+  .reel figcaption { margin-top: 12px; color: var(--muted); font-size: 15px; }
+  .reel figcaption .script { display: block; font-size: 28px; line-height: 1.2; color: var(--fg); }
 
   /* Features */
   .feature {
-    display: grid; grid-template-columns: 1fr 392px; gap: 56px; align-items: center;
+    display: grid; grid-template-columns: 1fr 380px; gap: 56px; align-items: center;
     padding: 46px 0; border-top: 1px solid var(--hairline);
   }
   .feature:first-of-type { border-top: 0; padding-top: 8px; }
@@ -483,7 +627,7 @@ $dark_tokens
   .feature:nth-of-type(even) .feature-text { order: 2; }
   .feature-text p:last-child { margin-bottom: 0; }
   .shot img {
-    border-radius: 14px; border: 1px solid var(--border); box-shadow: var(--shadow);
+    border-radius: 22px; border: 1px solid var(--glass-edge); box-shadow: var(--shadow);
     width: 100%;
   }
 
@@ -505,16 +649,12 @@ $dark_tokens
   .downloads { display: flex; flex-wrap: wrap; gap: 10px; margin: 16px 0; }
   .download {
     display: flex; flex-direction: column; gap: 2px;
-    background: var(--card); border: 1px solid var(--border); border-radius: 12px;
-    padding: 11px 16px; text-decoration: none; box-shadow: var(--shadow-soft);
+    border-radius: 16px; padding: 12px 18px; text-decoration: none;
   }
   .download:hover { border-color: var(--faint); }
   .download-label { font-weight: 600; font-size: 15px; }
   .download-meta { font-size: 12px; color: var(--faint); }
-  .note {
-    background: var(--bg-soft); border: 1px solid var(--hairline);
-    border-radius: 12px; padding: 16px 18px; margin: 16px 0; max-width: 660px;
-  }
+  .note { border-radius: 16px; padding: 16px 18px; margin: 16px 0; max-width: 660px; }
   .note p:last-child { margin-bottom: 0; }
   .fine { font-size: 14px; color: var(--faint); }
   .fine code { font-size: .9em; }
@@ -525,15 +665,17 @@ $dark_tokens
   footer a { color: var(--muted); }
   .foot-row { display: flex; flex-wrap: wrap; gap: 8px 22px; align-items: baseline; }
   .foot-row .spacer { margin-left: auto; }
+  .foot-row .script { font-size: 26px; color: var(--fg); }
 
   @media (max-width: 900px) {
-    .trio { grid-template-columns: 1fr; }
+    .trio, .reels { grid-template-columns: 1fr; }
+    .reel { max-width: 380px; margin: 0 auto; }
     .feature, .feature.wide { grid-template-columns: 1fr; gap: 26px; padding: 34px 0; }
     .feature:nth-of-type(even) .feature-text { order: 0; }
-    .shot { max-width: 392px; }
+    .shot { max-width: 380px; }
     .feature.wide .shot { max-width: 520px; }
     .keys { grid-template-columns: 1fr; }
-    .hero { padding-top: 56px; }
+    .hero { padding-top: 48px; }
     section.band { padding: 56px 0; }
     .top nav a.hide-sm { display: none; }
   }
@@ -543,11 +685,12 @@ $dark_tokens
      a sun to go light while it is dark, a moon to go dark while it is light. */
   .theme {
     display: flex; align-items: center; justify-content: center;
-    width: 30px; height: 30px; padding: 0;
-    border: 1px solid var(--border); border-radius: 9px;
-    background: transparent; color: var(--muted); cursor: pointer;
+    width: 32px; height: 32px; padding: 0;
+    border: 1px solid var(--glass-edge); border-radius: 999px;
+    background: var(--glass); color: var(--muted); cursor: pointer;
+    box-shadow: inset 0 1px 0 var(--glass-hi);
   }
-  .theme:hover { color: var(--fg); border-color: var(--faint); }
+  .theme:hover { color: var(--fg); }
   .theme svg { width: 15px; height: 15px; }
   .theme .sun { display: none; }
   @media (prefers-color-scheme: dark) {
@@ -561,6 +704,7 @@ $dark_tokens
 
   /* The changelog page: one column of prose, generated from CHANGELOG.md. */
   .prose { padding: 56px 0 72px; }
+  .prose h1 { font-family: var(--script); font-weight: 400; font-size: 64px; letter-spacing: 0; line-height: 1.1; }
   .prose h2 {
     margin: 48px 0 6px; padding-top: 24px; border-top: 1px solid var(--hairline);
     font-size: 24px;
@@ -615,8 +759,9 @@ nav_for() {
   cat <<NAV
 <header class="top">
   <div class="wrap top-inner">
-    <a class="wordmark" href="./"><img class="mark" src="icon.png" width="20" height="20" alt=""> Ledge</a>
+    <a class="wordmark" href="./"><img class="mark" src="icon.png" width="22" height="22" alt=""> <span class="script">Ledge</span></a>
     <nav>
+      <a href="$1#watch" class="hide-sm">Watch</a>
       <a href="$1#features">Features</a>
       <a href="$1#keys" class="hide-sm">Shortcuts</a>
       <a href="$1#download">Download</a>
@@ -637,7 +782,7 @@ cat > "$repo/index.html" <<HTML
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Ledge — notes on the edge of your screen</title>
-<meta name="description" content="Ledge is a small notes, tasks and focus widget docked to the edge of your screen. Free, local-only, for macOS, Windows, Debian and Ubuntu.">
+<meta name="description" content="Ledge is a small notes, tasks, focus and clipboard widget docked to the edge of your screen, made of frosted glass. Free, encrypted, local-only, for macOS, Windows, Debian and Ubuntu.">
 <meta property="og:title" content="Ledge — notes on the edge of your screen">
 <meta property="og:description" content="Point at the tab and a panel of colour-coded notes slides out; move away and it slides back. Free, local-only, for macOS, Windows and Linux.">
 <meta property="og:type" content="website">
@@ -655,19 +800,36 @@ $theme_script
 $nav_html
 
 <main id="top">
+<script>
+  // The clips play only while they are on screen, and not at all for a reader
+  // who has asked for less motion: they keep their poster and their controls.
+  document.addEventListener("DOMContentLoaded", function () {
+    var reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    var clips = document.querySelectorAll(".reel video");
+    if (reduce || !("IntersectionObserver" in window)) { return; }
+    var seen = new IntersectionObserver(function (entries) {
+      entries.forEach(function (entry) {
+        var video = entry.target;
+        if (entry.isIntersecting) { video.play().catch(function () {}); } else { video.pause(); }
+      });
+    }, { threshold: 0.4 });
+    clips.forEach(function (video) { seen.observe(video); });
+  });
+</script>
 
 <div class="hero wrap">
-  <img class="app-icon" src="icon.png" width="78" height="78" alt="">
+  <img class="app-icon" src="icon.png" width="76" height="76" alt="">
+  <p class="hero-script script" aria-hidden="true">Ledge</p>
   <span class="eyebrow">Version $version &middot; macOS, Windows, Linux</span>
   <h1>Notes on the edge<br>of your screen.</h1>
   <p class="lede">A small tab sits against the screen edge, above whatever you are
-  working in. Point at it and a panel of colour-coded notes slides out. Move away
-  and it slides back.</p>
+  working in. Point at it and a panel of frosted glass slides out, with your notes
+  lit by their colours. Move away and it slides back.</p>
   <p class="cta">
     <a class="button" href="#download">Download for free</a>
     <a class="button secondary" href="#features">See what it does</a>
   </p>
-  <p class="under-cta">No account, no sync, no telemetry. Your notes are a SQLite file on your own disk.</p>
+  <p class="under-cta">No account, no sync, no telemetry. Your notes are an encrypted file on your own disk.</p>
 $hero_figure
 </div>
 
@@ -686,19 +848,23 @@ $hero_figure
         you are typing in, and it slides away by itself the moment you leave.</p>
       </div>
       <div class="card">
-        <h3>Yours, on your disk</h3>
-        <p>Notes are Markdown in a local database, and can be exported as plain
-        files whenever you like. The app asks the network for nothing.</p>
+        <h3>Yours, and locked</h3>
+        <p>Notes are Markdown in a local database, encrypted with a key kept in
+        your system's keychain. The only thing the app asks the network is
+        whether there is a new version.</p>
       </div>
     </div>
   </div>
 </section>
 
+$watch_section
+
 <section class="band soft" id="features">
   <div class="wrap">
-    <h2>Three tabs, one panel</h2>
-    <p class="sub">Notes, tasks and a focus timer — the things you reach for while
-    you are in the middle of something else.</p>
+    <p class="kicker script">Four tabs</p>
+    <h2>One panel of glass</h2>
+    <p class="sub">Notes, tasks, a focus timer and what you just copied: the things
+    you reach for while you are in the middle of something else.</p>
 $features
   </div>
 </section>
@@ -755,8 +921,10 @@ $key_section
 <section class="band soft">
   <div class="wrap narrow">
     <h2>What it does not do</h2>
-    <p>There is no account, no cloud and no sync: notes live in a SQLite file in
-    the app's own data folder, and nothing leaves the machine. The window that
+    <p>There is no account, no cloud and no sync: notes live in an encrypted
+    SQLite file in the app's own data folder, and nothing leaves the machine. The
+    clipboard history is kept in memory only, and the panel is hidden from screen
+    shares and screenshots unless you say otherwise. The window that
     draws the panel is given no filesystem, shell or database access of its own —
     everything stateful is handled by the native side, and links open in your
     browser rather than inside the app.</p>
@@ -772,7 +940,7 @@ $key_section
 
 <footer>
   <div class="wrap foot-row">
-    <span>Ledge $version</span>
+    <span><span class="script">Ledge</span> &nbsp;$version</span>
     <span class="spacer"></span>
     <a href="#download">Download</a>
     <a href="changelog.html">Changelog</a>
@@ -1021,7 +1189,8 @@ Debian 12+, Ubuntu 22.04+, x86_64. New versions then arrive with
 | Path | What |
 |---|---|
 | \`index.html\` | The landing page, generated on every release |
-| \`screenshots/\` | The pictures on that page |
+| \`screenshots/\`, \`videos/\` | The pictures and clips on that page |
+| \`fonts/\` | The calligraphy face the page is written in (SIL OFL) |
 | \`pool/\`, \`dists/\` | The Debian packages and the signed index |
 | \`macos/\` | The \`.dmg\`, with \`SHA256SUMS\` |
 | \`windows/\` | The \`.exe\` and \`.msi\`, with \`SHA256SUMS\` |

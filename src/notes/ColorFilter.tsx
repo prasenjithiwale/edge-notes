@@ -2,7 +2,7 @@ import type { CSSProperties } from "react";
 
 import { cx } from "../lib/cx";
 import type { NoteColor } from "../lib/ipc";
-import { colorName } from "../lib/notes";
+import { colorName, dotColor } from "../lib/notes";
 import styles from "./ColorFilter.module.css";
 
 interface ColorFilterProps {
@@ -30,7 +30,7 @@ export function ColorFilter({ colors, selected, onSelect }: ColorFilterProps) {
           key={color}
           type="button"
           className={cx(styles.dot, selected === color && styles.dotSelected)}
-          style={{ "--dot-bg": `var(--note-${color}-bg)` } as CSSProperties}
+          style={{ "--dot-bg": dotColor(color) } as CSSProperties}
           aria-label={colorName(color)}
           aria-pressed={selected === color}
           title={colorName(color)}

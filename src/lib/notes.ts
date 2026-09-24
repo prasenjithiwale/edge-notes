@@ -178,3 +178,13 @@ export function colorName(color: string): string {
   }
   return color.slice(0, 1).toUpperCase() + color.slice(1);
 }
+
+/**
+ * A note colour at the size of a dot (the colour filter, the collapsed tab):
+ * its light, the same colour its glow is drawn in, because the palette's dark
+ * backgrounds are deep enough to vanish as a dot on dark glass. "none" has no
+ * light, so it keeps its neutral.
+ */
+export function dotColor(color: string): string {
+  return color === "none" ? "var(--note-none-bg)" : `var(--note-${color}-light)`;
+}
