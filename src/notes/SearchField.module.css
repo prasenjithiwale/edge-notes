@@ -6,7 +6,7 @@
   display: flex;
   align-items: center;
   border-radius: var(--radius-control);
-  background: var(--surface-sunken);
+  background: var(--glass-well);
 }
 
 .field {

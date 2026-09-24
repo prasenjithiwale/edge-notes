@@ -35,7 +35,8 @@ export function ViewTabs({ view, openTasks, focusRunning, onChange }: ViewTabsPr
         {
           "--tab-index": TABS.findIndex((tab) => tab.view === view),
           gridTemplateColumns: `repeat(${String(count)}, minmax(0, 1fr))`,
-          "--tab-width": `calc((100% - ${String((count + 1) * 2)}px) / ${String(count)})`,
+          // 3 px of padding each side and a 2 px gap between segments.
+          "--tab-width": `calc((100% - ${String(6 + (count - 1) * 2)}px) / ${String(count)})`,
         } as CSSProperties
       }
     >

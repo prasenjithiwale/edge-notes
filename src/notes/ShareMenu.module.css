@@ -19,7 +19,9 @@
   padding: 4px;
   border-radius: 10px;
   border: 1px solid var(--border);
-  background: var(--surface);
+  background: var(--glass-popover);
+  -webkit-backdrop-filter: blur(24px) saturate(1.6);
+  backdrop-filter: blur(24px) saturate(1.6);
   box-shadow: 0 8px 24px rgb(0 0 0 / 0.18);
   display: flex;
   flex-direction: column;
@@ -41,7 +43,7 @@
 }
 
 .item:hover {
-  background: var(--surface-sunken);
+  background: var(--glass-well);
 }
 
 .text {

@@ -21,18 +21,12 @@ function rule(sheet: string, name: string): string {
  * back to exactly what it said before the setting existed.
  */
 describe("the panel's colour", () => {
-  it("reaches the header, the toolbar and the focus ring", () => {
-    expect(rule(panel, "header")).toContain("var(--accent-bg, transparent)");
-    expect(rule(panel, "header")).toContain("var(--accent-ink, inherit)");
-    expect(rule(panel, "toolbar")).toContain("var(--accent-bg, transparent)");
-    expect(rule(panel, "toolbar")).toContain("var(--accent-ink, inherit)");
-    // The ring's metrics and its colour are separate rules, so this asks the
-    // sheet rather than one of them.
-    // The panel colour deepened towards its ink, never the ink alone (nearly
-    // black on the deeper colours), and the accent without one (24 Sep 2026).
-    expect(pomodoro).toContain(
-      "color-mix(in oklch, var(--accent-bg, var(--accent)) 65%, var(--accent-ink, var(--accent)))",
-    );
+  it("lights the aura at rest", () => {
+    // Aurora glass (24 Sep 2026): the chrome is glass, and the colour chosen in
+    // Settings is the light under it while no session is running. The header
+    // and toolbar no longer wear it as a flat band.
+    expect(panel).toContain("var(--accent-bg, var(--aura-idle-1))");
+    expect(rule(panel, "header")).not.toContain("--accent-bg");
   });
 
   it("always names a fallback, so no colour means the chrome it always had", () => {

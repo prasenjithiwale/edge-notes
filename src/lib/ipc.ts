@@ -732,3 +732,26 @@ export function onSettingsChanged(
     handler(event.payload);
   });
 }
+
+/** Where the frosted glass goes: the panel's rectangle in CSS pixels. */
+export interface Backdrop {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  radius: number;
+  dark: boolean;
+}
+
+/**
+ * Put the desktop's blur behind the panel, or take it away with null. Resolves
+ * to whether this platform has the glass at all (macOS only); a failure is the
+ * same answer, since the panel then simply stays solid.
+ */
+export async function setBackdrop(backdrop: Backdrop | null): Promise<boolean> {
+  try {
+    return await invoke<boolean>("backdrop_set", { backdrop });
+  } catch {
+    return false;
+  }
+}

@@ -68,7 +68,7 @@
 }
 
 .checkbox:hover:not(:disabled) {
-  background: rgb(0 0 0 / 8%);
+  background: var(--glass-well);
 }
 
 .checkbox:disabled {

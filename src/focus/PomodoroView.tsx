@@ -234,7 +234,7 @@ function useSeconds(active: boolean): number {
 }
 
 /** The ring: a track and the part of it that has gone, in the phase's colour. */
-function Ring({ value, phase }: { value: number; phase: Phase }) {
+function Ring({ value }: { value: number }) {
   const radius = 90;
   const circumference = 2 * Math.PI * radius;
   return (
@@ -242,7 +242,6 @@ function Ring({ value, phase }: { value: number; phase: Phase }) {
       <circle className={styles.track} cx="100" cy="100" r={radius} />
       <circle
         className={styles.progress}
-        data-phase={phase}
         cx="100"
         cy="100"
         r={radius}
@@ -321,14 +320,21 @@ export function PomodoroView({ active }: PomodoroViewProps) {
   }, [tasksLoaded, taskId, task, setTask]);
 
   return (
-    <div ref={rootRef} className={styles.focus} role="tabpanel" aria-label="Focus">
+    <div
+      ref={rootRef}
+      className={styles.focus}
+      data-phase={state.phase}
+      role="tabpanel"
+      aria-label="Focus"
+    >
       <div className={styles.head}>
         <p className={cx(styles.phase, !focusing && styles.phaseBreak)}>{label}</p>
         <p className={styles.hint}>{PHASE_HINTS[state.phase]}</p>
       </div>
 
       <div className={styles.clock}>
-        <Ring value={progress(state, now)} phase={state.phase} />
+        <div className={cx(styles.orb, running && styles.orbLive)} aria-hidden="true" />
+        <Ring value={progress(state, now)} />
         <div className={styles.readout}>
           <span
             className={styles.time}

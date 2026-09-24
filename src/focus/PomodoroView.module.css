@@ -12,6 +12,20 @@
   overscroll-behavior: contain;
 }
 
+/* The phase's colour, for everything on the tab that says which phase this
+   is: the ring, its glow, the orb, the Start button, the timeline. */
+.focus[data-phase="focus"] {
+  --ring: var(--ring-focus);
+}
+
+.focus[data-phase="short"] {
+  --ring: var(--ring-short);
+}
+
+.focus[data-phase="long"] {
+  --ring: var(--ring-long);
+}
+
 .head {
   display: flex;
   flex-direction: column;
@@ -23,17 +37,19 @@
 
 /* The phase, as a word rather than a chip: it is the answer to "what am I
    doing", and a widget this small has no room for a box round it. */
+/* Written, in the calligraphy face and the phase's own colour. */
 .phase {
   margin: 0;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text-primary);
+  font-family: var(--font-script);
+  font-size: 28px;
+  font-weight: 400;
+  line-height: 1.1;
+  color: var(--ring);
+  transition: color 1.2s ease;
 }
 
-/* A break is quieter than focus, in weight and in colour, so a glance at the
-   tab says which one is running without reading the word. */
 .phaseBreak {
-  color: var(--text-secondary);
+  color: var(--ring);
 }
 
 .hint {
@@ -62,35 +78,63 @@
 .track,
 .progress {
   fill: none;
-  stroke-width: 10;
+  stroke-width: 11;
   stroke-linecap: round;
+}
+
+/* A glass sphere inside the ring, with the phase's light caught in it and a
+   highlight at the upper left. It breathes slowly while the timer runs. */
+.orb {
+  position: absolute;
+  inset: 24px;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 34% 28%, rgba(255, 255, 255, 0.8) 0 6%, transparent 22%),
+    radial-gradient(circle at 62% 70%, color-mix(in srgb, var(--ring) 55%, transparent) 0%, transparent 62%),
+    radial-gradient(circle at 34% 62%, color-mix(in srgb, var(--ring) 30%, transparent) 0%, transparent 64%),
+    var(--glass-raised);
+  box-shadow:
+    inset 0 -10px 24px rgba(255, 255, 255, 0.3),
+    inset 0 6px 14px rgba(0, 0, 0, 0.08),
+    inset 0 0 0 1px var(--glass-hair);
+  opacity: 0.85;
+  transition: background 1.2s ease;
+}
+
+.orbLive {
+  animation: orb-breathe 6s ease-in-out infinite;
+}
+
+@keyframes orb-breathe {
+  0%,
+  100% {
+    opacity: 0.7;
+    transform: scale(0.985);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .orbLive {
+    animation: none;
+  }
 }
 
 /* The track stays neutral; only the time spent is in colour (24 Sep 2026). */
 .track {
-  stroke: var(--surface-sunken);
+  stroke: var(--glass-well);
 }
 
+/* The time spent, in the phase's colour, glowing. */
 .progress {
-  /* The panel colour itself, deepened a third of the way towards its own ink
-     so it holds up on the grey track — the ink alone is nearly black on the
-     deeper colours, and the colour alone is pale. The accent with no colour. */
-  --ring: color-mix(in oklch, var(--accent-bg, var(--accent)) 65%, var(--accent-ink, var(--accent)));
   stroke: var(--ring);
+  filter: drop-shadow(0 0 6px color-mix(in srgb, var(--ring) 70%, transparent));
   transition:
     stroke-dashoffset 1s linear,
-    stroke var(--open-duration) var(--open-easing);
-}
-
-/* Each phase wears its own colour, so the ring says which one is running
-   before the word does. Breaks borrow the note palette's pairings, mixed as
-   the focus ring is, so they are as legible by construction. */
-.progress[data-phase="short"] {
-  stroke: color-mix(in oklch, var(--note-teal-bg) 65%, var(--note-teal-text));
-}
-
-.progress[data-phase="long"] {
-  stroke: color-mix(in oklch, var(--note-indigo-bg) 65%, var(--note-indigo-text));
+    stroke 1.2s ease;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -111,10 +155,10 @@
    squinted at from across the desk is not doing its job. Tabular figures so the
    digits do not shuffle as they change. */
 .time {
-  font-size: 48px;
+  font-size: 50px;
   font-weight: 400;
   line-height: 1;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.04em;
   color: var(--text-primary);
   font-variant-numeric: tabular-nums;
 }
@@ -157,7 +201,7 @@
   padding: 2px;
   border: 1px solid var(--border);
   border-radius: var(--radius-control);
-  background: var(--surface);
+  background: var(--glass-raised);
 }
 
 .lengthStep {
@@ -173,7 +217,7 @@
 }
 
 .lengthStep:hover:not(:disabled) {
-  background: var(--surface-sunken);
+  background: var(--glass-well);
 }
 
 .lengthStep:disabled {
@@ -229,7 +273,7 @@
   padding: 0 10px;
   border: none;
   border-radius: var(--radius-control);
-  background: var(--surface-sunken);
+  background: var(--glass-well);
   text-align: left;
 }
 
@@ -289,7 +333,7 @@
   gap: 1px;
   border: 1px solid var(--border);
   border-radius: var(--radius-card);
-  background: var(--surface);
+  background: var(--glass-raised);
   box-shadow: var(--shadow-card-raised);
 }
 
@@ -310,11 +354,11 @@
 }
 
 .pick:hover {
-  background: var(--surface-sunken);
+  background: var(--glass-well);
 }
 
 .picked {
-  background: var(--surface-sunken);
+  background: var(--glass-well);
   font-weight: 600;
 }
 
@@ -353,7 +397,7 @@
 }
 
 .preset:hover:not(.presetOn) {
-  background: var(--surface-sunken);
+  background: var(--glass-well);
 }
 
 .presetRest {
@@ -365,7 +409,7 @@
 .presetOn {
   border-color: var(--text-primary);
   background: var(--text-primary);
-  color: var(--surface);
+  color: var(--on-ink);
 }
 
 .presetOn .presetRest {
@@ -392,14 +436,20 @@
   padding: 0 18px;
   border: none;
   border-radius: 999px;
-  background: var(--text-primary);
-  color: var(--surface);
+  background: var(--ring);
+  color: var(--on-ink);
   font-size: 13px;
   font-weight: 600;
+  box-shadow:
+    0 8px 22px -8px var(--ring),
+    inset 0 1px 0 rgba(255, 255, 255, 0.35);
+  transition:
+    background-color 1.2s ease,
+    box-shadow 1.2s ease;
 }
 
 .primary:hover {
-  opacity: 0.9;
+  opacity: 0.92;
 }
 
 .day {
@@ -420,7 +470,7 @@
   position: relative;
   height: 8px;
   border-radius: 4px;
-  background: var(--surface-sunken);
+  background: var(--glass-well);
   overflow: hidden;
 }
 
@@ -432,7 +482,8 @@
   bottom: 0;
   min-width: 2px;
   border-radius: 2px;
-  background: color-mix(in oklch, var(--accent-bg, var(--accent)) 65%, var(--accent-ink, var(--accent)));
+  background: var(--ring-focus);
+  box-shadow: 0 0 6px color-mix(in srgb, var(--ring-focus) 70%, transparent);
 }
 
 .timelineNow {

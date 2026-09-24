@@ -30,10 +30,9 @@ import { copyText } from "../lib/clipboard";
 import { useDockStore } from "../store/dock";
 import { colorName } from "../lib/notes";
 import { useNotesStore } from "../store/notes";
-import { applyPanelTranslucency, applyTabSize, useSettingsStore } from "../store/settings";
+import { applyTabSize, useSettingsStore } from "../store/settings";
 import styles from "./SettingsView.module.css";
 import {
-  PANEL_TRANSLUCENCY,
   PANEL_WIDTH,
   DELAY,
   FOCUS_MINUTES,
@@ -228,76 +227,6 @@ function SwitchSetting({
         <span className={styles.knob} />
       </button>
     </div>
-  );
-}
-
-interface SliderSettingProps {
-  label: string;
-  value: number;
-  range: Range;
-  step: number;
-  /** While dragging: show the value without storing it. */
-  onPreview: (value: number) => void;
-  /** Once released: store it. */
-  onCommit: (value: number) => void;
-}
-
-/**
- * A slider with its value as a percentage beside it. Dragging previews every
- * step and stores only the value it is released at, so a drag is one write, not
- * one per step; the keyboard commits each change, which is what a key press is.
- */
-function SliderSetting({ label, value, range, step, onPreview, onCommit }: SliderSettingProps) {
-  const [draft, setDraft] = useState(value);
-  const [dragging, setDragging] = useState(false);
-  const [lastValue, setLastValue] = useState(value);
-
-  // Follow the stored value when it changes elsewhere, but not mid-drag.
-  if (!dragging && value !== lastValue) {
-    setLastValue(value);
-    setDraft(value);
-  }
-
-  const commit = (next: number) => {
-    setDragging(false);
-    if (next !== value) {
-      onCommit(next);
-    }
-  };
-
-  return (
-    <label className={styles.row}>
-      <Label text={label} />
-      <span className={styles.control}>
-        <input
-          type="range"
-          className={styles.slider}
-          min={range.min}
-          max={range.max}
-          step={step}
-          value={draft}
-          aria-valuetext={`${String(draft)}%`}
-          onPointerDown={() => {
-            setDragging(true);
-          }}
-          onChange={(event) => {
-            const next = Number(event.target.value);
-            setDraft(next);
-            onPreview(next);
-          }}
-          onPointerUp={(event) => {
-            commit(Number(event.currentTarget.value));
-          }}
-          onKeyUp={(event) => {
-            commit(Number(event.currentTarget.value));
-          }}
-          onBlur={(event) => {
-            commit(Number(event.currentTarget.value));
-          }}
-        />
-        <output className={styles.percent}>{`${String(draft)}%`}</output>
-      </span>
-    </label>
   );
 }
 
@@ -838,7 +767,6 @@ export function SettingsView({ onClose }: SettingsViewProps) {
         <IconButton label="Back to notes" onClick={onClose}>
           <ArrowLeft size={16} strokeWidth={1.75} />
         </IconButton>
-        <h2 className={styles.heading}>Settings</h2>
       </div>
 
       <Group title="Appearance">
@@ -878,17 +806,6 @@ export function SettingsView({ onClose }: SettingsViewProps) {
             // so waiting for the round trip would make the choice feel dead.
             applyTabSize(size);
             void patch({ "tab.size": size });
-          }}
-        />
-
-        <SliderSetting
-          label="Panel translucency"
-          value={settings["panel.translucency"]}
-          range={PANEL_TRANSLUCENCY}
-          step={5}
-          onPreview={applyPanelTranslucency}
-          onCommit={(value) => {
-            void patch({ "panel.translucency": value });
           }}
         />
       </Group>

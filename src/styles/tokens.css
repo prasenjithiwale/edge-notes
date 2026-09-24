@@ -12,7 +12,7 @@
   --text-tertiary: #8e8e93;
   --accent: #2f6feb;
   --shadow-panel:
-    0 8px 28px rgba(0, 0, 0, 0.12), 0 1px 3px rgba(0, 0, 0, 0.08);
+    0 8px 28px rgba(40, 20, 80, 0.2), 0 1px 3px rgba(0, 0, 0, 0.08);
 
   /* Note palette: background / text pairs, stored by id in the database.
 
@@ -181,10 +181,81 @@
   --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
     "Liberation Mono", monospace;
 
-  /* Radii follow hierarchy: panel 14, cards 10, controls 8. */
-  --radius-panel: 14px;
-  --radius-card: 10px;
-  --radius-control: 8px;
+  /* Radii follow hierarchy: panel 18, cards 14, controls 10 — rounder for
+     glass, which reads as poured rather than cut. */
+  --radius-panel: 18px;
+  --radius-card: 14px;
+  --radius-control: 10px;
+
+  /* Aurora glass (owner's choice, 24 Sep 2026; replaces brief 7.1's neutral,
+     solid chrome). The panel is frosted glass over the desktop — a real blur on
+     macOS (`backdrop_set`), a nearly solid tint elsewhere — and under the glass
+     there is light: the aura, in the colour of what the app is doing. `--surface`
+     and `--surface-sunken` stay solid: they are what the glass averages to, and
+     what `contrast.test.ts` checks text against. */
+  --glass-panel: rgba(250, 249, 253, 0.58);
+  --glass-panel-solid: rgba(248, 247, 251, 0.97);
+  --glass-edge: rgba(255, 255, 255, 0.72);
+  --glass-highlight: rgba(255, 255, 255, 0.9);
+  --glass-raised: rgba(255, 255, 255, 0.62);
+  --glass-well: rgba(40, 20, 70, 0.06);
+  --glass-popover: rgba(252, 251, 255, 0.92);
+  --glass-hair: rgba(60, 40, 90, 0.1);
+  --card-lit: rgba(255, 255, 255, 0.55);
+  /* Each colour as light, for Aurora glass's notes (option B): the glow in a
+     note's corner and the seam along its top. Defined once, here, and not in
+     the dark blocks — a glow is light in either theme, and the deep dark-theme
+     backgrounds would glow brown. "none" has no light at all. */
+  --note-none-light: transparent;
+  --note-red-light: #ff8f8a;
+  --note-peach-light: #ffa06a;
+  --note-orange-light: #ffb347;
+  --note-yellow-light: #ffd84d;
+  --note-lime-light: #c8e25a;
+  --note-green-light: #7ee08a;
+  --note-mint-light: #6fe6b8;
+  --note-teal-light: #5fe3dc;
+  --note-sky-light: #6fd3ff;
+  --note-blue-light: #74b6ff;
+  --note-indigo-light: #959dff;
+  --note-lavender-light: #b39dff;
+  --note-purple-light: #d99cff;
+  --note-pink-light: #ff8fb8;
+  --note-sand-light: #e6c296;
+  --note-gray-light: #c9c6be;
+  /* The glass a note is made of, and how strongly its light shows. */
+  --note-surface: rgba(255, 255, 255, 0.62);
+  --note-glow-mix: 60%;
+  --note-glow-low: 45%;
+  --note-wash: 14%;
+  /* Text on a control filled with `--text-primary`. */
+  --on-ink: #ffffff;
+
+  /* The aura's three lights, per mood. Idle takes the panel colour from
+     Settings when there is one (`--accent-bg`), and a sunrise when not. */
+  --aura-opacity: 0.55;
+  --aura-idle-1: #ff8a7a;
+  --aura-idle-2: #a98bff;
+  --aura-idle-3: #ffc56b;
+  --aura-focus-1: #ff7a6b;
+  --aura-focus-2: #ff9fb6;
+  --aura-focus-3: #ffc56b;
+  --aura-short-1: #4fd1c5;
+  --aura-short-2: #7cc4ff;
+  --aura-short-3: #b8f0c8;
+  --aura-long-1: #6c7bff;
+  --aura-long-2: #a98bff;
+  --aura-long-3: #7cc4ff;
+  /* The Focus ring, the Start button and the timeline, per phase. Each holds
+     4.5:1 against `--on-ink`, because the Start button is filled with it. */
+  --ring-focus: #d92c40;
+  --ring-short: #0b7d73;
+  --ring-long: #5057e6;
+
+  /* Calligraphy, for headlines and moments only (owner's choice): the tab
+     titles, the Focus phase, empty states. Never for anything read at length or
+     pressed. Bundled (SIL OFL), so it is the same on every platform. */
+  --font-script: "Pinyon Script", "Snell Roundhand", "Apple Chancery", cursive;
 }
 
 /* The dark palette is applied through two selectors: the system preference,
@@ -263,6 +334,25 @@
     --code-number: #d0bf69;
     --code-keyword: #ff7ab2;
     --code-property: #78c2b3;
+
+    --glass-panel: rgba(24, 21, 32, 0.55);
+    --glass-panel-solid: rgba(26, 24, 33, 0.97);
+    --glass-edge: rgba(255, 255, 255, 0.14);
+    --glass-highlight: rgba(255, 255, 255, 0.14);
+    --glass-raised: rgba(255, 255, 255, 0.08);
+    --glass-well: rgba(255, 255, 255, 0.06);
+    --glass-popover: rgba(36, 33, 46, 0.94);
+    --glass-hair: rgba(255, 255, 255, 0.09);
+    --card-lit: rgba(255, 255, 255, 0.12);
+    --on-ink: #1c1c1e;
+    --note-surface: rgba(255, 255, 255, 0.07);
+    --note-glow-mix: 42%;
+    --note-glow-low: 32%;
+    --note-wash: 10%;
+    --aura-opacity: 0.42;
+    --ring-focus: #ff6b78;
+    --ring-short: #3fd0c3;
+    --ring-long: #8a90ff;
   }
 }
 
@@ -338,4 +428,23 @@
   --code-number: #d0bf69;
   --code-keyword: #ff7ab2;
   --code-property: #78c2b3;
+
+  --glass-panel: rgba(24, 21, 32, 0.55);
+  --glass-panel-solid: rgba(26, 24, 33, 0.97);
+  --glass-edge: rgba(255, 255, 255, 0.14);
+  --glass-highlight: rgba(255, 255, 255, 0.14);
+  --glass-raised: rgba(255, 255, 255, 0.08);
+  --glass-well: rgba(255, 255, 255, 0.06);
+  --glass-popover: rgba(36, 33, 46, 0.94);
+  --glass-hair: rgba(255, 255, 255, 0.09);
+  --card-lit: rgba(255, 255, 255, 0.12);
+  --on-ink: #1c1c1e;
+  --note-surface: rgba(255, 255, 255, 0.07);
+  --note-glow-mix: 42%;
+  --note-glow-low: 32%;
+  --note-wash: 10%;
+  --aura-opacity: 0.42;
+  --ring-focus: #ff6b78;
+  --ring-short: #3fd0c3;
+  --ring-long: #8a90ff;
 }

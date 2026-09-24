@@ -67,7 +67,7 @@ export function Tab({ className }: TabProps) {
         void dockBeginTabDrag();
       }}
     >
-      <div className={cx(styles.pill, translucent && styles.translucent)}>
+      <div className={cx(styles.pill, translucent && styles.translucent, running && styles.live)}>
         {/* A session counting down behind whatever you are working in is worth
             knowing about without opening anything, which is the one thing a
             collapsed widget is for (owner's request, 17 Sep 2026). */}

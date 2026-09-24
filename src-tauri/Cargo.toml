@@ -77,6 +77,10 @@ objc2-app-kit = { version = "0.3", default-features = false, features = [
   "NSOpenPanel",
   "NSSavePanel",
   "NSPanel",
+  # The frosted glass behind the panel: a blur of the desktop, placed behind
+  # exactly the panel's rectangle (`platform::macos::set_backdrop`).
+  "NSVisualEffectView",
+  "NSAppearance",
 ] }
 objc2-foundation = { version = "0.3", default-features = false, features = [
   "std",

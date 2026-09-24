@@ -14,7 +14,7 @@
 .chip {
   border: none;
   border-radius: 999px;
-  background: var(--surface-sunken);
+  background: var(--glass-well);
   color: var(--text-secondary);
   font-size: 11px;
   line-height: 1;
@@ -27,7 +27,7 @@
 }
 
 .chipSelected {
-  background: var(--surface);
+  background: var(--glass-raised);
   color: var(--text-primary);
   font-weight: 600;
   box-shadow: inset 0 0 0 1px var(--text-tertiary);

@@ -1,29 +1,151 @@
+/* Aurora glass. The panel is frosted glass: nearly solid while it slides and
+   wherever there is no blur behind it, and clear once Rust has put the
+   desktop's blur under it (`data-backdrop`, see `useBackdrop`). The glass
+   clearing as the panel lands is the one orchestrated moment of the design. */
 .panel {
   display: flex;
   flex-direction: column;
-  /* `--panel-alpha` comes from the panel translucency setting; solid by default,
-     as brief 7.1 has it. Notes keep their own solid colours on top. */
-  background: rgb(var(--surface-rgb) / var(--panel-alpha, 1));
+  background: var(--glass-panel-solid);
   border-radius: var(--radius-panel);
-  /* The panel carries the only shadow in the app (brief 7.1). */
-  box-shadow: var(--shadow-panel);
+  border: 1px solid var(--glass-edge);
+  box-shadow: var(--shadow-panel), inset 0 1px 0 var(--glass-highlight);
   overflow: hidden;
   position: relative;
+  isolation: isolate;
+  transition: background-color 320ms var(--open-easing);
 }
 
-/* The theme colour, when there is one: the note palette's own pairing, so the
-   ink on it is the ink that palette was contrast-checked with. Without a theme
-   both fall back and the chrome is neutral, which is brief 7.1's default. */
+.panel[data-backdrop] {
+  background: var(--glass-panel);
+}
+
+/* The aura: light under the glass, in the colour of what the app is doing —
+   warm while a session runs, cool on a break, indigo on the long one, and the
+   panel colour from Settings (or a sunrise) at rest. Three soft lights,
+   drifting slowly behind the masthead; the colours cross-fade because the
+   gradient is on three layers whose opacity changes, not on one that swaps. */
+.aura {
+  position: absolute;
+  z-index: -1;
+  left: -30%;
+  right: -30%;
+  top: -14%;
+  height: 62%;
+  pointer-events: none;
+  opacity: var(--aura-opacity);
+  filter: blur(26px);
+  animation: aura-drift 18s ease-in-out infinite alternate;
+}
+
+.aura > span {
+  position: absolute;
+  inset: 0;
+  transition: opacity 1.2s ease;
+  opacity: 0;
+}
+
+.aura > span[data-on] {
+  opacity: 1;
+}
+
+.aura > [data-mood="idle"] {
+  background:
+    radial-gradient(38% 46% at 28% 42%, var(--accent-bg, var(--aura-idle-1)) 0%, transparent 70%),
+    radial-gradient(40% 48% at 72% 34%, var(--aura-idle-2) 0%, transparent 70%),
+    radial-gradient(34% 40% at 52% 72%, var(--aura-idle-3) 0%, transparent 70%);
+}
+
+.aura > [data-mood="focus"] {
+  background:
+    radial-gradient(38% 46% at 28% 42%, var(--aura-focus-1) 0%, transparent 70%),
+    radial-gradient(40% 48% at 72% 34%, var(--aura-focus-2) 0%, transparent 70%),
+    radial-gradient(34% 40% at 52% 72%, var(--aura-focus-3) 0%, transparent 70%);
+}
+
+.aura > [data-mood="short"] {
+  background:
+    radial-gradient(38% 46% at 28% 42%, var(--aura-short-1) 0%, transparent 70%),
+    radial-gradient(40% 48% at 72% 34%, var(--aura-short-2) 0%, transparent 70%),
+    radial-gradient(34% 40% at 52% 72%, var(--aura-short-3) 0%, transparent 70%);
+}
+
+.aura > [data-mood="long"] {
+  background:
+    radial-gradient(38% 46% at 28% 42%, var(--aura-long-1) 0%, transparent 70%),
+    radial-gradient(40% 48% at 72% 34%, var(--aura-long-2) 0%, transparent 70%),
+    radial-gradient(34% 40% at 52% 72%, var(--aura-long-3) 0%, transparent 70%);
+}
+
+@keyframes aura-drift {
+  from {
+    transform: translate(-14px, -6px) rotate(-4deg);
+  }
+  to {
+    transform: translate(16px, 12px) rotate(5deg) scale(1.06);
+  }
+}
+
+/* Grain, so the glass reads as a material rather than a flat tint. */
+.panel::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  opacity: 0.06;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='140' height='140'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .aura {
+    animation: none;
+  }
+}
+
+/* The masthead: the view's name in calligraphy, with one plain line under it
+   saying something true about now. The only place the script is this large. */
+.masthead {
+  flex: none;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 14px 16px 0;
+}
+
+.title {
+  margin: 0;
+  font-family: var(--font-script);
+  font-size: 38px;
+  font-weight: 400;
+  line-height: 1.05;
+  letter-spacing: 0;
+  color: var(--text-primary);
+  /* Pinyon's swash capitals reach left of the box; room so they are not cut. */
+  padding-left: 2px;
+  white-space: nowrap;
+}
+
+.subtitle {
+  margin: 0;
+  font-size: 11px;
+  color: var(--text-secondary);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 4px;
+  gap: 6px;
   height: 44px;
   padding: 0 12px;
   flex: none;
-  background: var(--accent-bg, transparent);
-  color: var(--accent-ink, inherit);
 }
 
 .actions {
@@ -101,9 +223,7 @@
   justify-content: space-between;
   height: var(--toolbar-height);
   padding: 0 8px;
-  border-top: 1px solid var(--border);
-  background: var(--accent-bg, transparent);
-  color: var(--accent-ink, inherit);
+  border-top: 1px solid var(--glass-hair);
 }
 
 /* What the panel keeps about itself, together at the leading edge: Settings,

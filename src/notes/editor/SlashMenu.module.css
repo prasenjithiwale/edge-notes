@@ -23,7 +23,9 @@
   border-radius: var(--radius-card);
   /* The panel's surface, not the note's colour: this is chrome that happens to
      be over a note, the same as the task details sheet. */
-  background: var(--surface);
+  background: var(--glass-popover);
+  -webkit-backdrop-filter: blur(24px) saturate(1.6);
+  backdrop-filter: blur(24px) saturate(1.6);
   color: var(--text-primary);
   box-shadow: var(--shadow-card-raised);
   animation: menu-in 120ms var(--open-easing);
@@ -58,7 +60,7 @@
 /* One highlight, driven by the plugin's selected index, so the keyboard and the
    pointer agree about which row is next. */
 .selected {
-  background: var(--surface-sunken);
+  background: var(--glass-well);
 }
 
 .icon {

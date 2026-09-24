@@ -12,10 +12,13 @@
   text-align: center;
 }
 
+/* A moment, so it is written rather than printed (the calligraphy face). */
 .headline {
   margin: 0;
-  font-size: 13px;
-  font-weight: 600;
+  font-family: var(--font-script);
+  font-size: 30px;
+  font-weight: 400;
+  line-height: 1.2;
   color: var(--text-primary);
 }
 
@@ -26,14 +29,16 @@
 }
 
 .action {
-  border: 1px solid var(--border);
-  border-radius: var(--radius-control);
-  background: transparent;
-  color: var(--text-primary);
+  border: none;
+  border-radius: 999px;
+  background: var(--text-primary);
+  color: var(--on-ink);
   font-size: 13px;
-  padding: 6px 12px;
+  font-weight: 600;
+  padding: 8px 18px;
+  box-shadow: 0 8px 20px -10px rgba(20, 10, 40, 0.5);
 }
 
 .action:hover {
-  background: var(--surface-sunken);
+  opacity: 0.9;
 }

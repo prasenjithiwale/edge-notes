@@ -197,7 +197,7 @@
   top: calc(0.25em + 2px);
   width: 3px;
   height: 7px;
-  border: solid var(--note-bg, #fff);
+  border: solid var(--on-ink);
   border-width: 0 1.5px 1.5px 0;
   transform: rotate(45deg);
   cursor: default;

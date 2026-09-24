@@ -35,12 +35,14 @@
   justify-content: center;
   gap: 5px;
   border-radius: 999px;
-  background: var(--surface);
+  /* A drop of the panel's glass: nearly solid, because nothing is blurred
+     behind a pill this small, with the same lit top edge the panel has. */
+  background: var(--glass-popover);
   /* Its own border token, not the chrome hairline: the collapsed pill is the
      only part of the app that is always on screen, and against a dark desktop
      a `--border` outline on a dark surface left nothing to aim at. */
   border: 1px solid var(--tab-border);
-  box-shadow: var(--shadow-tab);
+  box-shadow: var(--shadow-tab), inset 0 1px 0 var(--glass-highlight);
   color: var(--text-primary);
   /* Solid as the panel slides out, see-through again as it slides away. The
      slide handshake ignores this: only `data-slide` elements acknowledge. */
@@ -53,6 +55,15 @@
    departure from the flat, solid surfaces of brief 7.1, chosen by the owner. */
 .translucent {
   opacity: var(--tab-translucent-opacity);
+}
+
+/* While a session runs, the pill glows in the running light's colour: the
+   light alone is 5 px, and the glow is what can be seen from across a desk. */
+.live {
+  box-shadow:
+    var(--shadow-tab),
+    inset 0 1px 0 var(--glass-highlight),
+    0 0 12px -2px var(--focus-running);
 }
 
 .tab:active {

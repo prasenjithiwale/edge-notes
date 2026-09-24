@@ -453,3 +453,95 @@ pub fn pick_images() -> Vec<std::path::PathBuf> {
         .filter_map(|url| url.path().map(|path| path.to_string().into()))
         .collect()
 }
+
+thread_local! {
+    /// The one blur view, made the first time it is asked for. Thread-local
+    /// because AppKit views belong to the main thread, which is the only thread
+    /// that ever reaches this.
+    static BACKDROP: std::cell::RefCell<Option<objc2::rc::Retained<objc2_app_kit::NSVisualEffectView>>> =
+        const { std::cell::RefCell::new(None) };
+}
+
+/// The frosted glass: an `NSVisualEffectView` blurring the desktop behind the
+/// panel's rectangle only.
+///
+/// Tauri's own window effects fill the whole window, and this window is the
+/// panel plus the tab plus a transparent margin for the shadow — all of which
+/// would frost into a grey slab around the panel. So the view is sized to the
+/// rectangle the webview reports, and hidden (not removed) with `None`.
+///
+/// `state` is Active because this panel is inactive nearly all its life and an
+/// inactive effect view draws flat grey. The corner radius is the private
+/// `setCornerRadius:` that `window-vibrancy` uses too, asked about first so a
+/// system without it gets square glass rather than an Objective-C exception.
+///
+/// Must run on the main thread; the caller marshals.
+pub fn set_backdrop(window: &WebviewWindow, backdrop: Option<crate::platform::Backdrop>) {
+    use objc2::{MainThreadMarker, MainThreadOnly, msg_send, sel};
+    use objc2_app_kit::{
+        NSAppearance, NSAppearanceCustomization, NSAppearanceNameAqua, NSAppearanceNameDarkAqua,
+        NSView, NSVisualEffectBlendingMode, NSVisualEffectMaterial, NSVisualEffectState,
+        NSVisualEffectView, NSWindowOrderingMode,
+    };
+    use objc2_foundation::{NSObjectProtocol, NSPoint, NSRect, NSSize};
+
+    let Some(mtm) = MainThreadMarker::new() else {
+        log::error!("macos: the backdrop was set off the main thread");
+        return;
+    };
+    let Ok(view) = window.ns_view() else {
+        return;
+    };
+    if view.is_null() {
+        return;
+    }
+    // SAFETY: the window's own content view, on the main thread.
+    let content: &NSView = unsafe { &*view.cast::<NSView>() };
+
+    BACKDROP.with(|slot| {
+        let mut slot = slot.borrow_mut();
+        let Some(backdrop) = backdrop else {
+            if let Some(effect) = slot.as_ref() {
+                effect.setHidden(true);
+            }
+            return;
+        };
+
+        let effect = slot.get_or_insert_with(|| {
+            let effect = NSVisualEffectView::initWithFrame(
+                NSVisualEffectView::alloc(mtm),
+                NSRect::new(NSPoint::new(0.0, 0.0), NSSize::new(0.0, 0.0)),
+            );
+            effect.setMaterial(NSVisualEffectMaterial::Popover);
+            effect.setBlendingMode(NSVisualEffectBlendingMode::BehindWindow);
+            effect.setState(NSVisualEffectState::Active);
+            content.addSubview_positioned_relativeTo(&effect, NSWindowOrderingMode::Below, None);
+            effect
+        });
+
+        let height = content.bounds().size.height;
+        let y = if content.isFlipped() {
+            backdrop.y
+        } else {
+            height - backdrop.y - backdrop.height
+        };
+        effect.setFrame(NSRect::new(
+            NSPoint::new(backdrop.x, y),
+            NSSize::new(backdrop.width, backdrop.height),
+        ));
+        if effect.respondsToSelector(sel!(setCornerRadius:)) {
+            // SAFETY: answered for just above; takes one CGFloat.
+            let () = unsafe { msg_send![&**effect, setCornerRadius: backdrop.radius] };
+        }
+        // SAFETY: AppKit's own constant appearance names.
+        let name = unsafe {
+            if backdrop.dark {
+                NSAppearanceNameDarkAqua
+            } else {
+                NSAppearanceNameAqua
+            }
+        };
+        effect.setAppearance(NSAppearance::appearanceNamed(name).as_deref());
+        effect.setHidden(false);
+    });
+}

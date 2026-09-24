@@ -29,14 +29,14 @@
 .clear {
   border: 1px solid var(--border);
   border-radius: var(--radius-control);
-  background: var(--surface);
+  background: var(--glass-raised);
   color: var(--text-primary);
   font-size: 11px;
   padding: 3px 8px;
 }
 
 .clear:hover {
-  background: var(--surface-sunken);
+  background: var(--glass-well);
 }
 
 .list {
@@ -53,7 +53,7 @@
   align-items: flex-start;
   gap: 4px;
   border-radius: 10px;
-  background: var(--surface-sunken);
+  background: var(--glass-well);
 }
 
 /* What is on the clipboard now, in colour and lifted off the list — asked for
@@ -139,7 +139,7 @@
 
 .icon:hover {
   border-color: var(--border);
-  background: var(--surface);
+  background: var(--glass-raised);
   color: var(--text-secondary);
 }
 
@@ -151,11 +151,14 @@
   text-align: center;
 }
 
+/* An empty state is a moment, so it is written in the calligraphy face. */
 .headline {
   margin: 0;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--text-secondary);
+  font-family: var(--font-script);
+  font-size: 28px;
+  font-weight: 400;
+  line-height: 1.2;
+  color: var(--text-primary);
 }
 
 .hint {

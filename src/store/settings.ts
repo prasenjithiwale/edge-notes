@@ -55,16 +55,6 @@ function applyTheme(theme: Settings["theme"]): void {
 }
 
 /**
- * `panel.translucency` as the panel's surface opacity. Set on the root so the
- * settings slider can preview a value while it is dragged, without a write per
- * step, and the stored value takes over when it is released.
- */
-export function applyPanelTranslucency(percent: number): void {
-  const clamped = Math.min(Math.max(percent, 0), 100);
-  document.documentElement.style.setProperty("--panel-alpha", String(1 - clamped / 100));
-}
-
-/**
  * The default tab metrics, and what each size multiplies them by.
  *
  * The same three factors as `TabSize::scale` in Rust, which sizes the window and
@@ -120,7 +110,6 @@ export function applyTabSize(size: Settings["tab.size"]): void {
 
 function applyAppearance(settings: Settings): void {
   applyTheme(settings.theme);
-  applyPanelTranslucency(settings["panel.translucency"]);
   applyTabSize(settings["tab.size"]);
   applyAccent(settings["appearance.accent"]);
 }

@@ -866,3 +866,20 @@ mod tests {
         assert_eq!(pretty_os("freebsd"), "freebsd");
     }
 }
+
+/// Frost the desktop behind the panel's rectangle, or clear it with `None`.
+/// Returns whether this platform has the glass at all, so the webview can draw
+/// its panel solid where it does not rather than see-through with nothing
+/// behind it.
+#[tauri::command]
+pub fn backdrop_set(app: AppHandle, backdrop: Option<platform::Backdrop>) -> AppResult<bool> {
+    if !platform::backdrop_supported() {
+        return Ok(false);
+    }
+    let window = app
+        .get_webview_window(crate::dock::DOCK_WINDOW_LABEL)
+        .ok_or(AppError::WindowNotFound(crate::dock::DOCK_WINDOW_LABEL))?;
+    // AppKit, so the main thread (see `apply_rect`).
+    app.run_on_main_thread(move || platform::set_backdrop(&window, backdrop))?;
+    Ok(true)
+}

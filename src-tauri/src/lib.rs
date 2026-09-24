@@ -76,6 +76,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             commands::app_ready,
+            commands::backdrop_set,
             commands::quick_capture_prefill,
             commands::quick_capture_close,
             commands::security_status,

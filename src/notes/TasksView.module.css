@@ -20,7 +20,7 @@
   display: flex;
   align-items: center;
   border-radius: var(--radius-control);
-  background: var(--surface-sunken);
+  background: var(--glass-well);
 }
 
 .add:focus-within {
@@ -87,7 +87,7 @@
   height: 20px;
   padding: 0 8px;
   border-radius: 999px;
-  background: var(--surface-sunken);
+  background: var(--glass-well);
   color: var(--text-secondary);
   font-size: 11px;
   font-variant-numeric: tabular-nums;
@@ -137,7 +137,7 @@
 }
 
 .heading:hover {
-  background: var(--surface-sunken);
+  background: var(--glass-well);
   color: var(--text-primary);
 }
 
@@ -190,13 +190,13 @@
 }
 
 .row:hover {
-  background: var(--surface-sunken);
+  background: var(--glass-well);
 }
 
 /* The row whose sheet is open stays lit, so the sheet under it plainly belongs
    to it rather than floating between two tasks. */
 .rowOpen {
-  background: var(--surface-sunken);
+  background: var(--glass-well);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -224,7 +224,7 @@
   border: 1.5px solid var(--text-tertiary);
   border-radius: 50%;
   background: transparent;
-  color: var(--surface);
+  color: var(--on-ink);
 }
 
 .box::after {
@@ -419,10 +419,13 @@
   text-align: center;
 }
 
+/* An empty state is a moment, so it is written in the calligraphy face. */
 .headline {
   margin: 0;
-  font-size: 13px;
-  font-weight: 600;
+  font-family: var(--font-script);
+  font-size: 28px;
+  font-weight: 400;
+  line-height: 1.2;
   color: var(--text-primary);
 }
 
@@ -438,7 +441,7 @@
 .hint code {
   padding: 1px 4px;
   border-radius: 4px;
-  background: var(--surface-sunken);
+  background: var(--glass-well);
   color: var(--text-primary);
   font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
   font-size: 11px;

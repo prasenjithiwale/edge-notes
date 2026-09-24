@@ -119,34 +119,6 @@ describe("tab appearance setting", () => {
   });
 });
 
-describe("panel translucency setting", () => {
-  it("shows the percentage, previews while dragging and stores on release", async () => {
-    render(<SettingsView onClose={() => undefined} />);
-    const slider = screen.getByLabelText<HTMLInputElement>(/^Panel translucency/);
-    expect(screen.getByText("0%")).toBeTruthy();
-
-    fireEvent.pointerDown(slider);
-    fireEvent.change(slider, { target: { value: "35" } });
-
-    expect(screen.getByText("35%")).toBeTruthy();
-    expect(document.documentElement.style.getPropertyValue("--panel-alpha")).toBe("0.65");
-    expect(updates()).toEqual([]);
-
-    fireEvent.pointerUp(slider);
-    await waitFor(() => {
-      expect(updates()).toEqual([{ patch: { "panel.translucency": 35 } }]);
-    });
-  });
-
-  it("does not store a release that changed nothing", () => {
-    render(<SettingsView onClose={() => undefined} />);
-    const slider = screen.getByLabelText(/^Panel translucency/);
-    fireEvent.pointerDown(slider);
-    fireEvent.pointerUp(slider);
-    expect(updates()).toEqual([]);
-  });
-});
-
 describe("task reminders setting", () => {
   it("is on by default and can be turned off", async () => {
     render(<SettingsView onClose={() => undefined} />);

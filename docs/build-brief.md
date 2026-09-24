@@ -203,11 +203,14 @@ Dimensions (logical px):
 
 ### 7.1 Principles
 
-- Calm, quiet, native. The note colors are the only color; the chrome is neutral.
-- One accent color, used only for focus rings and the active Keep open state.
-- Flat surfaces. The panel gets a single soft shadow to separate it from what's underneath; cards and controls get none.
-- 4 px spacing grid. Radii follow hierarchy: panel 14, cards 10, controls 8, chips fully rounded.
-- Sentence case everywhere. No all-caps labels, no emoji, no decorative dividers or gradients.
+Rewritten 24 Sep 2026 for **Aurora glass**, chosen by the owner over the original calm, flat, neutral look.
+
+- The panel is frosted glass over the desktop: a real blur on macOS, a nearly solid tint elsewhere. Under the glass there is light, the aura, in the colour of what the app is doing: warm during a focus session, teal on a short break, indigo on a long one, and the panel colour from Settings at rest.
+- Note colours are still the strongest colour on screen. Cards are tinted glass tiles with a lit top edge and a soft glow of their own colour.
+- Calligraphy (Pinyon Script, bundled) is for headlines and moments only: the view title, the Focus phase, empty states. Never for text read at length, and never on a control.
+- Gradients are allowed for light (the aura, the orb, highlights) and never as decoration on text or controls. One ambient motion, the aura's drift, stopped by reduced motion.
+- 4 px spacing grid. Radii follow hierarchy: panel 18, cards 14, controls 10; chips, tabs and icon buttons fully rounded.
+- Sentence case everywhere. No all-caps labels and no emoji.
 - Two font weights only: 400 and 600.
 - Nothing essential appears only on hover.
 - When in doubt, remove it.

@@ -48,6 +48,7 @@ import { useClipsStore } from "../store/clips";
 import { useDockStore } from "../store/dock";
 import { useNotesStore } from "../store/notes";
 import { useSettingsStore } from "../store/settings";
+import { Aura, Masthead, useBackdrop } from "./glass";
 import styles from "./Panel.module.css";
 
 /** How long notes must be still before the reminder list is re-sent. */
@@ -104,6 +105,7 @@ export function Panel({ className }: PanelProps) {
   const large = useDockStore((state) => state.large);
   const quick = useDockStore((state) => state.quick);
   const setLock = useDockStore((state) => state.setLock);
+  const frosted = useBackdrop(panelRef, phase === "open");
 
   const notes = useNotesStore((state) => state.notes);
   const loaded = useNotesStore((state) => state.loaded);
@@ -548,6 +550,10 @@ export function Panel({ className }: PanelProps) {
     void expand(id, { edit: target ? !target.pinned : true });
   };
 
+  // The light under the glass follows the timer: warm while a session runs,
+  // cool on a break, and the panel's own colour at rest.
+  const mood = isRunning(pomodoro) ? pomodoro.phase : "idle";
+
   if (quick) {
     // Summoned by its own shortcut, and it is the whole panel while it is up:
     // there is no list to show beside a field that exists to be gone in a
@@ -558,7 +564,9 @@ export function Panel({ className }: PanelProps) {
         className={cx(className, styles.panel)}
         data-slide="true"
         data-panel=""
+        data-backdrop={frosted ? "" : undefined}
       >
+        <Aura mood={mood} />
         <QuickCapture />
       </section>
     );
@@ -576,7 +584,9 @@ export function Panel({ className }: PanelProps) {
         className={cx(className, styles.panel)}
         data-slide="true"
         data-panel=""
+        data-backdrop={frosted ? "" : undefined}
       >
+        <Aura mood={mood} />
         <LockedView
           status={security}
           onUnlocked={(status) => {
@@ -597,6 +607,7 @@ export function Panel({ className }: PanelProps) {
       className={cx(className, styles.panel)}
       data-slide="true"
       data-panel=""
+      data-backdrop={frosted ? "" : undefined}
       // A `#tag` drawn in a note is a button carrying `data-tag`, and this is
       // the one listener that answers all of them — in a card, in the reader and
       // in the expanded panel alike. The alternative was threading a callback
@@ -608,6 +619,18 @@ export function Panel({ className }: PanelProps) {
         }
       }}
     >
+      <Aura mood={mood} />
+      {!expandedNote && (
+        <Masthead
+          title={
+            showSettings
+              ? "Settings"
+              : showArchive
+                ? "Archive"
+                : (TABS.find((tab) => tab.view === view)?.label ?? "Notes")
+          }
+        />
+      )}
       <header className={styles.header}>
         {searching ? (
           <SearchField

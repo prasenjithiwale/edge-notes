@@ -15,7 +15,7 @@
   border: none;
   /* Chips are fully rounded (brief 7.1). */
   border-radius: 999px;
-  background: var(--surface-sunken);
+  background: var(--glass-well);
   color: var(--text-secondary);
   font-size: 12px;
   height: 20px;

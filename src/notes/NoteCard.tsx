@@ -17,13 +17,23 @@ interface NoteCardProps {
   onToggleTask: (line: number) => void;
 }
 
+/**
+ * A note's colour, as Aurora glass paints it (option B, 24 Sep 2026): the note
+ * is made of the panel's own glass and its colour is *light* — a glow from its
+ * top-left corner and a lit seam along its top edge (`--note-light`). So the
+ * surface and ink every note component paints with (`--note-bg`,
+ * `--note-text`, `--note-edge`) are the glass and the panel's ink, the same for
+ * every colour; `--note-color` and `--note-ink` are the palette pair itself,
+ * for the few things that show the colour as a swatch.
+ */
 export function noteColorStyle(color: string): CSSProperties {
   return {
-    "--note-bg": `var(--note-${color}-bg)`,
-    "--note-text": `var(--note-${color}-text)`,
-    // Only "none" defines an edge; every other colour falls back to nothing.
-    // It is drawn as an inset ring rather than a border so it costs no layout.
-    "--note-edge": `var(--note-${color}-edge, transparent)`,
+    "--note-bg": "var(--note-surface)",
+    "--note-text": "var(--text-primary)",
+    "--note-edge": "var(--glass-hair)",
+    "--note-light": `var(--note-${color}-light)`,
+    "--note-color": `var(--note-${color}-bg)`,
+    "--note-ink": `var(--note-${color}-text)`,
   } as CSSProperties;
 }
 

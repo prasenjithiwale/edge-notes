@@ -189,7 +189,6 @@ export function ArchiveView({ onClose }: ArchiveViewProps) {
         <IconButton label="Back to notes" onClick={onClose}>
           <ArrowLeft size={16} strokeWidth={1.75} />
         </IconButton>
-        <h2 className={styles.heading}>Archive</h2>
       </div>
 
       {items.length === 0 ? (

@@ -96,3 +96,35 @@ pub fn pick_images(app: &tauri::AppHandle) -> Option<Vec<std::path::PathBuf>> {
         None
     }
 }
+
+/// Where the frosted glass goes: the panel's rectangle in the window, in CSS
+/// pixels from the top-left (which are AppKit points), its corner radius, and
+/// whether the app is drawing dark — the blur takes that from the app's own
+/// theme setting, not the system's, or a forced-dark panel would frost white.
+#[derive(Debug, Clone, Copy, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Backdrop {
+    pub x: f64,
+    pub y: f64,
+    pub width: f64,
+    pub height: f64,
+    pub radius: f64,
+    pub dark: bool,
+}
+
+/// Whether this platform can blur the desktop behind the panel. macOS only:
+/// Windows' Mica and Acrylic cover the whole window, margin and tab included,
+/// and Linux has nothing to ask. Elsewhere the panel's glass is drawn solid.
+#[must_use]
+pub const fn backdrop_supported() -> bool {
+    cfg!(target_os = "macos")
+}
+
+/// Put the blur behind `backdrop`, or take it away with `None`. Must run on the
+/// main thread; the caller marshals.
+pub fn set_backdrop(window: &WebviewWindow, backdrop: Option<Backdrop>) {
+    #[cfg(target_os = "macos")]
+    macos::set_backdrop(window, backdrop);
+    #[cfg(not(target_os = "macos"))]
+    let _ = (window, backdrop);
+}

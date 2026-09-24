@@ -15,11 +15,6 @@
   margin-bottom: 8px;
 }
 
-.heading {
-  font-size: 13px;
-  font-weight: 600;
-  margin: 0;
-}
 
 /* Settings are grouped, and each group is an inset card with hairlines between
    its rows. Four short cards are read at a glance; the same fourteen controls in
@@ -41,7 +36,7 @@
   flex-direction: column;
   border: 1px solid var(--border);
   border-radius: var(--radius-card);
-  background: var(--surface-sunken);
+  background: var(--glass-well);
   overflow: hidden;
 }
 
@@ -107,7 +102,7 @@
 }
 
 .disclosure:hover {
-  background: var(--surface);
+  background: var(--glass-raised);
 }
 
 .chevron {
@@ -136,7 +131,7 @@
   padding: 2px;
   border: 1px solid var(--border);
   border-radius: var(--radius-control);
-  background: var(--surface);
+  background: var(--glass-raised);
 }
 
 .step {
@@ -152,7 +147,7 @@
 }
 
 .step:hover:not(:disabled) {
-  background: var(--surface-sunken);
+  background: var(--glass-well);
 }
 
 .step:disabled {
@@ -191,7 +186,7 @@
 }
 
 .segment[aria-pressed="true"] {
-  background: var(--surface);
+  background: var(--glass-raised);
   color: var(--text-primary);
   font-weight: 600;
 }
@@ -201,7 +196,7 @@
 .select {
   border: 1px solid var(--border);
   border-radius: var(--radius-control);
-  background: var(--surface);
+  background: var(--glass-raised);
   color: var(--text-primary);
   font-size: 12px;
   padding: 4px 6px;
@@ -228,14 +223,14 @@
   flex: none;
   border: 1px solid var(--border);
   border-radius: var(--radius-control);
-  background: var(--surface);
+  background: var(--glass-raised);
   color: var(--text-primary);
   font-size: 12px;
   padding: 4px 10px;
 }
 
 .action:hover:not(:disabled) {
-  background: var(--surface-sunken);
+  background: var(--glass-well);
 }
 
 .action:disabled {
@@ -252,20 +247,6 @@
   overflow-wrap: anywhere;
 }
 
-.slider {
-  width: 120px;
-  accent-color: var(--text-secondary);
-}
-
-/* Fixed width, so the slider does not shift as the number gains a digit. */
-.percent {
-  min-width: 32px;
-  text-align: right;
-  font-size: 12px;
-  color: var(--text-primary);
-  font-variant-numeric: tabular-nums;
-}
-
 /* A switch, for the settings that are simply on or off. Sized off the 4 px grid:
    a 28x16 track with a 12 px knob. */
 .switch {
@@ -275,7 +256,7 @@
   padding: 2px;
   border: 1px solid var(--border);
   border-radius: 999px;
-  background: var(--surface-sunken);
+  background: var(--glass-well);
   display: flex;
   align-items: center;
   transition: background 120ms var(--open-easing);
@@ -292,7 +273,7 @@
   width: 12px;
   height: 12px;
   border-radius: 50%;
-  background: var(--surface);
+  background: var(--glass-raised);
   box-shadow: 0 1px 2px rgb(0 0 0 / 30%);
   transition: transform 120ms var(--open-easing);
 }
@@ -313,7 +294,7 @@
   min-width: 96px;
   border: 1px solid var(--border);
   border-radius: var(--radius-control);
-  background: var(--surface);
+  background: var(--glass-raised);
   color: var(--text-primary);
   font-size: 12px;
   padding: 4px 10px;
@@ -366,7 +347,7 @@
   -webkit-user-select: text;
   cursor: text;
   color: var(--text-secondary);
-  background: var(--surface-sunken);
+  background: var(--glass-well);
   border-radius: 6px;
   padding: 6px 8px;
   width: 100%;

@@ -9,7 +9,7 @@
   padding: 12px;
   border: 1px solid var(--border);
   border-radius: var(--radius-card);
-  background: var(--surface);
+  background: var(--glass-raised);
   box-shadow: var(--shadow-card-raised);
   animation: sheet-in 140ms var(--open-easing);
 }
@@ -43,11 +43,11 @@
 }
 
 .title:hover {
-  background: var(--surface-sunken);
+  background: var(--glass-well);
 }
 
 .title:focus {
-  background: var(--surface-sunken);
+  background: var(--glass-well);
   outline: none;
 }
 
@@ -78,7 +78,7 @@
   gap: 2px;
   padding: 2px;
   border-radius: var(--radius-control);
-  background: var(--surface-sunken);
+  background: var(--glass-well);
 }
 
 /* Status takes two rows of two rather than one row of four: "In progress" is
@@ -109,7 +109,7 @@
 }
 
 .segment.selected {
-  background: var(--surface);
+  background: var(--glass-raised);
   color: var(--text-primary);
   font-weight: 600;
   box-shadow: var(--shadow-card);
@@ -152,14 +152,14 @@
 }
 
 .chip:hover {
-  background: var(--surface-sunken);
+  background: var(--glass-well);
   color: var(--text-primary);
 }
 
 /* Selected without the accent: the chip fills and its outline darkens. */
 .chip.selected {
   border-color: var(--text-secondary);
-  background: var(--surface-sunken);
+  background: var(--glass-well);
   color: var(--text-primary);
   font-weight: 600;
 }
@@ -177,7 +177,7 @@
   padding: 0 8px;
   border: none;
   border-radius: var(--radius-control);
-  background: var(--surface-sunken);
+  background: var(--glass-well);
   color: var(--text-primary);
   font: inherit;
   font-size: 12px;
@@ -210,7 +210,7 @@
 }
 
 .clear:hover {
-  background: var(--surface-sunken);
+  background: var(--glass-well);
   color: var(--text-primary);
 }
 
@@ -233,7 +233,7 @@
 }
 
 .focusOn:hover {
-  background: var(--surface-sunken);
+  background: var(--glass-well);
   color: var(--text-primary);
 }
 
@@ -261,14 +261,14 @@
   padding: 0 12px;
   border: 1px solid var(--border);
   border-radius: var(--radius-control);
-  background: var(--surface);
+  background: var(--glass-raised);
   color: var(--text-primary);
   font-size: 12px;
   font-weight: 600;
 }
 
 .done:hover {
-  background: var(--surface-sunken);
+  background: var(--glass-well);
 }
 
 /* A free-text field under the details: what one line of title has no room for. */
@@ -279,7 +279,7 @@
   padding: 6px 8px;
   border: 1px solid var(--border);
   border-radius: var(--radius-control);
-  background: var(--surface-sunken);
+  background: var(--glass-well);
   color: var(--text-primary);
   font: inherit;
   font-size: 12px;
@@ -307,6 +307,6 @@
 }
 
 .delete:hover {
-  background: var(--surface-sunken);
+  background: var(--glass-well);
   color: var(--text-primary);
 }
