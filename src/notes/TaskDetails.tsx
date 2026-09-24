@@ -178,7 +178,7 @@ export function TaskDetails({ task, onClose, onFocusChange }: TaskDetailsProps) 
 
   return (
     // Named so the list can scroll a sheet opened on the last row into view.
-    <div className={styles.sheet} data-sheet={task.id}>
+    <div className={styles.sheet} data-sheet={task.id} data-priority={task.priority ?? "none"}>
       <input
         type="text"
         className={styles.title}

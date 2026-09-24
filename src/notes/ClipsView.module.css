@@ -27,12 +27,16 @@
 }
 
 .clear {
-  border: 1px solid var(--border);
-  border-radius: var(--radius-control);
+  border: none;
+  border-radius: 999px;
   background: var(--glass-raised);
+  box-shadow:
+    inset 0 0 0 1px var(--glass-hair),
+    inset 0 1px 0 var(--glass-highlight);
   color: var(--text-primary);
   font-size: 11px;
-  padding: 3px 8px;
+  font-weight: 600;
+  padding: 4px 10px;
 }
 
 .clear:hover {
@@ -42,38 +46,52 @@
 .list {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
+/* Each copy is a tile of the note glass, with the lit edge notes have. */
 .row {
   display: flex;
   align-items: flex-start;
   gap: 4px;
-  border-radius: 10px;
-  background: var(--glass-well);
-}
-
-/* What is on the clipboard now, in colour and lifted off the list — asked for
-   on 24 Sep 2026, an exception to brief 7.1's neutral chrome like the panel's
-   own colour. It wears the panel colour's pair (`--accent-bg`/`--accent-ink`,
-   AA by construction) when one is set, and a tint of the accent otherwise. It
-   is also said in words, so it is never colour alone. */
-.current {
-  background: var(--accent-bg, color-mix(in srgb, var(--accent) 14%, var(--surface)));
+  border-radius: var(--radius-card);
+  background: var(--note-surface);
   box-shadow:
-    inset 0 0 0 1px var(--accent-ink, color-mix(in srgb, var(--accent) 55%, transparent)),
-    var(--shadow-card-raised);
+    inset 0 0 0 1px var(--glass-hair),
+    inset 0 1px 0 var(--card-lit),
+    0 6px 16px -12px rgba(20, 10, 40, 0.35);
 }
 
-.current .text {
-  color: var(--accent-ink, var(--text-primary));
+/* What is on the clipboard now: lit, as a note is by its colour, by the
+   panel's own light (the colour from Settings, or the aura's lavender) — a
+   glow from the corner, a seam along the top and a glow beneath. It is also
+   said in words, so it is never colour alone. */
+.current {
+  --clip-light: var(--accent-bg, var(--aura-idle-2));
+  background:
+    linear-gradient(90deg, transparent, var(--clip-light), transparent) 14px 0 / calc(100% - 28px)
+      2px no-repeat,
+    radial-gradient(
+      120% 90% at 0% 0%,
+      color-mix(in srgb, var(--clip-light) var(--note-glow-mix), transparent) 0%,
+      transparent 62%
+    ),
+    linear-gradient(
+      color-mix(in srgb, var(--clip-light) var(--note-wash), transparent),
+      color-mix(in srgb, var(--clip-light) var(--note-wash), transparent)
+    ),
+    var(--note-surface);
+  box-shadow:
+    inset 0 0 0 1px var(--glass-hair),
+    inset 0 1px 0 var(--card-lit),
+    0 14px 28px -14px color-mix(in srgb, var(--clip-light) 75%, rgba(20, 10, 40, 0.4));
 }
 
 .current .when {
-  color: var(--accent-ink, var(--text-primary));
+  color: var(--text-primary);
   font-weight: 600;
 }
 
@@ -84,9 +102,9 @@
   display: flex;
   flex-direction: column;
   gap: 2px;
-  padding: 8px 0 8px 8px;
+  padding: 10px 0 10px 11px;
   border: none;
-  border-radius: 10px;
+  border-radius: var(--radius-card);
   background: transparent;
   color: inherit;
   font: inherit;
@@ -122,25 +140,25 @@
   display: flex;
   gap: 2px;
   padding: 6px 6px 0 0;
+  align-self: flex-start;
 }
 
 .icon {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 24px;
-  height: 22px;
+  width: 26px;
+  height: 26px;
   padding: 0;
-  border: 1px solid transparent;
-  border-radius: var(--radius-control);
+  border: none;
+  border-radius: 50%;
   background: transparent;
   color: var(--text-tertiary);
 }
 
 .icon:hover {
-  border-color: var(--border);
-  background: var(--glass-raised);
-  color: var(--text-secondary);
+  background: var(--glass-well);
+  color: var(--text-primary);
 }
 
 .empty {
