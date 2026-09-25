@@ -4635,3 +4635,12 @@ The owner generated the artwork with ChatGPT from a brief: a frosted-glass pane 
 - **App icon:** `swift tools/icon_master.swift tools/icon-source.png <master.png>` clips it to Apple's grid (824 px rounded square, radius 22.37%, centred in 1024 with a soft shadow and a light hairline), then `npx tauri icon <master.png> -o <scratch>` makes every size; only the desktop files are copied into `src-tauri/icons/` (its `ios/` and `android/` output is not used). The `.icns` carries all ten macOS sizes, the `.ico` 16–256. Reads clearly at 32 px; at 16 px it is a bright square with a pane in it.
 - **Tray icon:** still drawn by `tools/make_icons.py`, which now draws only that, mirrored to match — outlined pane, tab on the left touching it, three dots at 2x. The script's old app-icon drawing and the checked-in `icon.iconset/` are gone.
 - The download page's `icon.png` is copied from `128x128.png` by `render_site.sh`, so the site picks it up on the next render.
+
+## 25 Sep 2026 — The repository is public
+
+- **Repository settings:** description, homepage (the download page) and topics set; Wiki and Projects off; branches deleted on merge. `edge-notes-apt`'s description points here.
+- **`master` is protected** (classic branch protection): changes go through a pull request with one approving review from a code owner (`.github/CODEOWNERS` names only the owner), stale approvals dismissed, the last push must be approved by someone else, conversations resolved, no force pushes, no deletion. **Admins are not enforced**, deliberately: the owner is the only possible reviewer and GitHub does not let an author approve their own pull request, so enforcing it would lock the owner out of direct pushes and releases.
+- **Outside pull requests** cannot run workflows without approval (`all_external_contributors`); `release.yml` only runs on tags and by hand in any case.
+- **Private vulnerability reporting** is on; `SECURITY.md` points to it. `CONTRIBUTING.md` says bug reports yes, pull requests no. Issues use a form (`.github/ISSUE_TEMPLATE/bug_report.yml`) asking for Settings › About › Copy; blank issues are off.
+- The README opens with the hero screenshot, the download link and what the app does. `.claude/` and exported chat transcripts are ignored.
+- The full history was scanned for keys and tokens before going public: none. `docs/apt-publishing.md` (local signing-key notes) was never committed.
