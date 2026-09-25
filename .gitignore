@@ -7,3 +7,7 @@ src-tauri/gen/
 
 # Local notes on APT publishing and its keys; not for the repository.
 docs/apt-publishing.md
+
+# Local tool settings and exported chat transcripts; not for the repository.
+.claude/
+*-local-command-caveat*.txt

@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Downloads and install help
+    url: https://prasenjithiwale.github.io/edge-notes-apt/#download
+    about: Install instructions for macOS, Windows, Debian and Ubuntu.
+  - name: What changed in each release
+    url: https://prasenjithiwale.github.io/edge-notes-apt/changelog.html
+    about: The changelog, including known problems.

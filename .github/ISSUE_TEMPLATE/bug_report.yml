@@ -1,0 +1,35 @@
+name: Bug report
+description: Something in Ledge is broken or behaves unexpectedly.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. Security problems go through [private reporting](https://github.com/prasenjithiwale/edge-notes/security/advisories/new) instead.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open the panel
+        2. …
+  - type: textarea
+    id: about
+    attributes:
+      label: Version and system
+      description: Settings › About › Copy, pasted here.
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: extra
+    attributes:
+      label: Anything else
+      description: Screenshots help, but check they show no notes you would rather keep private.

@@ -1,10 +1,29 @@
 # Ledge
 
-A notes widget that lives on the edge of your screen. A small tab sits against
-the screen edge above whatever you are working in; point at it and a panel of
-colour-coded notes slides out, move away and it slides back.
+**Notes on the edge of your screen.** A small tab sits against the screen edge,
+above whatever you are working in. Point at it and a panel of frosted glass
+slides out; move away and it slides back.
 
-Built with Tauri 2. Rust owns the window, the database and the dock state
+**[Download for macOS, Windows, Debian and Ubuntu →](https://prasenjithiwale.github.io/edge-notes-apt/)**
+
+![The Ledge panel open on the right-hand edge of the screen: frosted glass over the desktop, notes lit by their own colours.](site/screenshots/hero.png)
+
+- **Notes** in sixteen colours, written in rich text and stored as plain Markdown:
+  checklists, code blocks with syntax colour, tables, pictures, tags.
+- **Tasks** with due dates, priorities, repeats and four statuses.
+- **Focus**, a pomodoro timer that changes the panel's light as it runs.
+- **Clips**, the last fifty things you copied, kept in memory only.
+- **Private by design:** no account, no sync, no analytics. Notes are encrypted
+  on disk with a key in your system's keychain; the only network request is the
+  update check.
+
+Free and [MIT licensed](LICENSE). Bug reports are welcome
+([issues](https://github.com/prasenjithiwale/edge-notes/issues)); pull requests
+are not taken ([why](CONTRIBUTING.md)).
+
+## How it is built
+
+Tauri 2. Rust owns the window, the encrypted database and the dock state
 machine; the webview gets no window, filesystem, shell or SQL permissions.
 
 ## Running it
