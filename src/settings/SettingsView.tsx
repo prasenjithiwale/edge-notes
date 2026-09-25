@@ -500,13 +500,13 @@ const TAB_SIZES: Choice<Settings["tab.size"]>[] = [
  * Where everything public about the app lives; `open_url` allows http and https
  * only.
  *
- * All three are on the published site or the public repository it is served
- * from, never on the source repository: that one is private, and a link from
- * inside the app that nobody outside can open is worse than no link.
+ * The downloads and the changelog are on the published site; the source and
+ * the issues are the app's own repository, public since 0.10 (MIT licensed).
  */
 const DOWNLOADS_URL = "https://prasenjithiwale.github.io/edge-notes-apt/";
 const CHANGELOG_URL = "https://prasenjithiwale.github.io/edge-notes-apt/changelog.html";
-const ISSUES_URL = "https://github.com/prasenjithiwale/edge-notes-apt/issues";
+const SOURCE_URL = "https://github.com/prasenjithiwale/edge-notes";
+const ISSUES_URL = "https://github.com/prasenjithiwale/edge-notes/issues";
 
 /** How long the copy button says so before going back to "Copy". */
 const COPIED_MS = 1_400;
@@ -1185,6 +1185,19 @@ export function SettingsView({ onClose }: SettingsViewProps) {
               className={styles.action}
               onClick={() => {
                 void openUrl(CHANGELOG_URL);
+              }}
+            >
+              Open
+            </button>
+          </div>
+
+          <div className={styles.row}>
+            <Label text="Source code" description="The whole app, MIT licensed." />
+            <button
+              type="button"
+              className={styles.action}
+              onClick={() => {
+                void openUrl(SOURCE_URL);
               }}
             >
               Open

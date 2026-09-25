@@ -347,7 +347,7 @@ describe("the About section", () => {
   it("opens the public pages through the one command that may", async () => {
     render(<SettingsView onClose={() => undefined} />);
     const opens = await screen.findAllByRole("button", { name: "Open" });
-    expect(opens).toHaveLength(3);
+    expect(opens).toHaveLength(4);
     for (const button of opens) {
       fireEvent.click(button);
     }
@@ -356,13 +356,13 @@ describe("the About section", () => {
       const urls = invoke.mock.calls
         .filter(([command]) => command === "open_url")
         .map(([, args]) => (args as { url: string }).url);
-      expect(urls).toHaveLength(3);
+      expect(urls).toHaveLength(4);
       expect(urls.every((url) => url.startsWith("https://"))).toBe(true);
       expect(urls.some((url) => url.endsWith("changelog.html"))).toBe(true);
-      expect(urls.some((url) => url.endsWith("/issues"))).toBe(true);
-      // Never the private one. "edge-notes-apt" is a different repository, and
-      // the boundary after the name is what tells them apart.
-      expect(urls.some((url) => /edge-notes(\/|$)/.test(url))).toBe(false);
+      // The source repository is public from 0.10: the code and the bug reports
+      // are both there, not in the site's publishing repository.
+      expect(urls).toContain("https://github.com/prasenjithiwale/edge-notes");
+      expect(urls).toContain("https://github.com/prasenjithiwale/edge-notes/issues");
     });
   });
 

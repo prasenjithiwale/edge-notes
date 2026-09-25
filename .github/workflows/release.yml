@@ -30,6 +30,8 @@ on:
 
 permissions:
   contents: write
+  # SignPath fetches the unsigned installers from this run's artifacts.
+  actions: read
 
 concurrency:
   group: release-${{ github.event.inputs.tag || github.ref_name }}
@@ -184,16 +186,59 @@ jobs:
       - name: Build setup.exe and .msi
         run: npm run tauri build -- --bundles nsis,msi --config "$UPDATER_CONFIG"
 
-      - name: Attach to the release
+      - name: Name the installers
         run: |
           version="${TAG#v}"
           bundle=src-tauri/target/release/bundle
-          mkdir -p out
-          cp "$bundle"/nsis/*-setup.exe "out/Ledge_${version}_windows_x64-setup.exe"
-          cp "$bundle"/msi/*.msi "out/Ledge_${version}_windows_x64.msi"
+          mkdir -p out unsigned
+          cp "$bundle"/nsis/*-setup.exe "unsigned/Ledge_${version}_windows_x64-setup.exe"
+          cp "$bundle"/msi/*.msi "unsigned/Ledge_${version}_windows_x64.msi"
+          cp unsigned/* out/
           cp "$bundle"/nsis/*-setup.exe.sig "out/Ledge_${version}_windows_x64-setup.exe.sig"
           cp "$bundle"/msi/*.msi.sig "out/Ledge_${version}_windows_x64.msi.sig"
-          gh release upload "$TAG" out/* --clobber
+
+      # Authenticode signing through SignPath Foundation's free open-source
+      # programme, so Windows stops warning about an unknown publisher. Off until
+      # the repository variables SIGNPATH_ORGANIZATION_ID, SIGNPATH_PROJECT_SLUG
+      # and SIGNPATH_SIGNING_POLICY_SLUG and the secret SIGNPATH_API_TOKEN exist;
+      # until then the installers ship unsigned, exactly as before. Every request
+      # waits for a person to approve it in SignPath (their rule), so approve it
+      # while this step is waiting.
+      - name: Upload the unsigned installers for signing
+        id: unsigned
+        if: vars.SIGNPATH_ORGANIZATION_ID != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-unsigned
+          path: unsigned/
+          if-no-files-found: error
+
+      - name: Sign with SignPath
+        if: vars.SIGNPATH_ORGANIZATION_ID != ''
+        uses: signpath/github-action-submit-signing-request@v3
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+          signing-policy-slug: ${{ vars.SIGNPATH_SIGNING_POLICY_SLUG }}
+          github-artifact-id: ${{ steps.unsigned.outputs.artifact-id }}
+          wait-for-completion: true
+          output-artifact-directory: signed
+
+      # The updater checks a signature of the exact bytes it downloads, so the
+      # signed installers need signatures of their own: the ones Tauri wrote are
+      # for the unsigned files, which are no longer the ones published.
+      - name: Use the signed installers
+        if: vars.SIGNPATH_ORGANIZATION_ID != ''
+        run: |
+          for file in signed/*.exe signed/*.msi; do
+            name=$(basename "$file")
+            cp "$file" "out/$name"
+            npx tauri signer sign "out/$name"
+          done
+
+      - name: Attach to the release
+        run: gh release upload "$TAG" out/* --clobber
   publish:
     name: Pages site
     needs: [prepare, linux, windows]

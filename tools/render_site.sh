@@ -20,11 +20,11 @@ shopt -s nullglob
 
 repo=$1
 site=https://prasenjithiwale.github.io/edge-notes-apt
-# Every link on the page has to be one a visitor can actually open. The source
-# repository is private, so the public one this site is served from is where bug
-# reports go, and the changelog is published here rather than linked into a
-# repository nobody outside can read.
-issues=https://github.com/prasenjithiwale/edge-notes-apt/issues
+# The source repository is public (MIT) from 0.10, so bug reports go to it and
+# the page links to the code the downloads are built from — which is also what
+# SignPath Foundation checks before it signs anything.
+source_repo=https://github.com/prasenjithiwale/edge-notes
+issues=$source_repo/issues
 source_dir=$(cd "$(dirname "$0")/.." && pwd)
 
 # Every published file is named <product>_<version>_<platform>..., so one rule
@@ -906,8 +906,10 @@ $key_section
 <section class="band">
   <div class="wrap narrow">
     <h2>Open source, closed to contributions</h2>
-    <p>Ledge is free and open source, and it is not open to contributions: no
-    pull requests, and no feature requests taken as a queue. This is one person's
+    <p>Ledge is free and open source under the <a href="$source_repo/blob/master/LICENSE">MIT
+    licence</a>, and <a href="$source_repo">the code is on GitHub</a>. It is not
+    open to contributions: no pull requests, and no feature requests taken as a
+    queue. This is one person's
     app, built to one set of opinions about what it should be, and keeping it
     that way is most of why it stays small and why it does what it does.</p>
     <p>Bug reports are the exception and they are welcome — if something is
@@ -936,6 +938,43 @@ $key_section
   </div>
 </section>
 
+<section class="band" id="signing">
+  <div class="wrap narrow">
+    <p class="kicker script">Signed</p>
+    <h2>Code signing policy</h2>
+    <p>Free code signing provided by <a href="https://signpath.io">SignPath.io</a>,
+    certificate by <a href="https://signpath.org">SignPath Foundation</a>. Ledge
+    has applied to the programme; until it is approved the Windows installers are
+    unsigned, and Windows says so the first time.</p>
+    <p>Only what the <a href="$source_repo/blob/master/.github/workflows/release.yml">release
+    workflow</a> builds from a tagged commit in <a href="$source_repo">the public
+    repository</a> is signed, and every signing request is approved by hand. The
+    macOS and Linux packages are signed separately: the Debian repository with the
+    key shown under Download, and every update with the app's own updater key.</p>
+    <div class="note">
+      <p><b>Committers and reviewers:</b> <a href="https://github.com/prasenjithiwale">Prasenjit Hiwale</a><br>
+      <b>Approvers:</b> <a href="https://github.com/prasenjithiwale">Prasenjit Hiwale</a></p>
+    </div>
+  </div>
+</section>
+
+<section class="band soft" id="privacy">
+  <div class="wrap narrow">
+    <p class="kicker script">Private</p>
+    <h2>Privacy</h2>
+    <p>Your notes, tasks, focus sessions and clipboard history never leave your
+    computer. There is no account, no analytics and no crash reporting.</p>
+    <p>Ledge makes one kind of network request on its own: a minute after it
+    starts and once a day after that, it downloads a small file,
+    <code>updates/latest.json</code>, from this site to see whether there is a new
+    version. Nothing about you or your notes is sent with it; like any web
+    request, GitHub, which hosts this site, sees your IP address. A new version
+    is only downloaded when you choose to install it. Copies installed with
+    <code>apt</code> do not check at all, since apt updates them.</p>
+    <p>A link in a note opens in your browser, and only when you click it.</p>
+  </div>
+</section>
+
 </main>
 
 <footer>
@@ -944,6 +983,9 @@ $key_section
     <span class="spacer"></span>
     <a href="#download">Download</a>
     <a href="changelog.html">Changelog</a>
+    <a href="$source_repo">Source</a>
+    <a href="#signing">Code signing</a>
+    <a href="#privacy">Privacy</a>
     <a href="$issues">Report a problem</a>
   </div>
 </footer>
@@ -954,10 +996,9 @@ HTML
 
 echo "wrote $repo/index.html"
 
-# The changelog is published here, as a page and as the file itself, because the
-# repository it is written in is private: "see the changelog" has to be a link a
-# reader can open. The source of truth stays in the source repository and is
-# copied on every release, so the two cannot drift.
+# The changelog is published here, as a page and as the file itself, so it sits
+# beside the downloads it describes. The source of truth stays in the source
+# repository and is copied on every release, so the two cannot drift.
 changelog=$source_dir/CHANGELOG.md
 if [ -f "$changelog" ]; then
   cp "$changelog" "$repo/CHANGELOG.md"
@@ -1155,16 +1196,15 @@ your screen — for macOS, Windows, Debian and Ubuntu.
 **The downloads, with install instructions for each platform, are on the site
 this repository serves: <$site/>**
 
-**Found a bug?** [Open an issue here]($issues) — this is where they are
-tracked. Please say which version (Settings › About in the app) and which
+**Found a bug?** [Open an issue in the source repository]($issues). Please say which version (Settings › About in the app) and which
 system. Every release and what changed in it is in
 [CHANGELOG.md](CHANGELOG.md), also published as a page at
 <$site/changelog.html>.
 
 This repository is the publishing target, not the source: it holds the packages,
 a signed APT index, the public key, the changelog and a generated landing page.
-It is written by the release workflow in a separate, private source repository,
-and nothing in it is edited by hand — an edit made here is overwritten by the
+It is written by the release workflow in the source repository,
+<$source_repo> (MIT licensed), and nothing in it is edited by hand — an edit made here is overwritten by the
 next release. Ledge is not open to contributions; see the site for what that
 means.
 

@@ -2,7 +2,7 @@
 //!
 //! Everything here is Rust's: the webview has no updater permission and asks
 //! through `update_check` and `update_install`. The feed is a static
-//! `latest.json` on the public Pages site (the source repository is private),
+//! `latest.json` on the Pages site (the same place the downloads are),
 //! and every file it lists is checked against the public key in
 //! `tauri.conf.json` before it is installed.
 //!

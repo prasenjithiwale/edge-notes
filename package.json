@@ -2,6 +2,8 @@
   "name": "ledge",
   "private": true,
   "version": "0.10.1",
+  "license": "MIT",
+  "repository": "github:prasenjithiwale/edge-notes",
   "type": "module",
   "engines": {
     "node": "^22.12.0 || ^24.0.0"

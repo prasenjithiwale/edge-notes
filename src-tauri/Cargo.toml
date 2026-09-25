@@ -2,6 +2,8 @@
 name = "ledge"
 version = "0.10.1"
 description = "Edge-docked notes widget"
+license = "MIT"
+repository = "https://github.com/prasenjithiwale/edge-notes"
 edition = "2024"
 rust-version = "1.85"
 

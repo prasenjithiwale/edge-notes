@@ -21,8 +21,9 @@ npm run tauri dev
 
 Downloads live at
 [prasenjithiwale.github.io/edge-notes-apt](https://prasenjithiwale.github.io/edge-notes-apt/),
-a public GitHub Pages site, because this repository is private and its Releases
-page is not a public download.
+which also serves the APT repository, the Homebrew cask's download and the
+update feed. The same files are attached to this repository's
+[Releases](https://github.com/prasenjithiwale/edge-notes/releases).
 
 ### macOS, with Homebrew
 
@@ -359,3 +360,19 @@ measured, and the open gaps. Read it before changing anything.
 npm run lint && npx tsc --noEmit && npm test
 cd src-tauri && cargo fmt && cargo clippy --all-targets -- -D warnings && cargo test
 ```
+
+## Licence and contributions
+
+Ledge is [MIT licensed](LICENSE). The calligraphy face, Pinyon Script, is under the
+SIL Open Font License (`src/assets/fonts/OFL.txt`).
+
+It is open source and not open to contributions: pull requests and feature
+requests are not taken. [Bug reports](https://github.com/prasenjithiwale/edge-notes/issues)
+are welcome; say which version and system (Settings › About › Copy).
+
+## Code signing and privacy
+
+Windows releases are to be signed through the
+[SignPath Foundation](https://signpath.org) programme for open-source projects;
+the policy, who approves each release, and what the app sends over the network
+are on the [download page](https://prasenjithiwale.github.io/edge-notes-apt/#signing).
