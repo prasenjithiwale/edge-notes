@@ -348,7 +348,7 @@ src-tauri/     Rust: dock/ (geometry, state machine, poller), db/, platform/,
                commands.rs, tray.rs, export.rs
 docs/          build-brief.md (the specification), progress.md (decisions,
                findings and what is still unverified)
-tools/         the icon generator
+tools/         icon artwork and scripts, release and site publishing
 ```
 
 `docs/progress.md` is the honest record: what was built, what broke, what was

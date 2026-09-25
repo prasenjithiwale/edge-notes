@@ -1,28 +1,23 @@
 #!/usr/bin/env python3
-"""Generate the app and tray icons.
+"""Generate the menu-bar (tray) icon.
 
-There is no image tooling on the build machine and checked-in binaries with no
-source are a trap, so the icons are drawn here and regenerated with:
+The app icon is not drawn here any more: it is artwork (tools/icon-source.png),
+shaped by tools/icon_master.swift and cut into every size by `tauri icon` — see
+the icon section of docs/progress.md. The tray icon stays drawn by hand, because
+macOS shows it as a template (only its alpha counts) at 22 px, where generated
+artwork turns to mush. Regenerate with:
 
     python3 tools/make_icons.py
 
-The mark is what the app actually looks like: a note panel with its tab on the
-edge, and the three recent-colour dots from brief 6.5. The tray icon is a
-monochrome template — macOS uses only its alpha, so it must be an outline, not a
-silhouette, or it shows up as a black blob.
+It mirrors the app icon: a glass pane docked to the right, its tab on the left
+edge, and at 2x the three recent-colour dots. An outline, not a silhouette, or a
+template image shows up as a solid blob.
 """
 
 import os
 import struct
 import zlib
 
-# Brief 7.2 and 7.3.
-ACCENT = (47, 111, 235, 255)
-PANEL = (253, 243, 196, 255)
-TAB = (255, 255, 255, 255)
-# The palette's *text* colours, not its backgrounds: a pale dot on a white tab
-# disappears at 32 px, which is where this icon spends most of its life.
-DOTS = [(107, 36, 64, 255), (23, 63, 102, 255), (27, 82, 56, 255)]
 BLACK = (0, 0, 0, 255)
 
 SS = 4  # supersampling factor, for anti-aliasing by downsampling
@@ -121,123 +116,29 @@ def write_png(path, width, height, raw):
         handle.write(png)
 
 
-def app_icon(size):
-    """A note panel with its tab, on the accent ground."""
-    c = Canvas(size)
-    u = size / 100  # percentage units, so the drawing is resolution-independent
-
-    c.rrect(0, 0, 100 * u, 100 * u, 22 * u, ACCENT)
-    c.rrect(14 * u, 22 * u, 54 * u, 56 * u, 8 * u, PANEL)
-    c.rrect(68 * u, 38 * u, 12 * u, 24 * u, 4 * u, TAB)
-
-    # The three recent-note dots, only where they will not turn to mush.
-    if size >= 64:
-        for index, colour in enumerate(DOTS):
-            c.circle(74 * u, (45 + index * 5) * u, 2.0 * u, colour)
-    c.to_png_size = size
-    return c
-
-
 def tray_icon(size):
-    """Monochrome template: an outlined panel with a solid tab on its edge."""
+    """Monochrome template: an outlined pane, a solid tab on its left edge, and
+    at 2x the three dots inside it."""
     c = Canvas(size)
     u = size / 100
     stroke = 9 * u
 
-    c.rrect(6 * u, 18 * u, 62 * u, 64 * u, 14 * u, BLACK)
-    c.clear_rrect(6 * u + stroke, 18 * u + stroke, 62 * u - stroke * 2, 64 * u - stroke * 2, 8 * u)
-    c.rrect(72 * u, 36 * u, 16 * u, 28 * u, 6 * u, BLACK)
+    c.rrect(30 * u, 18 * u, 64 * u, 64 * u, 14 * u, BLACK)
+    c.clear_rrect(30 * u + stroke, 18 * u + stroke, 64 * u - stroke * 2, 64 * u - stroke * 2, 8 * u)
+    c.rrect(17 * u, 34 * u, 16 * u, 32 * u, 7 * u, BLACK)
+    if size >= 40:
+        for index in range(3):
+            c.circle(72 * u, (38 + index * 12) * u, 4.5 * u, BLACK)
     return c
-
-
-def write_ico(path, pngs):
-    """A Windows .ico holding PNG entries, which Vista and later understand.
-
-    Written by hand for the same reason as the PNGs: no image tooling here.
-    """
-    count = len(pngs)
-    header = struct.pack("<HHH", 0, 1, count)
-    offset = 6 + 16 * count
-    entries, blobs = b"", b""
-    for size, blob in pngs:
-        entries += struct.pack(
-            "<BBBBHHII",
-            0 if size >= 256 else size,
-            0 if size >= 256 else size,
-            0,
-            0,
-            1,
-            32,
-            len(blob),
-            offset,
-        )
-        blobs += blob
-        offset += len(blob)
-    with open(path, "wb") as handle:
-        handle.write(header + entries + blobs)
 
 
 def main():
     root = os.path.join(os.path.dirname(__file__), "..", "src-tauri", "icons")
     root = os.path.abspath(root)
     os.makedirs(root, exist_ok=True)
-
-    sizes = {
-        "32x32.png": 32,
-        "64x64.png": 64,
-        "128x128.png": 128,
-        "128x128@2x.png": 256,
-        "Square30x30Logo.png": 30,
-        "Square44x44Logo.png": 44,
-        "Square71x71Logo.png": 71,
-        "Square89x89Logo.png": 89,
-        "Square107x107Logo.png": 107,
-        "Square142x142Logo.png": 142,
-        "Square150x150Logo.png": 150,
-        "Square284x284Logo.png": 284,
-        "Square310x310Logo.png": 310,
-        "StoreLogo.png": 50,
-    }
-    for name, size in sizes.items():
-        app_icon(size).to_png(os.path.join(root, name), size)
-        print("icon", name)
-
-    # The .icns set macOS wants; iconutil turns the folder into the file.
-    iconset = os.path.join(root, "icon.iconset")
-    os.makedirs(iconset, exist_ok=True)
-    for name, size in {
-        "icon_16x16.png": 16,
-        "icon_16x16@2x.png": 32,
-        "icon_32x32.png": 32,
-        "icon_32x32@2x.png": 64,
-        "icon_128x128.png": 128,
-        "icon_128x128@2x.png": 256,
-        "icon_256x256.png": 256,
-        "icon_256x256@2x.png": 512,
-        "icon_512x512.png": 512,
-        "icon_512x512@2x.png": 1024,
-    }.items():
-        app_icon(size).to_png(os.path.join(iconset, name), size)
-        print("iconset", name)
-
     for name, size in {"tray.png": 22, "tray@2x.png": 44}.items():
         tray_icon(size).to_png(os.path.join(root, name), size)
         print("tray", name)
-
-    # macOS turns the iconset folder into the .icns itself.
-    if os.uname().sysname == "Darwin":
-        os.system(f'iconutil -c icns "{iconset}" -o "{os.path.join(root, "icon.icns")}"')
-        print("icns icon.icns")
-
-    pngs = []
-    for size in (16, 32, 48, 64, 128, 256):
-        temp = os.path.join(root, f".ico-{size}.png")
-        app_icon(size).to_png(temp, size)
-        with open(temp, "rb") as handle:
-            pngs.append((size, handle.read()))
-        os.remove(temp)
-    write_ico(os.path.join(root, "icon.ico"), pngs)
-    print("ico icon.ico")
 
 
 if __name__ == "__main__":
