@@ -338,6 +338,15 @@ pub fn init(app: &AppHandle) -> tauri::Result<()> {
     Ok(())
 }
 
+/// The tray's ordinary icon, for putting back after the focus countdown has
+/// borrowed it (Windows and Linux).
+#[cfg(not(target_os = "macos"))]
+pub fn default_icon() -> Option<Image<'static>> {
+    Image::from_bytes(include_bytes!("../icons/tray@2x.png"))
+        .map_err(|error| log::error!("tray: could not load the tray icon: {error}"))
+        .ok()
+}
+
 /// Which global shortcut a binding is, so one enum decides its setting, its
 /// default and what pressing it does.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
