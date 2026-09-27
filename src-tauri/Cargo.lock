@@ -2265,7 +2265,7 @@ dependencies = [
 
 [[package]]
 name = "ledge"
-version = "0.10.2"
+version = "0.10.3"
 dependencies = [
  "gtk",
  "keyring",

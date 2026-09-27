@@ -11,6 +11,18 @@ To release, see "Releasing" in the README.
 
 ## [Unreleased]
 
+## [0.10.3] - 2026-09-28
+
+### Added
+
+- **Native Wayland docking (experimental, Linux).** On KDE Plasma, Sway,
+  Hyprland and COSMIC, Settings › Dock › Native Wayland docking lets your
+  desktop anchor the tab to the screen edge itself, above full-screen apps,
+  instead of running Ledge under XWayland. It takes effect after a restart and
+  needs `libgtk-layer-shell0`, which the `.deb` now recommends. Dragging the tab
+  along the edge is not available in this mode yet. GNOME has no layer shell,
+  so there nothing changes.
+
 ## [0.10.2] - 2026-09-27
 
 ### Added
