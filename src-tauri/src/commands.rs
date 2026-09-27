@@ -143,6 +143,29 @@ pub fn dock_pointer_left(app: AppHandle, dock: State<'_, Arc<Dock>>) -> AppResul
     Ok(())
 }
 
+/// The pointer came onto the webview. Only native Wayland listens (idea 9),
+/// where it is how hover is seen at all; everywhere else it is ignored.
+#[tauri::command]
+pub fn dock_pointer_entered(app: AppHandle, dock: State<'_, Arc<Dock>>) -> AppResult<()> {
+    dock.input(&app, Input::PointerEnteredWebview);
+    Ok(())
+}
+
+/// Native Wayland docking (idea 9): can it be offered, is it asked for, is it on.
+#[tauri::command]
+#[must_use]
+pub fn layer_shell_status() -> platform::LayerShellStatus {
+    platform::layer_shell_status()
+}
+
+/// Ask for native Wayland docking from the next launch, or stop. Returns the
+/// status as it now stands, so Settings shows what was actually written.
+#[tauri::command]
+pub fn layer_shell_set(enabled: bool) -> platform::LayerShellStatus {
+    platform::set_layer_shell_requested(enabled);
+    platform::layer_shell_status()
+}
+
 // -- Notes (brief 9.3) ------------------------------------------------------
 
 /// Active notes, most recently edited first.

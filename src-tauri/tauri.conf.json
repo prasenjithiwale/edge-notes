@@ -58,7 +58,8 @@
       "deb": {
         "provides": ["edge-notes"],
         "conflicts": ["edge-notes"],
-        "replaces": ["edge-notes"]
+        "replaces": ["edge-notes"],
+        "recommends": ["libgtk-layer-shell0"]
       }
     }
   },

@@ -93,6 +93,9 @@ pub fn run() {
             commands::dock_animation_done,
             commands::dock_toggle,
             commands::dock_pointer_left,
+            commands::dock_pointer_entered,
+            commands::layer_shell_status,
+            commands::layer_shell_set,
             commands::dock_begin_tab_drag,
             commands::dock_end_tab_drag,
             commands::dock_set_large,
@@ -229,7 +232,11 @@ pub fn run() {
             platform::set_hidden_from_capture(&window, stored.privacy_hide_from_capture);
 
             let geometry = poller::geometry_for(&handle, &placement);
-            app.manage(Arc::new(Dock::new(geometry, timings)));
+            let dock = Arc::new(Dock::new(geometry, timings));
+            if platform::layer_shell_active() {
+                dock.use_surface_pointer();
+            }
+            app.manage(dock);
 
             // Brief 6.3: another app taking focus starts the close delay.
             let event_handle = handle.clone();

@@ -128,3 +128,50 @@ pub fn set_backdrop(window: &WebviewWindow, backdrop: Option<Backdrop>) {
     #[cfg(not(target_os = "macos"))]
     let _ = (window, backdrop);
 }
+
+/// This run docks as a native Wayland layer surface (idea 9). Linux only.
+#[must_use]
+pub fn layer_shell_active() -> bool {
+    #[cfg(target_os = "linux")]
+    return linux::layer_shell_active();
+    #[cfg(not(target_os = "linux"))]
+    false
+}
+
+/// Native Wayland docking, as Settings shows it: whether it can be offered at
+/// all (a Wayland session on a desktop other than GNOME), whether it is asked
+/// for (from the next launch), and whether this run is using it.
+#[derive(Debug, Clone, Copy, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LayerShellStatus {
+    pub possible: bool,
+    pub requested: bool,
+    pub active: bool,
+}
+
+#[must_use]
+pub fn layer_shell_status() -> LayerShellStatus {
+    #[cfg(target_os = "linux")]
+    return LayerShellStatus {
+        possible: linux::layer_shell_possible(),
+        requested: linux::layer_shell_requested(),
+        active: linux::layer_shell_active(),
+    };
+    #[cfg(not(target_os = "linux"))]
+    LayerShellStatus {
+        possible: false,
+        requested: false,
+        active: false,
+    }
+}
+
+/// Ask for native Wayland docking from the next launch, or stop asking.
+pub fn set_layer_shell_requested(enabled: bool) -> bool {
+    #[cfg(target_os = "linux")]
+    return linux::set_layer_shell_requested(enabled);
+    #[cfg(not(target_os = "linux"))]
+    {
+        let _ = enabled;
+        false
+    }
+}

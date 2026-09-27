@@ -2267,7 +2267,9 @@ dependencies = [
 name = "ledge"
 version = "0.10.2"
 dependencies = [
+ "gtk",
  "keyring",
+ "libloading",
  "log",
  "objc2",
  "objc2-app-kit",

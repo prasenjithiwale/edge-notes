@@ -6,6 +6,7 @@ import { isAnimatingPhase, isClosedPhase, transitionFor } from "../lib/dock";
 import {
   appReady,
   dockAnimationDone,
+  dockPointerEntered,
   dockPointerLeft,
   onDockState,
 } from "../lib/ipc";
@@ -155,6 +156,12 @@ export function DockShell() {
     void dockPointerLeft();
   }, []);
 
+  // Native Wayland (idea 9): no app can read the global cursor, so the window's
+  // own enter is how a hover on the tab is seen. Ignored everywhere else.
+  const handlePointerEnter = useCallback(() => {
+    void dockPointerEntered();
+  }, []);
+
   const className = cx(
     styles.viewport,
     isClosedPhase(phase) && styles.closed,
@@ -177,6 +184,7 @@ export function DockShell() {
       style={style}
       data-side={side}
       onPointerLeave={handlePointerLeave}
+      onPointerEnter={handlePointerEnter}
     >
       <div
         className={styles.group}

@@ -145,6 +145,28 @@ impl Dock {
         }
     }
 
+    /// The docked side, the monitor's work area and its scale, for placing a
+    /// layer surface by margins rather than by position.
+    #[must_use]
+    pub fn frame(&self) -> (Side, Rect, f64) {
+        let read = |controller: &DockController| {
+            let geometry = controller.geometry();
+            (geometry.side(), geometry.work_area(), geometry.scale())
+        };
+        match self.controller.lock() {
+            Ok(controller) => read(&controller),
+            Err(poisoned) => read(&poisoned.into_inner()),
+        }
+    }
+
+    /// Hover from the window's own pointer events (native Wayland, idea 9).
+    pub fn use_surface_pointer(&self) {
+        match self.controller.lock() {
+            Ok(mut controller) => controller.use_surface_pointer(),
+            Err(poisoned) => poisoned.into_inner().use_surface_pointer(),
+        }
+    }
+
     #[must_use]
     pub fn side(&self) -> Side {
         match self.controller.lock() {
@@ -318,8 +340,20 @@ fn focus(window: &WebviewWindow) {
 ///
 /// Linux takes its own path (`settle_rect`): there a move and a resize are
 /// separate asynchronous requests, and the window manager may adjust either.
+/// A native Wayland layer surface (idea 9) has no position to settle: it is
+/// anchored to the edge, and placing it is a size and a margin.
 #[cfg(target_os = "linux")]
 fn apply_rect(app: &AppHandle, rect: Rect) {
+    if crate::platform::layer_shell_active() {
+        let Some(dock) = app.try_state::<std::sync::Arc<Dock>>() else {
+            return;
+        };
+        let (side, work_area, scale) = dock.frame();
+        on_main(app, move |window| {
+            crate::platform::linux::place_layer(window, rect, side, work_area, scale);
+        });
+        return;
+    }
     spawn_settle(app, rect);
 }
 
@@ -557,8 +591,10 @@ pub fn spawn(app: AppHandle) {
 
                     // Linux: a window manager can move the window after it was
                     // placed. While collapsed, put the tab back if it drifted.
+                    // A layer surface is held at the edge by the compositor.
                     #[cfg(target_os = "linux")]
                     if dock.phase() == Phase::Collapsed
+                        && !crate::platform::layer_shell_active()
                         && let Some(actual) = window_rect(&app)
                     {
                         let expected = dock.expected_window_rect();
@@ -576,7 +612,11 @@ pub fn spawn(app: AppHandle) {
                     }
                 }
 
-                if let Ok(position) = app.cursor_position() {
+                // On native Wayland no app can read the global cursor; hover
+                // comes from the window's own enter and leave instead.
+                if !crate::platform::layer_shell_active()
+                    && let Ok(position) = app.cursor_position()
+                {
                     dock.input(
                         &app,
                         Input::Cursor {

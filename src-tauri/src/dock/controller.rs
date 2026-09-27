@@ -73,8 +73,12 @@ pub enum Input {
     AnimationDone(Phase),
     Toggle,
     WindowBlurred,
-    /// Linux secondary signal (brief 8.10).
+    /// Linux secondary signal (brief 8.10). In surface-pointer mode, the
+    /// primary one: the pointer left the window.
     PointerLeftWebview,
+    /// The pointer came onto the window. Only surface-pointer mode (native
+    /// Wayland) listens: everywhere else the polled cursor already says so.
+    PointerEnteredWebview,
     MonitorChanged,
     /// The tab is being dragged along the edge (brief M4).
     BeginTabDrag,
@@ -204,6 +208,12 @@ pub struct DockController {
     leave_since: Option<Instant>,
     ack_deadline: Option<Instant>,
     last_cursor: Option<(f64, f64)>,
+    /// Native Wayland (idea 9): no app may read the global cursor, so whether it
+    /// is inside comes from the window's own pointer enter and leave instead of
+    /// from a polled position. Set once at startup, never switched back.
+    surface_pointer: bool,
+    /// In surface-pointer mode, whether the pointer is on the window.
+    pointer_inside: bool,
 }
 
 impl DockController {
@@ -225,7 +235,19 @@ impl DockController {
             leave_since: None,
             ack_deadline: None,
             last_cursor: None,
+            surface_pointer: false,
+            pointer_inside: false,
         }
+    }
+
+    /// Take "is the pointer inside" from the window's enter and leave events
+    /// rather than from a polled global cursor (native Wayland, idea 9). The
+    /// window is always exactly the tab or the panel with its tab, so being on
+    /// the window is being on the dock. Dragging the tab along the edge needs a
+    /// global cursor and is not available in this mode; a press is still a
+    /// click.
+    pub fn use_surface_pointer(&mut self) {
+        self.surface_pointer = true;
     }
 
     #[must_use]
@@ -299,6 +321,10 @@ impl DockController {
 
     pub fn handle(&mut self, input: Input, now: Instant) -> Vec<Action> {
         match input {
+            // Global samples mean nothing where the window cannot be told
+            // apart from the desktop's coordinates; the poller does not send
+            // them in that mode, and any that arrive are ignored.
+            Input::Cursor { .. } if self.surface_pointer => Vec::new(),
             Input::Cursor { x, y } => self.on_cursor(x, y, now),
             Input::SetKeepOpen(value) => self.on_keep_open(value, now),
             Input::SetInteractionLock(value) => self.on_interaction_lock(value, now),
@@ -306,7 +332,10 @@ impl DockController {
             Input::AnimationDone(phase) => self.on_animation_done(phase),
             Input::Toggle => self.on_toggle(now),
             Input::WindowBlurred => self.on_blur(now),
+            Input::PointerLeftWebview if self.surface_pointer => self.on_inside(false, now),
             Input::PointerLeftWebview => self.on_pointer_left(now),
+            Input::PointerEnteredWebview if self.surface_pointer => self.on_inside(true, now),
+            Input::PointerEnteredWebview => Vec::new(),
             Input::MonitorChanged => self.on_monitor_changed(),
             Input::SetLarge(large) => self.on_set_large(large, now),
             Input::OpenQuick => self.on_open_quick(now),
@@ -420,6 +449,13 @@ impl DockController {
         }
 
         let inside = self.cursor_inside(x, y);
+        self.on_inside(inside, now)
+    }
+
+    /// The pointer is on the dock, or it is not: from a polled cursor, or in
+    /// surface-pointer mode from the window's own enter and leave.
+    fn on_inside(&mut self, inside: bool, now: Instant) -> Vec<Action> {
+        self.pointer_inside = inside;
 
         if !inside {
             // The cursor has left, so a dismissal has run its course: hover may
@@ -493,6 +529,9 @@ impl DockController {
     }
 
     fn cursor_is_inside(&self) -> bool {
+        if self.surface_pointer {
+            return self.pointer_inside;
+        }
         self.last_cursor
             .is_some_and(|(x, y)| self.cursor_inside(x, y))
     }
@@ -708,6 +747,12 @@ impl DockController {
         self.leave_since = None;
         self.hover_since = None;
         self.ack_deadline = None;
+        if self.surface_pointer {
+            // The window shrinks back to the tab, out from under a pointer that
+            // was on the panel; its leave may never come. Hovering the tab is a
+            // fresh enter.
+            self.pointer_inside = false;
+        }
         vec![
             Action::SetWindowRect(self.geometry.collapsed_window_rect()),
             Action::EmitState(self.state()),
@@ -1521,6 +1566,70 @@ mod tests {
         c.handle(Input::PointerLeftWebview, ms(t0, 200));
         c.tick(ms(t0, 600));
         assert_eq!(c.phase(), Phase::Closing);
+    }
+
+    fn surface_controller() -> DockController {
+        let mut c = controller();
+        c.use_surface_pointer();
+        c
+    }
+
+    /// Native Wayland (idea 9): the window's own enter and leave drive hover,
+    /// with the same delays as the polled cursor.
+    #[test]
+    fn surface_pointer_opens_on_enter_and_closes_on_leave() {
+        let mut c = surface_controller();
+        let t0 = Instant::now();
+
+        c.handle(Input::PointerEnteredWebview, t0);
+        assert!(c.tick(ms(t0, 119)).is_empty());
+        assert!(!c.tick(ms(t0, 120)).is_empty());
+        assert_eq!(c.phase(), Phase::Opening);
+        c.handle(Input::AnimationDone(Phase::Opening), ms(t0, 130));
+
+        c.handle(Input::PointerLeftWebview, ms(t0, 200));
+        assert!(c.tick(ms(t0, 200 + 399)).is_empty());
+        c.tick(ms(t0, 200 + 400));
+        assert_eq!(c.phase(), Phase::Closing);
+
+        // Coming back during the close reverses it, as brief 6.1 asks.
+        c.handle(Input::PointerEnteredWebview, ms(t0, 700));
+        assert_eq!(c.phase(), Phase::Opening);
+    }
+
+    #[test]
+    fn surface_pointer_ignores_the_polled_cursor() {
+        let mut c = surface_controller();
+        let t0 = Instant::now();
+        let (x, y) = tab_point(&c);
+
+        // A stale or meaningless global position must not open the panel...
+        c.handle(Input::Cursor { x, y }, t0);
+        assert!(c.tick(ms(t0, 1_000)).is_empty());
+        assert_eq!(c.phase(), Phase::Collapsed);
+
+        // ...nor close one the pointer is on.
+        c.handle(Input::PointerEnteredWebview, ms(t0, 1_000));
+        c.tick(ms(t0, 1_120));
+        c.handle(Input::AnimationDone(Phase::Opening), ms(t0, 1_130));
+        c.handle(
+            Input::Cursor {
+                x: AWAY.0,
+                y: AWAY.1,
+            },
+            ms(t0, 1_200),
+        );
+        assert!(c.tick(ms(t0, 3_000)).is_empty());
+        assert_eq!(c.phase(), Phase::Open);
+    }
+
+    #[test]
+    fn pointer_entered_means_nothing_to_the_polled_cursor() {
+        let mut c = controller();
+        let t0 = Instant::now();
+        c.handle(Input::PointerEnteredWebview, t0);
+        assert!(c.tick(ms(t0, 1_000)).is_empty());
+        assert_eq!(c.phase(), Phase::Collapsed);
     }
 
     #[test]

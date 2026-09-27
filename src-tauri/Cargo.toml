@@ -113,6 +113,12 @@ keyring = { version = "3.6.3", features = ["windows-native"] }
 # `vendored` builds libdbus in, so an AppImage does not depend on the host's.
 [target.'cfg(target_os = "linux")'.dependencies]
 keyring = { version = "3.6.3", features = ["sync-secret-service", "crypto-rust", "vendored"] }
+# Native Wayland docking (idea 9), both already in the build through Tauri:
+# `gtk` to reach the window's GTK object, `libloading` to load the system's
+# gtk-layer-shell only if it is installed — linking it would stop the app
+# starting on a desktop without it.
+gtk = "0.18"
+libloading = "0.7"
 
 [profile.release]
 codegen-units = 1

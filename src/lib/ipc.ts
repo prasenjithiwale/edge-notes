@@ -417,6 +417,14 @@ export function dockPointerLeft(): Promise<void> {
   return call("dock_pointer_left");
 }
 
+/**
+ * The pointer came onto the window. On native Wayland (idea 9) this and
+ * `dockPointerLeft` are how hover is seen at all; elsewhere Rust ignores it.
+ */
+export function dockPointerEntered(): Promise<void> {
+  return call("dock_pointer_entered");
+}
+
 export function onDockState(
   handler: (state: DockState) => void,
 ): Promise<UnlistenFn> {
@@ -754,4 +762,23 @@ export async function setBackdrop(backdrop: Backdrop | null): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+/**
+ * Native Wayland docking (idea 9, Linux): whether it can be offered on this
+ * desktop, whether it is asked for, and whether this run is using it.
+ */
+export interface LayerShellStatus {
+  possible: boolean;
+  requested: boolean;
+  active: boolean;
+}
+
+export function layerShellStatus(): Promise<LayerShellStatus> {
+  return callResult<LayerShellStatus>("layer_shell_status");
+}
+
+/** Ask for native Wayland docking from the next launch, or stop asking. */
+export function layerShellSet(enabled: boolean): Promise<LayerShellStatus> {
+  return callResult<LayerShellStatus>("layer_shell_set", { enabled });
 }

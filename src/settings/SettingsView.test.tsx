@@ -430,3 +430,41 @@ describe("updates", () => {
     });
   });
 });
+
+/** Idea 9: offered only where it can work, and applied from the next launch. */
+describe("native Wayland docking", () => {
+  function withStatus(status: { possible: boolean; requested: boolean; active: boolean }) {
+    const fallback = invoke.getMockImplementation();
+    invoke.mockImplementation((command: string, args?: unknown) => {
+      if (command === "layer_shell_status") {
+        return Promise.resolve(status);
+      }
+      if (command === "layer_shell_set") {
+        const { enabled } = args as { enabled: boolean };
+        return Promise.resolve({ ...status, requested: enabled });
+      }
+      return fallback ? fallback(command, args) : Promise.resolve(null);
+    });
+  }
+
+  it("is not offered where it cannot work", async () => {
+    withStatus({ possible: false, requested: false, active: false });
+    render(<SettingsView onClose={() => undefined} />);
+    await screen.findByText("Appearance");
+    expect(screen.queryByRole("switch", { name: "Native Wayland docking" })).toBeNull();
+  });
+
+  it("asks for it from the next launch", async () => {
+    withStatus({ possible: true, requested: false, active: false });
+    render(<SettingsView onClose={() => undefined} />);
+    const toggle = await screen.findByRole("switch", { name: "Native Wayland docking" });
+    expect(toggle.getAttribute("aria-checked")).toBe("false");
+
+    fireEvent.click(toggle);
+    await waitFor(() => {
+      expect(toggle.getAttribute("aria-checked")).toBe("true");
+    });
+    expect(invoke).toHaveBeenCalledWith("layer_shell_set", { enabled: true });
+    expect(screen.getByText("Turns on the next time Ledge starts.")).toBeTruthy();
+  });
+});

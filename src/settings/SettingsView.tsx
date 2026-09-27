@@ -7,6 +7,9 @@ import { acceleratorFromEvent, formatAccelerator } from "../lib/accelerator";
 import {
   appInfo,
   autostartGet,
+  layerShellSet,
+  layerShellStatus,
+  type LayerShellStatus,
   autostartSet,
   isIpcErrorOf,
   monitorsList,
@@ -708,6 +711,7 @@ export function SettingsView({ onClose }: SettingsViewProps) {
   const [monitors, setMonitors] = useState<string[]>([]);
   const [focused, setFocused] = useState(false);
   const [autostart, setAutostart] = useState<boolean | null>(null);
+  const [layerShell, setLayerShell] = useState<LayerShellStatus | null>(null);
   const [shortcutError, setShortcutError] = useState<{
     which: ShortcutName;
     message: string;
@@ -740,6 +744,11 @@ export function SettingsView({ onClose }: SettingsViewProps) {
       .then(setAutostart)
       .catch((error: unknown) => {
         console.error("settings: could not read launch at login", error);
+      });
+    void layerShellStatus()
+      .then(setLayerShell)
+      .catch((error: unknown) => {
+        console.error("settings: could not read native Wayland docking", error);
       });
   }, []);
 
@@ -888,6 +897,31 @@ export function SettingsView({ onClose }: SettingsViewProps) {
             {...fieldProps}
           />
         </Advanced>
+
+        {/* Native Wayland docking (idea 9): only where it can work, a Wayland
+            session on a desktop other than GNOME. It is chosen before the app's
+            display connection opens, so it takes effect on the next launch. */}
+        {layerShell?.possible === true && (
+          <SwitchSetting
+            label="Native Wayland docking"
+            description={
+              layerShell.active
+                ? "On: the tab is anchored by your desktop instead of XWayland."
+                : layerShell.requested
+                  ? "Turns on the next time Ledge starts."
+                  : "Experimental. Anchors the tab with your desktop's layer shell instead of XWayland. Takes effect after a restart."
+            }
+            checked={layerShell.requested}
+            onChange={(checked) => {
+              void layerShellSet(checked)
+                .then(setLayerShell)
+                .catch((error: unknown) => {
+                  console.error("settings: could not change native Wayland docking", error);
+                });
+            }}
+            {...fieldProps}
+          />
+        )}
       </Group>
 
       <Group title="Focus">

@@ -1,0 +1,62 @@
+# Lint, type check and both test suites on every push and pull request, on
+# Linux (idea 11). Linux-only code — the X11 placement loop, the Wayland layer
+# shell — cannot be compiled on a Mac, and before this it was first compiled by
+# a release tag. macOS is checked locally before every commit; Windows is left to
+# the release run to keep this fast.
+name: Check
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: check-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  linux:
+    name: Linux
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Linux build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev \
+            librsvg2-dev patchelf
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Frontend
+        run: |
+          npm run lint
+          npx tsc --noEmit
+          npm test
+
+      # The frontend is built first because the Rust crate embeds it.
+      - name: Rust
+        run: |
+          npm run build
+          cd src-tauri
+          cargo fmt --check
+          cargo clippy --all-targets -- -D warnings
+          cargo test
