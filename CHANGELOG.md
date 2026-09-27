@@ -11,6 +11,36 @@ To release, see "Releasing" in the README.
 
 ## [Unreleased]
 
+## [0.10.2] - 2026-09-27
+
+### Added
+
+- **A new app icon:** a frosted-glass pane over an aurora of colour, in the
+  Dock, the Start menu, the taskbar and on the download page. The menu-bar
+  icon is redrawn to match.
+- **A grip on every note** (⋮⋮, top left) to drag it into a new place, locked
+  notes included. ⌥↑ and ⌥↓ still move a note from the keyboard.
+- **The focus countdown on Windows and Linux.** While a session runs, the tray
+  icon becomes a red badge with the minutes left, and hovering it shows the
+  exact time.
+- **Ledge is open source**, under the MIT licence. Settings › About has a Source
+  code link, and Report a problem now opens the issues of the source
+  repository.
+
+### Changed
+
+- The menu-bar countdown on macOS is a rounded red pill instead of a square
+  box.
+
+### Fixed
+
+- The text of a locked note can be selected and copied again. Every card could
+  be dragged as a whole, and that turned any attempt to select text into a drag.
+- The colour dots in the filter row and on the collapsed tab were nearly
+  invisible in dark mode.
+- Settings › Panel colour now says what it does: it colours the light under
+  the glass.
+
 ## [0.10.1] - 2026-09-24
 
 ### Changed
