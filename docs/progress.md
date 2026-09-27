@@ -4644,3 +4644,7 @@ The owner generated the artwork with ChatGPT from a brief: a frosted-glass pane 
 - **Private vulnerability reporting** is on; `SECURITY.md` points to it. `CONTRIBUTING.md` says bug reports yes, pull requests no. Issues use a form (`.github/ISSUE_TEMPLATE/bug_report.yml`) asking for Settings › About › Copy; blank issues are off.
 - The README opens with the hero screenshot, the download link and what the app does. `.claude/` and exported chat transcripts are ignored.
 - The full history was scanned for keys and tokens before going public: none. `docs/apt-publishing.md` (local signing-key notes) was never committed.
+
+## 27 Sep 2026 — A locked note's text can be selected again
+
+Reported by the owner: the text of a locked (pinned) card could not be selected. The card was right — `.selectable` sets `user-select: text` in both spellings — but every card sits in a `draggable` slot for manual ordering (idea 16), and inside a draggable element WebKit turns a press-and-drag into a drag, never a selection. It had been broken since drag-to-reorder shipped. A locked note's slot is no longer draggable (`canDrag && !note.pinned`); it still moves with ⌥↑/⌥↓ and other cards still drop beside it. `NoteList.test.tsx` holds it. jsdom cannot show the selection itself; checked in the dev app by the owner.

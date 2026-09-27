@@ -70,6 +70,21 @@ describe("dragging a note into a new place", () => {
     expect(onReorder).toHaveBeenCalledWith(["c", "a", "b"]);
   });
 
+  it("leaves a locked note to text selection rather than dragging", () => {
+    const { container } = render(
+      <NoteList
+        notes={[note("a"), { ...note("b"), pinned: true }, note("c")]}
+        editingId={null}
+        onOpen={() => undefined}
+        onUnpin={() => undefined}
+        onExpand={() => undefined}
+        onToggleTask={() => undefined}
+        onReorder={() => undefined}
+      />,
+    );
+    expect(slots(container).map((slot) => slot.draggable)).toEqual([true, false, true]);
+  });
+
   it("cannot be dragged at all when the list is filtered", () => {
     const { container } = render(
       <NoteList
