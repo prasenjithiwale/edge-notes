@@ -205,3 +205,14 @@
     transition: none;
   }
 }
+
+/* The grip that drags a card into a new place. The grab cursor is the one
+   exception to brief 7.5's `cursor: default` on buttons, as it is on the tab:
+   it is the only thing on the card that says it can be picked up. */
+.grip {
+  cursor: grab;
+}
+
+.grip:active {
+  cursor: grabbing;
+}

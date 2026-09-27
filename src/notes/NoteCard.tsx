@@ -1,5 +1,5 @@
 import { useMemo, useState, type CSSProperties, type MouseEvent } from "react";
-import { Check, Copy, Lock, Maximize2, Pencil } from "lucide-react";
+import { Check, Copy, GripVertical, Lock, Maximize2, Pencil } from "lucide-react";
 
 import { IconButton } from "../components/IconButton";
 import { cx } from "../lib/cx";
@@ -15,6 +15,12 @@ interface NoteCardProps {
   onUnpin: () => void;
   onExpand: () => void;
   onToggleTask: (line: number) => void;
+  /**
+   * Draw the grip that drags this card into a new place. Only the grip starts a
+   * drag: the rest of the card is for opening, and on a locked note for
+   * selecting text, which a draggable card would turn into a drag.
+   */
+  movable?: boolean;
 }
 
 /**
@@ -151,8 +157,29 @@ function cardLabel(note: Note): string {
 /** How long the copy button stays ticked, as the code block's does. */
 const COPIED_MS = 1_400;
 
-export function NoteCard({ note, onOpen, onUnpin, onExpand, onToggleTask }: NoteCardProps) {
+export function NoteCard({
+  note,
+  onOpen,
+  onUnpin,
+  onExpand,
+  onToggleTask,
+  movable = false,
+}: NoteCardProps) {
   const [copied, setCopied] = useState(false);
+  // Always drawn when the list can be arranged: an inactive window on macOS may
+  // never see a hover (brief 7.5). Its drag bubbles to the list's slot, which
+  // does the arranging; the keyboard's way is ⌥↑/⌥↓ from anywhere on the card.
+  const grip = movable && (
+    <IconButton
+      label="Move note: drag, or ⌥↑ ⌥↓"
+      className={cx(styles.tool, styles.grip)}
+      draggable
+      data-drag-handle=""
+      onClick={() => undefined}
+    >
+      <GripVertical size={14} strokeWidth={1.75} />
+    </IconButton>
+  );
   const expand = (
     <IconButton label="Expand note" className={styles.tool} onClick={onExpand}>
       <Maximize2 size={14} strokeWidth={1.75} />
@@ -179,6 +206,7 @@ export function NoteCard({ note, onOpen, onUnpin, onExpand, onToggleTask }: Note
           <Body note={note} onToggleTask={onToggleTask} />
         </div>
         <div className={styles.tools} onClick={stop}>
+          {grip}
           {expand}
         </div>
       </div>
@@ -191,6 +219,7 @@ export function NoteCard({ note, onOpen, onUnpin, onExpand, onToggleTask }: Note
         <FullBody note={note} onToggleTask={onToggleTask} />
       </div>
       <div className={styles.tools}>
+        {grip}
         {/* A locked note is one you read and copy in place, and selecting its
             text is only half of that: the copy key only arrives if the panel
             owns the keyboard, and a panel opened by hover deliberately does not

@@ -95,16 +95,10 @@ export function NoteList({
               dragId === note.id && styles.dragging,
               drop?.id === note.id && (drop.after ? styles.dropAfter : styles.dropBefore),
             )}
-            // A card is dragged by itself rather than by a grip: a handle would
-            // be another control on every card, and one that only appears on
-            // hover is one macOS may never show (brief 7.5).
-            //
-            // Except a locked card, whose text is there to be selected and
-            // copied: inside a draggable element WebKit turns a press-and-drag
-            // into a drag, never a selection, so `user-select: text` on the card
-            // did nothing. A locked note still moves with ⌥↑/⌥↓, and other
-            // cards can still be dropped beside it.
-            draggable={canDrag && !note.pinned}
+            // The slot is not draggable itself: inside a draggable element
+            // WebKit turns every press-and-drag into a drag, so a locked card's
+            // text could not be selected. The card's grip is what is dragged,
+            // and its dragstart bubbles here.
             onDragStart={(event) => {
               dragging.current = note.id;
               setDragId(note.id);
@@ -112,6 +106,15 @@ export function NoteList({
               // never leaves the panel, so what it says does not matter.
               event.dataTransfer.effectAllowed = "move";
               event.dataTransfer.setData("text/plain", note.id);
+              // The whole card is what is being moved, not the grip under the
+              // pointer, so the picture that follows the cursor is the card,
+              // held at the point it was picked up by.
+              const box = event.currentTarget.getBoundingClientRect();
+              event.dataTransfer.setDragImage(
+                event.currentTarget,
+                event.clientX - box.left,
+                event.clientY - box.top,
+              );
             }}
             onDragOver={(event) => {
               over(event, note.id);
@@ -124,6 +127,7 @@ export function NoteList({
           >
             <NoteCard
               note={note}
+              movable={canDrag}
               onOpen={() => {
                 onOpen(note.id);
               }}

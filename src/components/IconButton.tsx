@@ -24,6 +24,9 @@ interface IconButtonProps {
    * button moved focus off the textarea.
    */
   keepFocus?: boolean;
+  /** A drag handle: the note grip, which starts its card's drag. */
+  draggable?: boolean;
+  "data-drag-handle"?: string;
   /** Marks this button as an arrow-key navigation target (brief 6.11). */
   "data-card"?: string;
   "data-id"?: string;
