@@ -287,12 +287,8 @@ pub fn share_sheet(window: &WebviewWindow, text: &str, files: &[std::path::PathB
 /// Must run on the main thread; the caller marshals.
 #[must_use]
 pub fn set_tray_countdown(text: Option<&str>) -> bool {
-    use objc2::rc::Retained;
-    use objc2_app_kit::{
-        NSApplication, NSBackgroundColorAttributeName, NSColor, NSFont, NSFontAttributeName,
-        NSForegroundColorAttributeName, NSShadow, NSShadowAttributeName,
-    };
-    use objc2_foundation::{MainThreadMarker, NSAttributedString, NSDictionary, NSSize, NSString};
+    use objc2_app_kit::NSApplication;
+    use objc2_foundation::{MainThreadMarker, NSAttributedString};
 
     let Some(mtm) = MainThreadMarker::new() else {
         return false;
@@ -320,44 +316,12 @@ pub fn set_tray_countdown(text: Option<&str>) -> bool {
             continue;
         };
 
-        // The red is *behind* the time, not on it: a lit field with the time
-        // sitting on it in white, which is the only thing legible on that field
-        // in either menu bar.
-        //
-        // The halo around the field is not possible here. A title's shadow is
-        // drawn behind the glyphs, and the glyphs sit on top of the fill, so it
-        // never shows; and a layer shadow on the button — the only other way —
-        // stops the button drawing its title at all. The shadow that is left
-        // sits under the white digits and softens them against the red.
-        let glow = NSShadow::new();
-        glow.setShadowColor(Some(&NSColor::systemRedColor()));
-        glow.setShadowBlurRadius(3.0);
-        glow.setShadowOffset(NSSize::new(0.0, 0.0));
-
-        // The menu bar's own font at its own size, so the countdown sits on the
-        // same baseline as everything beside it.
-        let font = NSFont::menuBarFontOfSize(0.0);
-        let keys: [&objc2_foundation::NSString; 4] = [
-            unsafe { NSForegroundColorAttributeName },
-            unsafe { NSBackgroundColorAttributeName },
-            unsafe { NSFontAttributeName },
-            unsafe { NSShadowAttributeName },
-        ];
-        let values: [&objc2::runtime::AnyObject; 4] = [
-            unsafe { &*Retained::as_ptr(&NSColor::whiteColor()).cast() },
-            unsafe { &*Retained::as_ptr(&NSColor::systemRedColor()).cast() },
-            unsafe { &*Retained::as_ptr(&font).cast() },
-            unsafe { &*Retained::as_ptr(&glow).cast() },
-        ];
-        let attributes = NSDictionary::from_slices(&keys, &values);
-        // SAFETY: the keys are AppKit's own attribute names and each value is
-        // the type that key is documented to take.
-        // Padded, so the field has a little air in it rather than being a box
-        // crushed onto the digits. The plain title underneath is unpadded: it
-        // is what sizes the item, and the item has to be at least this wide.
-        let padded = format!(" {text} ");
-        let title = unsafe {
-            NSAttributedString::new_with_attributes(&NSString::from_str(&padded), &attributes)
+        // A rounded red pill with the time on it in white, which is the only
+        // thing legible on red in either menu bar. A title's background colour
+        // is always a square box, so the pill is drawn as a small image and set
+        // inline in the title as an attachment; the status item keeps its icon.
+        let Some(title) = countdown_pill(text) else {
+            continue;
         };
         button.setAttributedTitle(&title);
     }
@@ -544,4 +508,88 @@ pub fn set_backdrop(window: &WebviewWindow, backdrop: Option<crate::platform::Ba
         effect.setAppearance(NSAppearance::appearanceNamed(name).as_deref());
         effect.setHidden(false);
     });
+}
+
+/// The menu-bar countdown as a rounded red pill with the time in white, ready to
+/// be set as a status button's title: an image in a text attachment, drawn at
+/// twice the point size so it is sharp on a Retina menu bar. `None` if AppKit
+/// refuses any step, and the caller then leaves the plain title showing.
+///
+/// Must run on the main thread; the caller marshals.
+fn countdown_pill(text: &str) -> Option<objc2::rc::Retained<objc2_foundation::NSAttributedString>> {
+    use objc2::AllocAnyThread;
+    use objc2::rc::Retained;
+    use objc2_app_kit::{
+        NSAttributedStringAttachmentConveniences, NSBezierPath, NSBitmapImageRep, NSColor,
+        NSDeviceRGBColorSpace, NSFont, NSFontAttributeName, NSForegroundColorAttributeName,
+        NSGraphicsContext, NSImage, NSStringDrawing, NSTextAttachment,
+    };
+    use objc2_foundation::{NSDictionary, NSPoint, NSRect, NSSize, NSString};
+
+    // The menu bar's own font at its own size, digits of equal width so the
+    // pill does not twitch as the seconds change.
+    let font = NSFont::monospacedDigitSystemFontOfSize_weight(NSFont::systemFontSize(), 0.3);
+    let keys: [&NSString; 2] = [unsafe { NSForegroundColorAttributeName }, unsafe {
+        NSFontAttributeName
+    }];
+    let values: [&objc2::runtime::AnyObject; 2] = [
+        unsafe { &*Retained::as_ptr(&NSColor::whiteColor()).cast() },
+        unsafe { &*Retained::as_ptr(&font).cast() },
+    ];
+    let attributes = NSDictionary::from_slices(&keys, &values);
+    let string = NSString::from_str(text);
+    // SAFETY: AppKit's own attribute keys, each with the type it takes.
+    let measured = unsafe { string.sizeWithAttributes(Some(&attributes)) };
+
+    let height = (measured.height + 2.0).round();
+    let padding = 7.0;
+    let width = (measured.width + padding * 2.0).ceil();
+    let scale = 2.0;
+
+    // SAFETY: a fresh bitmap AppKit allocates itself (null planes), RGBA.
+    let rep = unsafe {
+        NSBitmapImageRep::initWithBitmapDataPlanes_pixelsWide_pixelsHigh_bitsPerSample_samplesPerPixel_hasAlpha_isPlanar_colorSpaceName_bytesPerRow_bitsPerPixel(
+            NSBitmapImageRep::alloc(),
+            std::ptr::null_mut(),
+            (width * scale) as isize,
+            (height * scale) as isize,
+            8,
+            4,
+            true,
+            false,
+            NSDeviceRGBColorSpace,
+            0,
+            0,
+        )
+    }?;
+    rep.setSize(NSSize::new(width, height));
+    let context = NSGraphicsContext::graphicsContextWithBitmapImageRep(&rep)?;
+
+    NSGraphicsContext::saveGraphicsState_class();
+    NSGraphicsContext::setCurrentContext(Some(&context));
+    let bounds = NSRect::new(NSPoint::new(0.0, 0.0), NSSize::new(width, height));
+    let radius = (height / 2.0).min(6.0);
+    NSColor::systemRedColor().setFill();
+    NSBezierPath::bezierPathWithRoundedRect_xRadius_yRadius(bounds, radius, radius).fill();
+    // SAFETY: as above.
+    unsafe {
+        string.drawAtPoint_withAttributes(
+            NSPoint::new(padding, ((height - measured.height) / 2.0).round()),
+            Some(&attributes),
+        );
+    }
+    NSGraphicsContext::restoreGraphicsState_class();
+
+    let image = NSImage::initWithSize(NSImage::alloc(), NSSize::new(width, height));
+    image.addRepresentation(&rep);
+
+    let attachment = NSTextAttachment::new();
+    attachment.setImage(Some(&image));
+    // Centred on the menu bar's text rather than sat on its baseline.
+    let lift = ((font.capHeight() - height) / 2.0).round();
+    attachment.setBounds(NSRect::new(
+        NSPoint::new(0.0, lift),
+        NSSize::new(width, height),
+    ));
+    Some(objc2_foundation::NSAttributedString::attributedStringWithAttachment(&attachment))
 }

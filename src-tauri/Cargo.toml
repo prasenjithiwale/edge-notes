@@ -83,6 +83,17 @@ objc2-app-kit = { version = "0.3", default-features = false, features = [
   # exactly the panel's rectangle (`platform::macos::set_backdrop`).
   "NSVisualEffectView",
   "NSAppearance",
+  # The menu-bar countdown's rounded red pill, drawn into a small image and
+  # set inline in the status button's title (`set_tray_countdown`).
+  "NSImage",
+  "NSImageRep",
+  "NSBitmapImageRep",
+  "NSGraphicsContext",
+  "NSBezierPath",
+  "NSStringDrawing",
+  "NSTextAttachment",
+  # CGSize and CGRect, for measuring the pill's text and placing it.
+  "objc2-core-foundation",
 ] }
 objc2-foundation = { version = "0.3", default-features = false, features = [
   "std",
