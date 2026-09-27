@@ -166,19 +166,21 @@ export function NoteCard({
   movable = false,
 }: NoteCardProps) {
   const [copied, setCopied] = useState(false);
-  // Always drawn when the list can be arranged: an inactive window on macOS may
-  // never see a hover (brief 7.5). Its drag bubbles to the list's slot, which
+  // Always drawn when the list can be arranged, at the top left before the
+  // text: an inactive window on macOS may never see a hover (brief 7.5). Its drag bubbles to the list's slot, which
   // does the arranging; the keyboard's way is ⌥↑/⌥↓ from anywhere on the card.
   const grip = movable && (
-    <IconButton
-      label="Move note: drag, or ⌥↑ ⌥↓"
-      className={cx(styles.tool, styles.grip)}
-      draggable
-      data-drag-handle=""
-      onClick={() => undefined}
-    >
-      <GripVertical size={14} strokeWidth={1.75} />
-    </IconButton>
+    <div className={styles.lead} onClick={stop}>
+      <IconButton
+        label="Move note: drag, or ⌥↑ ⌥↓"
+        className={cx(styles.tool, styles.grip)}
+        draggable
+        data-drag-handle=""
+        onClick={() => undefined}
+      >
+        <GripVertical size={14} strokeWidth={1.75} />
+      </IconButton>
+    </div>
   );
   const expand = (
     <IconButton label="Expand note" className={styles.tool} onClick={onExpand}>
@@ -202,11 +204,11 @@ export function NoteCard({
           data-card=""
           data-id={note.id}
         />
+        {grip}
         <div className={styles.text}>
           <Body note={note} onToggleTask={onToggleTask} />
         </div>
         <div className={styles.tools} onClick={stop}>
-          {grip}
           {expand}
         </div>
       </div>
@@ -215,11 +217,11 @@ export function NoteCard({
 
   return (
     <div className={cx(styles.card, styles.pinned)} style={noteColorStyle(note.color)}>
+      {grip}
       <div className={cx(styles.text, styles.selectable)}>
         <FullBody note={note} onToggleTask={onToggleTask} />
       </div>
       <div className={styles.tools}>
-        {grip}
         {/* A locked note is one you read and copy in place, and selecting its
             text is only half of that: the copy key only arrives if the panel
             owns the keyboard, and a panel opened by hover deliberately does not

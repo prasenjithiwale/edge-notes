@@ -138,8 +138,16 @@
 }
 
 .openable .text,
-.openable .tools {
+.openable .tools,
+.openable .lead {
   position: relative;
+}
+
+/* The grip's column, before the text: tucked into the top-left corner, so the
+   text keeps as much of the card's width as it can. */
+.lead {
+  flex: none;
+  margin: -2px -4px 0 -6px;
 }
 
 .openable .text {
