@@ -94,6 +94,7 @@ pub fn run() {
             commands::dock_toggle,
             commands::dock_pointer_left,
             commands::dock_pointer_entered,
+            commands::dock_input_region,
             commands::layer_shell_status,
             commands::layer_shell_set,
             commands::dock_begin_tab_drag,

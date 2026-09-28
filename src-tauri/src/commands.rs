@@ -151,6 +151,28 @@ pub fn dock_pointer_entered(app: AppHandle, dock: State<'_, Arc<Dock>>) -> AppRe
     Ok(())
 }
 
+/// Where the dock window may take the pointer: the tab's rectangle while the
+/// panel is closed, or `None` for the whole window. Linux only; a no-op
+/// elsewhere. See `platform::linux::set_input_region`.
+#[tauri::command]
+pub fn dock_input_region(app: AppHandle, region: Option<InputRegion>) -> AppResult<()> {
+    let window = app
+        .get_webview_window(crate::dock::DOCK_WINDOW_LABEL)
+        .ok_or(AppError::WindowNotFound(crate::dock::DOCK_WINDOW_LABEL))?;
+    let region = region.map(|r| (r.x, r.y, r.width, r.height));
+    app.run_on_main_thread(move || platform::set_input_region(&window, region))?;
+    Ok(())
+}
+
+/// A rectangle in CSS pixels from the window's top-left.
+#[derive(Debug, Clone, Copy, serde::Deserialize)]
+pub struct InputRegion {
+    pub x: f64,
+    pub y: f64,
+    pub width: f64,
+    pub height: f64,
+}
+
 /// Native Wayland docking (idea 9): can it be offered, is it asked for, is it on.
 #[tauri::command]
 #[must_use]

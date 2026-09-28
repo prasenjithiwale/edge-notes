@@ -61,6 +61,7 @@ export function Tab({ className }: TabProps) {
   return (
     <div
       className={cx(className, styles.tab, isOpen && styles.open)}
+      data-dock-tab=""
       data-appearance={translucent ? "translucent" : "solid"}
       onPointerDown={() => {
         dragging.current = true;

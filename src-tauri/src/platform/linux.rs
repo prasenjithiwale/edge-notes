@@ -269,3 +269,38 @@ pub fn place_layer(window: &WebviewWindow, rect: Rect, side: Side, work_area: Re
     gtk_window.set_size_request(width, height);
     gtk_window.resize(width, height);
 }
+
+/// Where the window takes the pointer, in logical pixels from its top-left, or
+/// `None` for all of it.
+///
+/// While the panel is closed the window should be just the tab, but a GTK
+/// window that is not resizable is sized by requests, and one that has grown may
+/// not shrink back straight away (or at all, under some window managers). Then
+/// an invisible, panel-sized block sits over whatever is behind it and eats its
+/// clicks and scrolling. Limiting input to the tab makes the rest pass through
+/// whatever size the window really is. Works on X11 (the shape extension) and
+/// Wayland alike. Must run on the main thread.
+pub fn set_input_region(window: &WebviewWindow, region: Option<(f64, f64, f64, f64)>) {
+    use gtk::cairo::{RectangleInt, Region};
+    use gtk::prelude::*;
+    let Ok(gtk_window) = window.gtk_window() else {
+        return;
+    };
+    match region {
+        Some((x, y, width, height)) => {
+            let shape = Region::create();
+            let rect = RectangleInt::new(
+                x.floor() as i32,
+                y.floor() as i32,
+                width.ceil().max(1.0) as i32,
+                height.ceil().max(1.0) as i32,
+            );
+            if let Err(error) = shape.union_rectangle(&rect) {
+                log::error!("linux: could not build the input region: {error}");
+                return;
+            }
+            gtk_window.input_shape_combine_region(Some(&shape));
+        }
+        None => gtk_window.input_shape_combine_region(None),
+    }
+}

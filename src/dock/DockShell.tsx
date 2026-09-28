@@ -6,6 +6,7 @@ import { isAnimatingPhase, isClosedPhase, transitionFor } from "../lib/dock";
 import {
   appReady,
   dockAnimationDone,
+  dockInputRegion,
   dockPointerEntered,
   dockPointerLeft,
   onDockState,
@@ -148,6 +149,32 @@ export function DockShell() {
     },
     [phase],
   );
+
+  // While the panel is closed only the tab takes the pointer (Linux; a no-op
+  // elsewhere). A GTK window that grew for the panel may not shrink back, or not
+  // at once, and its empty remainder would otherwise swallow clicks and scrolling
+  // meant for the app behind it. Measured again on every resize, because the
+  // shrink can land after the collapsed state does and move the tab within the
+  // window. Any other phase gives the whole window back.
+  useEffect(() => {
+    if (phase !== "collapsed") {
+      void dockInputRegion(null);
+      return;
+    }
+    const send = () => {
+      const tab = document.querySelector<HTMLElement>("[data-dock-tab]");
+      if (tab === null) {
+        return;
+      }
+      const box = tab.getBoundingClientRect();
+      void dockInputRegion({ x: box.left, y: box.top, width: box.width, height: box.height });
+    };
+    send();
+    window.addEventListener("resize", send);
+    return () => {
+      window.removeEventListener("resize", send);
+    };
+  }, [phase, side, tabTop, panelWidth]);
 
   // Linux secondary signal (brief 8.10): under XWayland the polled cursor can go
   // stale once the pointer is over a native Wayland window. Harmless elsewhere —

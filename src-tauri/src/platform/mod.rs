@@ -175,3 +175,14 @@ pub fn set_layer_shell_requested(enabled: bool) -> bool {
         false
     }
 }
+
+/// Limit where the dock window takes the pointer (see
+/// `linux::set_input_region`). Linux only: macOS and Windows windows are
+/// resized atomically, so a closed panel never leaves a block behind. Must run
+/// on the main thread.
+pub fn set_input_region(window: &WebviewWindow, region: Option<(f64, f64, f64, f64)>) {
+    #[cfg(target_os = "linux")]
+    linux::set_input_region(window, region);
+    #[cfg(not(target_os = "linux"))]
+    let _ = (window, region);
+}

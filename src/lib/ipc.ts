@@ -425,6 +425,18 @@ export function dockPointerEntered(): Promise<void> {
   return call("dock_pointer_entered");
 }
 
+/**
+ * Where the window takes the pointer: the tab's rectangle while the panel is
+ * closed, or null for the whole window. Linux only (a no-op elsewhere): there a
+ * window that has not shrunk back would otherwise block clicks and scrolling in
+ * whatever is behind the panel's empty space.
+ */
+export function dockInputRegion(
+  region: { x: number; y: number; width: number; height: number } | null,
+): Promise<void> {
+  return call("dock_input_region", { region });
+}
+
 export function onDockState(
   handler: (state: DockState) => void,
 ): Promise<UnlistenFn> {
