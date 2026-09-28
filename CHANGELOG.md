@@ -11,6 +11,14 @@ To release, see "Releasing" in the README.
 
 ## [Unreleased]
 
+## [0.10.4] - 2026-09-28
+
+### Fixed
+
+- **Linux: the closed panel no longer blocks the app behind it.** The space the
+  open panel takes could stay unclickable and unscrollable after the panel slid
+  away. While the panel is closed, only the tab takes the pointer now.
+
 ## [0.10.3] - 2026-09-28
 
 ### Added
