@@ -1,12 +1,17 @@
 #!/usr/bin/env bash
 # Write the landing page of the Ledge Pages site.
 #
-#   tools/render_site.sh <pages repository checkout>
+#   tools/render_site.sh <edge-notes-apt checkout> <page directory>
 #
 # Run by the Release workflow after publish_apt.sh, publish_macos.sh and
 # publish_windows.sh, so the page describes what is actually published: the
 # versions, file names and sizes all come from the checkout, never from an
 # argument that could disagree with it.
+#
+# The packages stay on edge-notes-apt, where installed copies and apt sources
+# already point; the page lives in the folio portfolio (`folio/ledge/`, the
+# second argument) from 14 Oct 2026. The old page's two addresses are written
+# as redirects to the new one, so links and bookmarks to them keep working.
 #
 # The screenshots are the other half of the page and they come from this
 # repository instead — `site/screenshots/` beside this script — because they are
@@ -19,7 +24,11 @@ set -euo pipefail
 shopt -s nullglob
 
 repo=$1
+page=$2
+mkdir -p "$page"
+# Where the packages are served, and where the page is.
 site=https://prasenjithiwale.github.io/edge-notes-apt
+page_url=https://prasenjithiwale.github.io/folio/ledge
 # The source repository is public (MIT) from 0.10, so bug reports go to it and
 # the page links to the code the downloads are built from — which is also what
 # SignPath Foundation checks before it signs anything.
@@ -82,37 +91,37 @@ done | sort -V | tail -1)
 # is replaced whole, so a picture dropped here does not linger on the site.
 screenshots=$source_dir/site/screenshots
 if [ -d "$screenshots" ]; then
-  rm -rf "$repo/screenshots"
-  mkdir -p "$repo/screenshots"
-  cp "$screenshots"/*.png "$repo/screenshots/"
+  rm -rf "$page/screenshots"
+  mkdir -p "$page/screenshots"
+  cp "$screenshots"/*.png "$page/screenshots/"
 fi
 
 # The short clips of the app moving, each with the still it shows before it
 # plays. Recorded from a demo home seeded by tools/site_demo.sh.
 videos=$source_dir/site/videos
 if [ -d "$videos" ]; then
-  rm -rf "$repo/videos"
-  mkdir -p "$repo/videos"
-  cp "$videos"/*.mp4 "$videos"/*.jpg "$repo/videos/"
+  rm -rf "$page/videos"
+  mkdir -p "$page/videos"
+  cp "$videos"/*.mp4 "$videos"/*.jpg "$page/videos/"
 fi
 
 # The app's calligraphy face, so the page's headlines are written in the same
 # hand as the app's. SIL Open Font License; the licence travels with it.
 fonts=$source_dir/src/assets/fonts
 if [ -d "$fonts" ]; then
-  mkdir -p "$repo/fonts"
-  cp "$fonts"/*.woff2 "$fonts"/OFL.txt "$repo/fonts/"
+  mkdir -p "$page/fonts"
+  cp "$fonts"/*.woff2 "$fonts"/OFL.txt "$page/fonts/"
 fi
 
 # The app's own icon, straight from the bundle's, so the tab and the wordmark
 # show what the Dock and the Start menu show.
 [ -f "$source_dir/src-tauri/icons/128x128.png" ] &&
-  cp "$source_dir/src-tauri/icons/128x128.png" "$repo/icon.png"
+  cp "$source_dir/src-tauri/icons/128x128.png" "$page/icon.png"
 
 # A screenshot is only put on the page if it is actually there: the site should
 # never show a broken image because a file was renamed here.
-shot() { [ -f "$repo/screenshots/$1" ]; }
-clip() { [ -f "$repo/videos/$1.mp4" ] && [ -f "$repo/videos/$1.jpg" ]; }
+shot() { [ -f "$page/screenshots/$1" ]; }
+clip() { [ -f "$page/videos/$1.mp4" ] && [ -f "$page/videos/$1.jpg" ]; }
 
 macos_section=
 if [ -n "$dmg" ]; then
@@ -416,7 +425,7 @@ dark_tokens='    --bg: #121016;
     --accent: #a898ff;
     --on-ink: #16141b;'
 
-cat > "$repo/style.css" <<CSS
+cat > "$page/style.css" <<CSS
   /* The page wears the app's own look, Aurora glass: frosted surfaces over a soft
      light, calligraphy for headlines only. The tokens mirror the app's. */
   @font-face {
@@ -775,7 +784,7 @@ NAV
 
 nav_html=$(nav_for "")
 
-cat > "$repo/index.html" <<HTML
+cat > "$page/index.html" <<HTML
 <!doctype html>
 <html lang="en">
 <head>
@@ -786,8 +795,8 @@ cat > "$repo/index.html" <<HTML
 <meta property="og:title" content="Ledge — notes on the edge of your screen">
 <meta property="og:description" content="Point at the tab and a panel of colour-coded notes slides out; move away and it slides back. Free, local-only, for macOS, Windows and Linux.">
 <meta property="og:type" content="website">
-<meta property="og:url" content="$site/">
-<meta property="og:image" content="$site/screenshots/hero.png">
+<meta property="og:url" content="$page_url/">
+<meta property="og:image" content="$page_url/screenshots/hero.png">
 <meta name="twitter:card" content="summary_large_image">
 <link rel="icon" href="icon.png" sizes="128x128" type="image/png">
 <link rel="apple-touch-icon" href="icon.png">
@@ -994,14 +1003,14 @@ $key_section
 </html>
 HTML
 
-echo "wrote $repo/index.html"
+echo "wrote $page/index.html"
 
 # The changelog is published here, as a page and as the file itself, so it sits
 # beside the downloads it describes. The source of truth stays in the source
 # repository and is copied on every release, so the two cannot drift.
 changelog=$source_dir/CHANGELOG.md
 if [ -f "$changelog" ]; then
-  cp "$changelog" "$repo/CHANGELOG.md"
+  cp "$changelog" "$page/CHANGELOG.md"
 
   # Markdown to HTML, for exactly the dialect the changelog is written in:
   # headings, bullet lists, links, bold, italic and inline code. Python rather
@@ -1010,7 +1019,7 @@ if [ -f "$changelog" ]; then
   CHANGELOG_TITLE="Ledge — changelog" \
   CHANGELOG_NAV="$(nav_for "./")" \
   CHANGELOG_SCRIPT="$theme_script" \
-  python3 - "$changelog" "$repo/changelog.html" <<'PYTHON'
+  python3 - "$changelog" "$page/changelog.html" <<'PYTHON'
 import html
 import os
 import re
@@ -1193,16 +1202,15 @@ cat > "$repo/README.md" <<MARKDOWN
 Packages of **Ledge**, a notes, tasks and focus widget docked to the edge of
 your screen — for macOS, Windows, Debian and Ubuntu.
 
-**The downloads, with install instructions for each platform, are on the site
-this repository serves: <$site/>**
+**The downloads, with install instructions for each platform, are on Ledge's
+page: <$page_url/>** This repository serves the files it links to.
 
 **Found a bug?** [Open an issue in the source repository]($issues). Please say which version (Settings › About in the app) and which
-system. Every release and what changed in it is in
-[CHANGELOG.md](CHANGELOG.md), also published as a page at
-<$site/changelog.html>.
+system. Every release and what changed in it is at
+<$page_url/changelog.html>.
 
 This repository is the publishing target, not the source: it holds the packages,
-a signed APT index, the public key, the changelog and a generated landing page.
+a signed APT index, the public key and the updater feed.
 It is written by the release workflow in the source repository,
 <$source_repo> (MIT licensed), and nothing in it is edited by hand — an edit made here is overwritten by the
 next release. Ledge is not open to contributions; see the site for what that
@@ -1228,15 +1236,34 @@ Debian 12+, Ubuntu 22.04+, x86_64. New versions then arrive with
 
 | Path | What |
 |---|---|
-| \`index.html\` | The landing page, generated on every release |
-| \`screenshots/\`, \`videos/\` | The pictures and clips on that page |
-| \`fonts/\` | The calligraphy face the page is written in (SIL OFL) |
+| \`index.html\`, \`changelog.html\` | Redirects to the page's new address |
 | \`pool/\`, \`dists/\` | The Debian packages and the signed index |
 | \`macos/\` | The \`.dmg\`, with \`SHA256SUMS\` |
 | \`windows/\` | The \`.exe\` and \`.msi\`, with \`SHA256SUMS\` |
 | \`key.gpg\` | The public half of the APT signing key |
+| \`updates/\` | The feed installed copies check for new versions |
 
 Older versions of every package are kept.
 MARKDOWN
 
 echo "wrote $repo/README.md"
+
+# The page used to be served from here. Its two addresses now forward to the new
+# one, keeping the #section a link pointed at; what only the page used goes.
+redirect() {
+  cat > "$repo/$1" <<HTML
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>Ledge has moved</title>
+<link rel="canonical" href="$page_url/$2">
+<meta http-equiv="refresh" content="0; url=$page_url/$2">
+<script>location.replace("$page_url/$2" + location.hash)</script>
+<p>Ledge has moved to <a href="$page_url/$2">$page_url/$2</a>.</p>
+</html>
+HTML
+  echo "wrote $repo/$1"
+}
+redirect index.html ""
+redirect changelog.html changelog.html
+rm -rf "$repo/screenshots" "$repo/videos" "$repo/fonts" "$repo/style.css" "$repo/icon.png" "$repo/CHANGELOG.md"

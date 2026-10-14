@@ -506,8 +506,8 @@ const TAB_SIZES: Choice<Settings["tab.size"]>[] = [
  * The downloads and the changelog are on the published site; the source and
  * the issues are the app's own repository, public since 0.10 (MIT licensed).
  */
-const DOWNLOADS_URL = "https://prasenjithiwale.github.io/edge-notes-apt/";
-const CHANGELOG_URL = "https://prasenjithiwale.github.io/edge-notes-apt/changelog.html";
+const DOWNLOADS_URL = "https://prasenjithiwale.github.io/folio/ledge/";
+const CHANGELOG_URL = "https://prasenjithiwale.github.io/folio/ledge/changelog.html";
 const SOURCE_URL = "https://github.com/prasenjithiwale/edge-notes";
 const ISSUES_URL = "https://github.com/prasenjithiwale/edge-notes/issues";
 

@@ -55,7 +55,7 @@ cask "edge-notes" do
   desc "Notes widget docked to the edge of the screen"
   # The site rather than the source repository: a cask homepage is something
   # people click, and the site is where the app is described.
-  homepage "https://prasenjithiwale.github.io/edge-notes-apt/"
+  homepage "https://prasenjithiwale.github.io/folio/ledge/"
 
   # Bare symbol, not ">= :monterey": Homebrew 7 deprecated the string form, and
   # this one already means "Monterey or newer" (its comparator defaults to >=).

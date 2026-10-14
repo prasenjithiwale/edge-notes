@@ -1,7 +1,9 @@
 # Builds the Linux and Windows packages for a release and attaches them to it,
 # then publishes both to the public Pages site
 # (github.com/prasenjithiwale/edge-notes-apt, named before the app was): the .deb into the signed APT
-# repository, the Windows installers as direct downloads. This repository is
+# repository, the Windows installers as direct downloads. The landing page that
+# links them is written into the folio portfolio (prasenjithiwale/folio, under
+# ledge/). This repository is
 # private, so its Releases page is not a public download — the Pages site is.
 #
 # Tauri can only bundle for the platform it runs on, so neither can be built on a
@@ -284,6 +286,14 @@ jobs:
           ssh-key: ${{ secrets.APT_DEPLOY_KEY }}
           path: apt
 
+      # The landing page lives in the folio portfolio from 14 Oct 2026; the
+      # packages stay on edge-notes-apt, which installed copies point at.
+      - uses: actions/checkout@v4
+        with:
+          repository: prasenjithiwale/folio
+          ssh-key: ${{ secrets.FOLIO_DEPLOY_KEY }}
+          path: folio
+
       - name: Import the signing key
         env:
           APT_SIGNING_KEY: ${{ secrets.APT_SIGNING_KEY }}
@@ -330,7 +340,24 @@ jobs:
         run: source/tools/publish_updates.sh apt "$SITE_URL" "${TAG#v}" incoming
 
       - name: Write the landing page
-        run: source/tools/render_site.sh apt
+        run: source/tools/render_site.sh apt folio/ledge
+
+      # The page before the files' redirects to it, so the old address never
+      # forwards to a page that is not there yet. folio is shared with other
+      # projects' releases, so this rebases onto whatever they pushed meanwhile.
+      - name: Publish the page
+        working-directory: folio
+        run: |
+          git add -A ledge
+          if git diff --cached --quiet; then
+            echo "The page already describes this release."
+            exit 0
+          fi
+          git -c user.name="github-actions[bot]" \
+            -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+            commit -m "ledge ${TAG#v}"
+          git pull --rebase
+          git push
 
       - name: Publish
         working-directory: apt
@@ -437,7 +464,7 @@ jobs:
           shopt -s nullglob
           wanted=$(
             {
-              grep -oE 'windows/[^"]+\.(exe|msi)' index.html
+              grep -oE 'windows/[^"]+\.(exe|msi)' ../folio/ledge/index.html
               printf '%s\n' windows/*_"$version"_*
             } | sort -u
           )

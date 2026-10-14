@@ -4674,3 +4674,18 @@ Owner's choices: load gtk-layer-shell at runtime rather than take the Rust bindi
 ## 28 Sep 2026 — Linux: a closed panel no longer blocks what is behind it
 
 Reported by the owner on Linux: with the panel closed, the area the open panel occupies could not be clicked or scrolled in the app underneath. The window is `resizable: false`, and a non-resizable GTK window is sized by requests; one that has grown for the panel may not shrink back at once, or at all under some window managers, leaving a transparent, panel-sized block over the desktop. Rather than chase every window manager's shrink, **input is limited to the tab while the panel is closed**: `DockShell` measures `[data-dock-tab]` whenever the phase becomes collapsed (and on every window resize, since the shrink can land after the state does) and sends it through `dock_input_region`; `platform::linux::set_input_region` applies it with `gtk_widget_input_shape_combine_region`, which is the X11 shape extension under XWayland and the surface's input region on Wayland. Any other phase clears it, so the open panel takes input across the whole window. macOS and Windows resize atomically and ignore the command. Compiled for Linux by the Check workflow; **not yet run on the owner's machine.**
+
+## 14 Oct 2026 — The landing page moved to folio
+
+The page is now <https://prasenjithiwale.github.io/folio/ledge/>, in the
+`prasenjithiwale/folio` portfolio beside kaffy, design unchanged.
+`tools/render_site.sh` takes a second argument (the page directory): it still
+reads the packages from the `edge-notes-apt` checkout, writes the page, its
+pictures, clips, fonts and changelog into `folio/ledge/`, and writes
+`edge-notes-apt`'s `index.html` and `changelog.html` as redirects to the new
+address (keeping the `#section`). The packages, the APT repository, `key.gpg`
+and `updates/latest.json` stay on `edge-notes-apt`, since installed copies and
+apt sources have those addresses built in. Release pushes folio first, then
+`edge-notes-apt`, so the redirect never points at a page that isn't there; it
+needs a `FOLIO_DEPLOY_KEY` secret. Settings › About, the README and the
+Homebrew cask's homepage point at the new page.

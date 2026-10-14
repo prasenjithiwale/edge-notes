@@ -4,7 +4,7 @@
 above whatever you are working in. Point at it and a panel of frosted glass
 slides out; move away and it slides back.
 
-**[Download for macOS, Windows, Debian and Ubuntu →](https://prasenjithiwale.github.io/edge-notes-apt/)**
+**[Download for macOS, Windows, Debian and Ubuntu →](https://prasenjithiwale.github.io/folio/ledge/)**
 
 ![The Ledge panel open on the right-hand edge of the screen: frosted glass over the desktop, notes lit by their own colours.](site/screenshots/hero.png)
 
@@ -38,10 +38,11 @@ npm run tauri dev
 
 ## Installing
 
-Downloads live at
-[prasenjithiwale.github.io/edge-notes-apt](https://prasenjithiwale.github.io/edge-notes-apt/),
-which also serves the APT repository, the Homebrew cask's download and the
-update feed. The same files are attached to this repository's
+Downloads are on
+[prasenjithiwale.github.io/folio/ledge](https://prasenjithiwale.github.io/folio/ledge/).
+The files themselves, the APT repository, the Homebrew cask's download and the
+update feed are served from `edge-notes-apt`, whose old page address now
+redirects there. The same files are attached to this repository's
 [Releases](https://github.com/prasenjithiwale/edge-notes/releases).
 
 ### macOS, with Homebrew
@@ -184,10 +185,11 @@ itself from. **Lose it and no installed copy can be updated again**; keep a
 backup away from this Mac. The Pages job writes `updates/latest.json`, the feed
 the app reads, with `tools/publish_updates.sh`.
 
-The Pages job needs three repository secrets: `APT_SIGNING_KEY` (the armored
+The Pages job needs four repository secrets: `APT_SIGNING_KEY` (the armored
 private key that signs the APT repository), `APT_DEPLOY_KEY` (an SSH deploy key
-with write access to `edge-notes-apt`) and `HOMEBREW_TAP_DEPLOY_KEY` (the same,
-for `homebrew-tap`).
+with write access to `edge-notes-apt`), `FOLIO_DEPLOY_KEY` (the same, for
+`folio`, where the landing page is written) and `HOMEBREW_TAP_DEPLOY_KEY` (the
+same, for `homebrew-tap`).
 
 The macOS `.dmg` is the one package built by hand, so a release made without
 step 2 simply has no `.dmg`: the job says so and leaves the site's and the cask's
@@ -394,4 +396,4 @@ are welcome; say which version and system (Settings › About › Copy).
 Windows releases are to be signed through the
 [SignPath Foundation](https://signpath.org) programme for open-source projects;
 the policy, who approves each release, and what the app sends over the network
-are on the [download page](https://prasenjithiwale.github.io/edge-notes-apt/#signing).
+are on the [download page](https://prasenjithiwale.github.io/folio/ledge/#signing).
