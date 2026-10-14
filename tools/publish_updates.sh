@@ -66,7 +66,7 @@ add "Ledge_${version}_linux_x86_64.AppImage" linux-x86_64-appimage
 
 jq -n \
   --arg version "$version" \
-  --arg notes "What changed: $site/changelog.html" \
+  --arg notes "What changed: https://prasenjithiwale.github.io/folio/ledge/changelog.html" \
   --arg date "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
   --argjson platforms "$platforms" \
   '{version: $version, notes: $notes, pub_date: $date, platforms: $platforms}' >"$feed"
